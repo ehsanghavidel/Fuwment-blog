@@ -19,3 +19,4 @@
 # تایپ‌اسکریپت
 *.tsbuildinfo
 next-env.d.ts
+supabase/.temp/
