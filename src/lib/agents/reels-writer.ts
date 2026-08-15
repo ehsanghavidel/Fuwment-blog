@@ -6,6 +6,7 @@ import { ctaListBlock } from "./reels-cta";
 import { ReelsScriptSchema, type ReelsScript, type SocialReview } from "./types";
 import type { SocialCheck } from "./social-checks";
 import type { ReelsSource } from "./reels-source";
+import type { BrandRoute } from "@/lib/company";
 
 /**
  * ایجنت — کپی‌رایتر ریلز
@@ -22,7 +23,11 @@ import type { ReelsSource } from "./reels-source";
  * لحن «گفتاری اما محترمانه» — روان و بدون تکلف، ولی با «شما».
  */
 
-function systemPrompt(lessons: string, leadMagnet: string | null): string {
+function systemPrompt(
+  lessons: string,
+  leadMagnet: string | null,
+  route: BrandRoute | undefined
+): string {
   return `تو «کپی‌رایتر ریلز» ${COMPANY_NAME} هستی. اسکریپت‌هایی می‌نویسی که قرار است مستقیم از رویشان بلند خوانده و ضبط شوند.
 
 ${COMPANY_PROFILE}
@@ -46,7 +51,7 @@ ${BRAND_VOICE}
 هر ۱۴۰ کلمه‌ی فارسی حدود یک دقیقه خوانده می‌شود. سقف مطلق ۴۰۰ کلمه (زیر ۳ دقیقه). نقطه‌ی شیرین ۱۴۰ تا ۲۲۰ کلمه (یک تا یک‌ونیم دقیقه) — مگر محتوا واقعاً سنگین باشد.
 
 — فهرست دعوت به اقدام (فقط یکی) —
-${ctaListBlock()}
+${ctaListBlock(route)}
 
 آن را انتخاب کن که با هدف اصلی همین ویدیو جور دربیاید. جمله را با لحن خودت و طبیعی بگو؛ برچسب فهرست یک نام است، نه متنی که باید عیناً خوانده شود. در ctaId شناسه‌ی همان مورد را بگذار.${
     leadMagnet ? `\n\nمنبع رایگان موجود برای این ویدیو: «${leadMagnet}»` : ""
@@ -85,6 +90,7 @@ ${source.text}
 export async function runReelsWriter(input: {
   source: ReelsSource;
   leadMagnet: string | null;
+  route?: BrandRoute;
 }): Promise<ReelsScript> {
   const lessons = await lessonsBlockFor("reels-writer");
 
@@ -94,7 +100,7 @@ export async function runReelsWriter(input: {
 
   return runAgentJSON({
     agent: "reels-writer",
-    system: systemPrompt(lessons, input.leadMagnet),
+    system: systemPrompt(lessons, input.leadMagnet, input.route),
     prompt,
     temperature: 0.7,
     maxOutputTokens: 4000,
@@ -106,6 +112,7 @@ export async function runReelsWriter(input: {
 export async function runReelsRevision(input: {
   source: ReelsSource;
   leadMagnet: string | null;
+  route?: BrandRoute;
   draft: ReelsScript;
   review: SocialReview;
   failedChecks: SocialCheck[];
@@ -127,7 +134,7 @@ ${input.failedChecks.map((c) => `- ${c.name}: ${c.note}`).join("\n") || "- (هم
 
   return runAgentJSON({
     agent: "reels-writer",
-    system: systemPrompt(lessons, input.leadMagnet),
+    system: systemPrompt(lessons, input.leadMagnet, input.route),
     prompt,
     temperature: 0.5,
     maxOutputTokens: 4000,

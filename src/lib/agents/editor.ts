@@ -3,6 +3,7 @@ import { runAgentJSON } from "@/lib/ai";
 import { BRAND_VOICE, COMPANY_NAME } from "@/lib/company";
 import { lessonsBlockFor } from "./lessons";
 import { ReviewSchema, type Brief, type Review } from "./types";
+import type { BrandCheck } from "./brand-checks";
 
 /**
  * ایجنت ۵ — ویراستار (Editor)
@@ -22,12 +23,23 @@ export const APPROVE_THRESHOLD = 75;
 export async function runEditor(input: {
   brief: Brief;
   draft: string;
+  /** چک‌های قطعی برند که رد شده‌اند — کد قبلاً سنجیده، ویراستار دوباره قضاوتشان نمی‌کند */
+  failedBrandChecks?: BrandCheck[];
 }): Promise<Review> {
   const lessons = await lessonsBlockFor("editor");
 
   const system = `تو «ویراستار ارشد» بلاگ ${COMPANY_NAME} هستی — سخت‌گیر اما منصف. کارت قضاوت کیفیت است، نه بازنویسی. ایرادهایی که می‌گیری باید آن‌قدر مشخص باشند که نویسنده دقیقاً بداند چه چیزی را کجا عوض کند.
 
 ${BRAND_VOICE}${lessons}`;
+
+  // چک‌های قطعیِ ردشده به‌عنوان «واقعیت» داده می‌شوند، نه نظر. ویراستار
+  // نباید درباره‌شان مذاکره کند — کد آن‌ها را شمرده و قضاوتشان تمام است.
+  const failed = input.failedBrandChecks?.filter((c) => !c.pass) ?? [];
+  const brandBlock = failed.length
+    ? `\n— چک‌های قطعی برند که رد شده‌اند (این‌ها قطعی‌اند، نه سلیقه) —
+${failed.map((c) => `- ${c.name}: ${c.note}`).join("\n")}
+این موارد باید عیناً در issues بیایند و امتیاز brandVoice را پایین بیاورند.\n`
+    : "";
 
   const prompt = `بریف مقاله:
 عنوان: ${input.brief.title}
@@ -37,7 +49,7 @@ ${BRAND_VOICE}${lessons}`;
 
 — پیش‌نویس —
 ${input.draft}
-
+${brandBlock}
 پیش‌نویس را با این روبریک ارزیابی کن (هر معیار ۰ تا ۱۰):
 - clarity: شفافیت و روانی — آیا هر پاراگراف یک حرف روشن دارد؟
 - brandVoice: تطابق با لحن برند — بدون اغراق، بدون تبلیغ‌زدگی؟

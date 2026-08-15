@@ -11,6 +11,7 @@ import { allowedCtaIds, directCtaIds } from "./reels-cta";
 import { runSocialCritic } from "./critic";
 import type { ReelsSource } from "./reels-source";
 import type { ReelsScript, SocialBrief } from "./types";
+import type { BrandRoute } from "@/lib/company";
 
 /**
  * ارکستریتور ریلز — پایپ‌لاین چهارم سیستم.
@@ -38,6 +39,11 @@ export async function runReelsPipeline(opts: {
   leadMagnet?: string | null;
   /** آیا منبع را انسان داده؟ پیش‌فرض بله. کمپین false می‌فرستد. */
   sourceIsTrusted?: boolean;
+  /**
+   * مسیر برند. اگر داده شود، CTAها قطعاً به همان مسیر محدود می‌شوند.
+   * پایپ‌لاین ریلز استراتژیست ندارد، پس این از ورودی اجرا می‌آید نه از بریف.
+   */
+  route?: BrandRoute;
 }): Promise<PipelineRun> {
   const store = getStore();
   const runId = opts.runId;
@@ -84,8 +90,8 @@ export async function runReelsPipeline(opts: {
       };
     });
 
-    const allowed = allowedCtaIds();
-    const direct = directCtaIds();
+    const allowed = allowedCtaIds(opts.route);
+    const direct = directCtaIds(opts.route);
 
     /**
      * ویراستار اجتماعی یک `SocialBrief` می‌خواهد تا بداند محتوا قرار بوده
@@ -110,9 +116,9 @@ export async function runReelsPipeline(opts: {
       writerAgent: "reels-writer",
       label: "ریلز",
       brief,
-      write: () => runReelsWriter({ source, leadMagnet }),
+      write: () => runReelsWriter({ source, leadMagnet, route: opts.route }),
       revise: (draft, review, failedChecks) =>
-        runReelsRevision({ source, leadMagnet, draft, review, failedChecks }),
+        runReelsRevision({ source, leadMagnet, route: opts.route, draft, review, failedChecks }),
       check: (d) =>
         runReelsChecks({
           hook: d.hook,

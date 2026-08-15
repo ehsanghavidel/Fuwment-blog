@@ -3,6 +3,7 @@ import { runAgentText, writerModel } from "@/lib/ai";
 import { BRAND_VOICE, COMPANY_NAME, COMPANY_PROFILE } from "@/lib/company";
 import { lessonsBlockFor } from "./lessons";
 import type { Brief, Research, Review } from "./types";
+import type { BrandCheck } from "./brand-checks";
 
 /**
  * ایجنت ۴ — نویسنده (Writer)
@@ -69,7 +70,16 @@ export async function runWriterRevision(input: {
   research: Research;
   draft: string;
   review: Review;
+  /** چک‌های قطعی برند که رد شده‌اند — این‌ها قابل مذاکره نیستند */
+  failedBrandChecks?: BrandCheck[];
 }): Promise<string> {
+  const failed = input.failedBrandChecks?.filter((c) => !c.pass) ?? [];
+  const brandBlock = failed.length
+    ? `\n— چک‌های قطعی برند که رد شده‌اند (اجباری، نه سلیقه‌ای) —
+${failed.map((c) => `- ${c.name}: ${c.note}`).join("\n")}
+تا وقتی این‌ها برطرف نشوند مقاله منتشر نمی‌شود.\n`
+    : "";
+
   return runAgentText({
     agent: "writer",
     model: writerModel(),
@@ -81,7 +91,7 @@ ${input.draft}
 
 — ایرادهای ویراستار (امتیاز فعلی: ${input.review.score}/100) —
 ${input.review.issues.map((i) => `- ${i}`).join("\n")}
-
+${brandBlock}
 پیش‌نویس را با رفع دقیق همین ایرادها بازنویسی کن. بخش‌های خوب را نگه دار؛ فقط جاهای مشکل‌دار را بهتر کن. خروجی، متن کامل و نهایی مقاله است.`,
     temperature: 0.5,
     maxOutputTokens: 12000,

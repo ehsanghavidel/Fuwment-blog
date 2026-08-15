@@ -7,6 +7,7 @@ import { runStrategist } from "./strategist";
 import { runResearcher } from "./researcher";
 import { runWriter, runWriterRevision } from "./writer";
 import { runEditor, APPROVE_THRESHOLD } from "./editor";
+import { runBrandChecks, runBriefChecks, type BrandCheck } from "./brand-checks";
 import { runSeo } from "./seo";
 import { runCritic } from "./critic";
 import type { Review } from "./types";
@@ -72,9 +73,20 @@ export async function runPipeline(opts: {
     // ── ۲. استراتژیست ──
     const brief = await step("strategist", "استراتژیست محتوا", async () => {
       const out = await runStrategist({ ideas, topicHint });
+
+      // هدف‌گیری مبهم باید همین‌جا بمیرد، نه ده گام بعد. بریفِ «برای همه»
+      // یعنی مقاله‌ی بی‌قلاب — و هزینه‌ی کشفش بعد از نگارش، یک اجرای کامل است.
+      const briefChecks = runBriefChecks({ audience: out.audience, title: out.title });
+      const failed = briefChecks.filter((c) => !c.pass);
+      if (failed.length > 0) {
+        throw new Error(
+          `بریف رد شد: ${failed.map((c) => c.note).join(" | ")}`
+        );
+      }
+
       return {
         output: out,
-        summary: `بریف «${out.title}» — کلیدواژه: ${out.primaryKeyword}، ${out.outline.length} بخش`,
+        summary: `بریف «${out.title}» — ${out.route} / ${out.audienceGroup} / ${out.journeyStage} — کلیدواژه: ${out.primaryKeyword}، ${out.outline.length} بخش`,
       };
     });
 
@@ -94,31 +106,58 @@ export async function runPipeline(opts: {
       return { output: out, summary: `پیش‌نویس ${out.split(/\s+/).length} کلمه‌ای نوشته شد` };
     });
 
+    // چک‌های قطعی برند روی پیش‌نویس — قبل از ویراستار، چون خروجی‌شان ورودی اوست
+    let brandChecks: BrandCheck[] = runBrandChecks({ text: draft });
+
     let review: Review = await step("editor", "ویراستار — بازبینی اول", async () => {
-      const out = await runEditor({ brief, draft });
+      const out = await runEditor({ brief, draft, failedBrandChecks: brandChecks });
+      const passed = brandChecks.filter((c) => c.pass).length;
       return {
-        output: out,
-        summary: `امتیاز ${out.score}/100 — ${out.verdict === "approve" ? "تأیید شد" : `${out.issues.length} ایراد، نیاز به بازنویسی`}`,
+        output: { review: out, brandChecks },
+        summary: `امتیاز ${out.score}/100 — چک برند ${passed}/${brandChecks.length} پاس — ${out.verdict === "approve" ? "تأیید شد" : `${out.issues.length} ایراد`}`,
       };
-    });
+    }).then((r) => r.review);
+
+    /**
+     * شرط بازنویسی: نظر ویراستار (قضاوت) **یا** ردشدن هر چک قطعی برند (کد).
+     *
+     * همان درسی که در social-loop.ts ثبت شده: قضاوت مدل نباید نتیجه‌ی
+     * اندازه‌گیری قطعی را دور بزند. یک «تضمینی» در متن، ادعای حقوقی است —
+     * امتیاز ۸۵ ویراستار آن را بی‌خطر نمی‌کند.
+     */
+    const needsRevision = (r: Review, cs: BrandCheck[]) =>
+      r.verdict === "revise" || cs.some((c) => !c.pass);
 
     let revisionRounds = 0;
-    while (review.verdict === "revise" && revisionRounds < MAX_REVISION_ROUNDS) {
+    while (needsRevision(review, brandChecks) && revisionRounds < MAX_REVISION_ROUNDS) {
       revisionRounds++;
       const round = revisionRounds;
+      const failedBrand = brandChecks.filter((c) => !c.pass);
 
       draft = await step("writer", `نویسنده — بازنویسی ${round}`, async () => {
-        const out = await runWriterRevision({ brief, research, draft, review });
-        return { output: out, summary: `بازنویسی بر اساس ${review.issues.length} ایراد ویراستار` };
-      });
-
-      review = await step("editor", `ویراستار — بازبینی ${round + 1}`, async () => {
-        const out = await runEditor({ brief, draft });
+        const out = await runWriterRevision({
+          brief,
+          research,
+          draft,
+          review,
+          failedBrandChecks: failedBrand,
+        });
         return {
           output: out,
-          summary: `امتیاز ${out.score}/100 — ${out.verdict === "approve" ? "تأیید شد" : "هنوز ایراد دارد"}`,
+          summary: `بازنویسی بر اساس ${review.issues.length} ایراد ویراستار و ${failedBrand.length} چک ردشده`,
         };
       });
+
+      brandChecks = runBrandChecks({ text: draft });
+
+      review = await step("editor", `ویراستار — بازبینی ${round + 1}`, async () => {
+        const out = await runEditor({ brief, draft, failedBrandChecks: brandChecks });
+        const passed = brandChecks.filter((c) => c.pass).length;
+        return {
+          output: { review: out, brandChecks },
+          summary: `امتیاز ${out.score}/100 — چک برند ${passed}/${brandChecks.length} پاس — ${out.verdict === "approve" ? "تأیید شد" : "هنوز ایراد دارد"}`,
+        };
+      }).then((r) => r.review);
     }
     // نکته: اگر بعد از سقف بازنویسی هنوز revise بود، ادامه می‌دهیم اما پست
     // «پیش‌نویس» می‌ماند تا انسان تصمیم نهایی را بگیرد (human-in-the-loop).
@@ -138,7 +177,12 @@ export async function runPipeline(opts: {
     });
 
     // ── ۷. ناشر ──
-    const approved = review.verdict === "approve" && review.score >= APPROVE_THRESHOLD;
+    // انتشار خودکار سه شرط دارد؛ چک قطعی برند وتوی مطلق است: یک ادعای
+    // «تضمینی» یا «وکیل» در متن، مسئله‌ی حقوقی است و امتیاز بالای ویراستار
+    // آن را بی‌خطر نمی‌کند.
+    const brandOk = brandChecks.every((c) => c.pass);
+    const approved =
+      review.verdict === "approve" && review.score >= APPROVE_THRESHOLD && brandOk;
     const post = await step("publisher", "ناشر", async () => {
       const now = new Date().toISOString();
       const p: Post = {
@@ -162,7 +206,9 @@ export async function runPipeline(opts: {
         output: { postId: p.id, slug: p.slug, status: p.status },
         summary: approved
           ? `منتشر شد: /blog/${p.slug}`
-          : `به‌عنوان پیش‌نویس ذخیره شد (امتیاز ${review.score} — نیاز به تأیید انسانی)`,
+          : !brandOk
+            ? `به‌عنوان پیش‌نویس ذخیره شد — ${brandChecks.filter((c) => !c.pass).length} چک قطعی برند رد شد (نیاز به تأیید انسانی)`
+            : `به‌عنوان پیش‌نویس ذخیره شد (امتیاز ${review.score} — نیاز به تأیید انسانی)`,
       };
     });
 
@@ -178,6 +224,7 @@ export async function runPipeline(opts: {
           post: fullPost,
           editorReview: review,
           seoChecks: checks,
+          brandChecks,
           revisionRounds,
         });
         return {

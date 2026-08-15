@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { BrandRoute } from "@/lib/company";
 
 /**
  * قرارداد خروجی هر ایجنت — با Zod تعریف می‌شود.
@@ -27,9 +28,50 @@ export type IdeaScoutOutput = z.infer<typeof IdeaScoutOutputSchema>;
 
 /* ── ۲. استراتژیست ──────────────────────────────────────── */
 
+/**
+ * مسیرهای برند، به‌شکل قابل مصرف برای Zod.
+ *
+ * `satisfies` اینجا کار اصلی را می‌کند: BrandRoute در company.ts زندگی
+ * می‌کند و اگر مسیر چهارمی به آن union اضافه شود، همین خط خطای کامپایل
+ * می‌دهد. بدون آن، فهرست اینجا بی‌صدا از برند عقب می‌ماند.
+ */
+export const BRAND_ROUTES = [
+  "brand",
+  "global-talent",
+  "innovator-founder",
+] as const satisfies readonly BrandRoute[];
+
+/**
+ * پنج گروه مخاطب — دقیقاً همان‌هایی که در COMPANY_PROFILE شماره‌گذاری شده‌اند.
+ * اگر آن فهرست عوض شد، این هم باید عوض شود (Zod نمی‌تواند از متن بخواند).
+ */
+export const AUDIENCE_GROUPS = [
+  "digital-tech",
+  "academic-research",
+  "arts-culture",
+  "engineering-medical",
+  "entrepreneurship",
+] as const;
+
+/**
+ * مرحله‌ی سفر مخاطب.
+ *
+ * ⚠️ برخلاف دو فهرست بالا، این یکی در راهنمای برند تعریف نشده است. تنها
+ * اشاره‌ی موجود «محتوای مرحله‌ی آگاهی نباید بفروشد» است، پس سه‌تایی
+ * استاندارد را گذاشته‌ایم. اگر برندگاید مجموعه‌ی دیگری دارد، اینجا و در
+ * پرامپت استراتژیست باید عوض شود.
+ */
+export const JOURNEY_STAGES = ["awareness", "consideration", "decision"] as const;
+
 export const BriefSchema = z.object({
   title: z.string(),
   audience: z.string(),
+  /** کدام مسیر برند — تعیین‌کننده‌ی CTAهای مجاز */
+  route: z.enum(BRAND_ROUTES),
+  /** کدام‌یک از پنج گروه مخاطب */
+  audienceGroup: z.enum(AUDIENCE_GROUPS),
+  /** کدام مرحله از سفر مخاطب */
+  journeyStage: z.enum(JOURNEY_STAGES),
   searchIntent: z.string(),
   primaryKeyword: z.string(),
   secondaryKeywords: z.array(z.string()).min(2).max(8),

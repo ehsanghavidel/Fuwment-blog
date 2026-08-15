@@ -18,15 +18,19 @@
  *   کارآفرینی ممنوع است — مخاطب کارآفرین از همان اولین کلیک احساس می‌کند
  *   اینجا جای او نیست.
  *
- * ⚠️ محدودیت فعلی: هیچ بریفی هنوز فیلد «مسیر» ندارد، پس نمی‌توانیم فهرست
- * را در کد فیلتر کنیم. به‌جایش همه را نشان می‌دهیم و محدوده‌ی مسیرِ هرکدام
- * را صریح در متن پرامپت می‌نویسیم — یعنی رعایتش با مدل است، نه با کد.
- * وقتی «مسیر» به بریف اضافه شد، ctasForRoute() در company.ts آماده است و
- * جای فیلترِ قطعی همین‌جاست.
+ * همه‌ی توابع یک `route` اختیاری می‌گیرند:
+ * - با مسیر → فیلتر قطعی با ctasForRoute(). CTAی خارج از مسیر حتی به
+ *   پرامپت هم نمی‌رسد، و چک قطعی هم ردش می‌کند.
+ * - بدون مسیر → همه را نشان می‌دهیم و محدوده‌ی هرکدام را در متن می‌نویسیم؛
+ *   رعایتش با مدل است، نه با کد.
+ *
+ * بریف بلاگ حالا `route` دارد. پایپ‌لاین ریلز استراتژیست ندارد و بریفش
+ * دستی ساخته می‌شود، پس مسیرش اختیاری است و از ورودی اجرا می‌آید.
  */
 
 import {
   BRAND_CTAS,
+  ctasForRoute,
   type BrandCta,
   type BrandRoute,
   type CtaKind,
@@ -48,19 +52,19 @@ const ROUTE_LABELS: Record<BrandRoute, string> = {
 
 const ALL_ROUTES = Object.keys(ROUTE_LABELS) as BrandRoute[];
 
-/** فهرست CTAهای مجاز برای این اجرا — تا وقتی «مسیر» در بریف نیست، همه. */
-export function availableCtas(): BrandCta[] {
-  return BRAND_CTAS;
+/** فهرست CTAهای مجاز — با مسیر فیلتر می‌شود، بدون مسیر همه. */
+export function availableCtas(route?: BrandRoute): BrandCta[] {
+  return route ? ctasForRoute(route) : BRAND_CTAS;
 }
 
 /** شناسه‌های مجاز — ورودی چک قطعی */
-export function allowedCtaIds(): string[] {
-  return availableCtas().map((c) => c.id);
+export function allowedCtaIds(route?: BrandRoute): string[] {
+  return availableCtas(route).map((c) => c.id);
 }
 
 /** شناسه‌های دعوت مستقیم — برای اعمال قاعده‌ی «حداکثر یکی» */
-export function directCtaIds(): string[] {
-  return availableCtas()
+export function directCtaIds(route?: BrandRoute): string[] {
+  return availableCtas(route)
     .filter((c) => c.kind === "direct")
     .map((c) => c.id);
 }
@@ -78,27 +82,37 @@ function routeScope(cta: BrandCta): string {
 }
 
 /** رندر فهرست برای تزریق به پرامپت */
-export function ctaListBlock(): string {
+export function ctaListBlock(route?: BrandRoute): string {
+  const list = availableCtas(route);
+
   const render = (c: BrandCta, i: number) =>
     [
       `${i + 1}. ${c.label} (id: ${c.id})`,
-      `   محدوده: ${routeScope(c)}`,
+      // وقتی مسیر معلوم است، «محدوده» حرف اضافه است — همه‌ی موارد فهرست
+      // از قبل فیلتر شده‌اند و تکرارش فقط پرامپت را شلوغ می‌کند.
+      route ? null : `   محدوده: ${routeScope(c)}`,
       c.note ? `   توضیح: ${c.note}` : null,
     ]
       .filter(Boolean)
       .join("\n");
 
-  const direct = availableCtas().filter((c) => c.kind === "direct");
-  const transitional = availableCtas().filter((c) => c.kind === "transitional");
+  const direct = list.filter((c) => c.kind === "direct");
+  const transitional = list.filter((c) => c.kind === "transitional");
 
-  return `— دعوت مستقیم (direct) — در هر محتوا **حداکثر یکی** از این‌ها:
-${direct.map(render).join("\n")}
+  const header = route
+    ? `مسیر این محتوا: ${ROUTE_LABELS[route]}. فهرست زیر از قبل به همین مسیر محدود شده — فقط از این‌ها انتخاب کن.\n\n`
+    : "";
 
-— دعوت واسط (transitional) — می‌تواند کنار دعوت مستقیم بیاید:
-${transitional.map(render).join("\n")}
-
-⚠️ «محدوده» را جدی بگیر: دعوتی را انتخاب کن که با مسیرِ همین محتوا هم‌خوان
+  const footer = route
+    ? ""
+    : `\n\n⚠️ «محدوده» را جدی بگیر: دعوتی را انتخاب کن که با مسیرِ همین محتوا هم‌خوان
 باشد. اگر محتوا درباره‌ی Global Talent نیست، «تست خوانایی» را نیاور؛ اگر
 درباره‌ی کسب‌وکار و بنیان‌گذاری نیست، «ارزیابی کسب‌وکار» را نیاور. وقتی مسیرِ
 محتوا روشن نیست، سراغ دعوتی برو که در همه‌ی مسیرها مجاز است.`;
+
+  return `${header}— دعوت مستقیم (direct) — در هر محتوا **حداکثر یکی** از این‌ها:
+${direct.map(render).join("\n")}
+
+— دعوت واسط (transitional) — می‌تواند کنار دعوت مستقیم بیاید:
+${transitional.map(render).join("\n")}${footer}`;
 }

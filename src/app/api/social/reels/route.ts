@@ -3,6 +3,7 @@ import { z } from "zod";
 import { runReelsPipeline } from "@/lib/agents/reels-orchestrator";
 import { isConfigured } from "@/lib/ai";
 import { isStudioAuthorized, unauthorized } from "@/lib/auth";
+import { BRAND_ROUTES } from "@/lib/agents/types";
 
 /**
  * POST /api/social/reels — ساخت اسکریپت ریلز از یک لینک یا یک متن.
@@ -19,8 +20,14 @@ const BodySchema = z
     runId: z.string().uuid(),
     sourceUrl: z.string().url().optional(),
     sourceText: z.string().max(20000).optional(),
-    /** منبع رایگان اختیاری — بدون آن، CTAی «کامنت کلمه‌ی کلیدی» مجاز نیست */
+    /** منبع رایگان اختیاری — فقط به‌عنوان زمینه به پرامپت می‌رود */
     leadMagnet: z.string().max(200).optional(),
+    /**
+     * مسیر برند این محتوا. اگر داده شود، فهرست CTA به همان مسیر فیلتر
+     * می‌شود و چک قطعی هم بر همان مبنا می‌سنجد. اگر نه، همه‌ی CTAها
+     * نشان داده می‌شوند و رعایت محدوده با مدل است.
+     */
+    route: z.enum(BRAND_ROUTES).optional(),
   })
   // دقیقاً یکی از دو ورودی. هر دو با هم یعنی کاربر نمی‌داند کدام مبناست.
   .refine((b) => Boolean(b.sourceUrl) !== Boolean(b.sourceText?.trim()), {
@@ -50,6 +57,7 @@ export async function POST(req: NextRequest) {
     sourceUrl: parsed.data.sourceUrl ?? null,
     sourceText: parsed.data.sourceText ?? null,
     leadMagnet: parsed.data.leadMagnet ?? null,
+    route: parsed.data.route,
   });
 
   return Response.json({ run });
