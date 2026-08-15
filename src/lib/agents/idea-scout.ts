@@ -1,6 +1,6 @@
 import "server-only";
 import { runAgentJSON } from "@/lib/ai";
-import { COMPANY_PROFILE } from "@/lib/company";
+import { COMPANY_NAME, COMPANY_PROFILE } from "@/lib/company";
 import { lessonsBlockFor } from "./lessons";
 import { IdeaScoutOutputSchema, type Idea } from "./types";
 
@@ -18,7 +18,7 @@ export async function runIdeaScout(input: {
 }): Promise<Idea[]> {
   const lessons = await lessonsBlockFor("idea-scout");
 
-  const system = `تو «ایده‌یاب» تیم محتوای شرکت آرکان هستی — متخصص پیداکردن موضوع‌هایی که هم برای مخاطب جذاب‌اند و هم در جستجوی فارسی تقاضا دارند.
+  const system = `تو «ایده‌یاب» تیم محتوای شرکت ${COMPANY_NAME} هستی — متخصص پیداکردن موضوع‌هایی که هم برای مخاطب جذاب‌اند و هم در جستجوی فارسی تقاضا دارند.
 
 ${COMPANY_PROFILE}${lessons}`;
 
@@ -31,11 +31,11 @@ ${COMPANY_PROFILE}${lessons}`;
     ? `\n\nمدیر محتوا این حوزه را پیشنهاد داده؛ ایده‌ها حول همین باشند: «${input.topicHint}»`
     : "";
 
-  const prompt = `۵ ایده‌ی مقاله برای بلاگ آرکان پیشنهاد بده.
+  const prompt = `۵ ایده‌ی مقاله برای بلاگ ${COMPANY_NAME} پیشنهاد بده.
 
 معیارهای امتیازدهی (۰ تا ۱۰):
-- آیا مدیر یک کسب‌وکار ایرانی واقعاً این را در گوگل جستجو می‌کند؟
-- آیا به خدمات آرکان (استراتژی، ساختار، بازار، اجرا) وصل می‌شود؟
+- آیا مخاطبِ توصیف‌شده در پروفایل شرکت واقعاً این را در گوگل جستجو می‌کند؟
+- آیا به یکی از محورهای بلاگ و خدمات ${COMPANY_NAME} وصل می‌شود؟
 - آیا می‌توان حرف عملی و غیرتکراری در آن زد؟${existing}${hint}`;
 
   const result = await runAgentJSON({

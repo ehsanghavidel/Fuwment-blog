@@ -114,7 +114,7 @@ export async function prepareReelsSource(input: {
       redirect: "follow",
       headers: {
         // بعضی سایت‌ها بدون UA پاسخ نمی‌دهند
-        "User-Agent": "Mozilla/5.0 (compatible; ArkanContentStudio/1.0)",
+        "User-Agent": "Mozilla/5.0 (compatible; FuwmentContentStudio/1.0)",
         Accept: "text/html,application/xhtml+xml",
       },
       signal: AbortSignal.timeout(15000),

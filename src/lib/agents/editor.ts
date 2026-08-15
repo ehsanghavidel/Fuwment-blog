@@ -1,6 +1,6 @@
 import "server-only";
 import { runAgentJSON } from "@/lib/ai";
-import { BRAND_VOICE } from "@/lib/company";
+import { BRAND_VOICE, COMPANY_NAME } from "@/lib/company";
 import { lessonsBlockFor } from "./lessons";
 import { ReviewSchema, type Brief, type Review } from "./types";
 
@@ -25,7 +25,7 @@ export async function runEditor(input: {
 }): Promise<Review> {
   const lessons = await lessonsBlockFor("editor");
 
-  const system = `تو «ویراستار ارشد» بلاگ آرکان هستی — سخت‌گیر اما منصف. کارت قضاوت کیفیت است، نه بازنویسی. ایرادهایی که می‌گیری باید آن‌قدر مشخص باشند که نویسنده دقیقاً بداند چه چیزی را کجا عوض کند.
+  const system = `تو «ویراستار ارشد» بلاگ ${COMPANY_NAME} هستی — سخت‌گیر اما منصف. کارت قضاوت کیفیت است، نه بازنویسی. ایرادهایی که می‌گیری باید آن‌قدر مشخص باشند که نویسنده دقیقاً بداند چه چیزی را کجا عوض کند.
 
 ${BRAND_VOICE}${lessons}`;
 

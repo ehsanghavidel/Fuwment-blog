@@ -169,8 +169,10 @@ export function runReelsChecks(input: {
   ctaId: string;
   onScreenText: string;
   hashtags: string[];
-  /** شناسه‌های مجاز، از فهرست reels-cta */
+  /** شناسه‌های مجاز، از BRAND_CTAS (company.ts) */
   allowedCtaIds: string[];
+  /** زیرمجموعه‌ی بالا که نوعشان direct است — برای قاعده‌ی «حداکثر یک دعوت مستقیم» */
+  directCtaIds: string[];
 }): SocialCheck[] {
   const { hook, body, cta, onScreenText, hashtags } = input;
   const checks: SocialCheck[] = [];
@@ -234,6 +236,26 @@ export function runReelsChecks(input: {
       : `«${input.ctaId}» در فهرست مجاز نیست (${input.allowedCtaIds.join("، ")})`,
   });
 
+  // قاعده‌ی برند: حداکثر یک دعوت مستقیم در هر محتوا.
+  //
+  // ⚠️ صادقانه: اسکیمای ریلز فقط یک ctaId دارد، پس این شمارش امروز هیچ‌وقت
+  // از ۱ بالاتر نمی‌رود و چک عملاً همیشه پاس می‌شود. عمداً به‌شکل شمارش روی
+  // آرایه نوشته شده تا اگر بعداً محتوایی چند CTA اعلام کرد، قاعده خودبه‌خود
+  // اعمال شود. برای ریلز، چیزی که واقعاً کار می‌کند چک بالا (فهرست مجاز) و
+  // خودِ دستورالعمل پرامپت است — نه این یکی.
+  const declaredIds = [input.ctaId];
+  const directUsed = declaredIds.filter((id) => input.directCtaIds.includes(id));
+  checks.push({
+    name: "حداکثر یک دعوت مستقیم",
+    pass: directUsed.length <= 1,
+    note:
+      directUsed.length <= 1
+        ? directUsed.length === 1
+          ? `یک دعوت مستقیم: ${directUsed[0]}`
+          : "دعوت مستقیمی استفاده نشده (فقط واسط)"
+        : `${directUsed.length} دعوت مستقیم هم‌زمان: ${directUsed.join("، ")}`,
+  });
+
   const onScreenLen = charCount(onScreenText);
   checks.push({
     name: "طول متن روی تصویر",
@@ -241,7 +263,7 @@ export function runReelsChecks(input: {
     note: `${onScreenLen} کاراکتر (سقف ۴۵ — روی ویدیو باید یک‌نگاهی خوانده شود)`,
   });
 
-  // املای محاوره‌ای — برندگاید آرکان فارسی کتابی با خطاب «شما» می‌خواهد.
+  // املای محاوره‌ای — برندگاید فارسی کتابی با خطاب «شما» می‌خواهد.
   // این فهرست عمداً کوتاه و بی‌ابهام است: همه واژه‌های کاملی هستند که
   // شکل کتابی مشخصی دارند، پس تطبیقِ کلمه‌کامل خطای کاذب نمی‌دهد.
   // (برخلاف پسوندهایی مثل «تون» که داخل «ستون» هم پیدا می‌شوند.)

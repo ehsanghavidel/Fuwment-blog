@@ -20,3 +20,5 @@
 *.tsbuildinfo
 next-env.d.ts
 supabase/.temp/
+.backup/
+.backup/

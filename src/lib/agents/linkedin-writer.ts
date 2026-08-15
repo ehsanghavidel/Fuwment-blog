@@ -1,6 +1,6 @@
 import "server-only";
 import { runAgentJSON } from "@/lib/ai";
-import { COMPANY_PROFILE, BRAND_VOICE } from "@/lib/company";
+import { COMPANY_NAME, COMPANY_PROFILE, BRAND_VOICE } from "@/lib/company";
 import { lessonsBlockFor } from "./lessons";
 import {
   LinkedInPostSchema,
@@ -21,7 +21,7 @@ import type { SocialCheck } from "./social-checks";
  */
 
 function systemPrompt(lessons: string): string {
-  return `تو «کپی‌رایتر لینکدین» آرکان هستی. برای فیدی می‌نویسی که مخاطبش مدیران و بنیان‌گذارانند و حوصله‌ی تبلیغ ندارند.
+  return `تو «کپی‌رایتر لینکدین» ${COMPANY_NAME} هستی. برای فیدی می‌نویسی که مخاطبش متخصصان و بنیان‌گذارانند و حوصله‌ی تبلیغ ندارند.
 
 ${COMPANY_PROFILE}
 
@@ -52,7 +52,7 @@ ${brief.keyPoints.map((p) => `- ${p}`).join("\n")}
 const SHAPE_HINT = `{
   "title": "عنوان داخلی برای فهرست استودیو",
   "body": "متن کامل پست، با خط خالی بین پاراگراف‌ها",
-  "hashtags": ["#استراتژی", "#رشد_کسب_وکار", "#مدیریت"],
+  "hashtags": ["#گلوبال_تلنت", "#GlobalTalent", "#مسیر_حرفه‌ای"],
   "cta": "پرسش پایانی دعوت به گفت‌وگو"
 }`;
 

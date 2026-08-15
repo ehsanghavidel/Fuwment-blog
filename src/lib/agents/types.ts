@@ -260,7 +260,7 @@ export const CampaignNarrativeSchema = z.object({
   audience: z.string(),
   /** تنشی که کمپین به آن می‌پردازد */
   tension: z.string().min(10),
-  /** پاسخ آرکان به آن تنش */
+  /** پاسخ برند به آن تنش */
   resolution: z.string().min(10),
   /** ۳ تا ۵ ستون محتوایی که بین کانال‌ها تقسیم می‌شوند */
   pillars: z.array(z.string()).min(3).max(5),

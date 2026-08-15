@@ -1,6 +1,6 @@
 import "server-only";
 import { runAgentJSON } from "@/lib/ai";
-import { BRAND_VOICE, COMPANY_PROFILE } from "@/lib/company";
+import { BRAND_VOICE, COMPANY_NAME, COMPANY_PROFILE } from "@/lib/company";
 import { lessonsBlockFor } from "./lessons";
 import { BriefSchema, type Brief, type Idea } from "./types";
 
@@ -21,7 +21,7 @@ export async function runStrategist(input: {
 }): Promise<Brief> {
   const lessons = await lessonsBlockFor("strategist");
 
-  const system = `تو «استراتژیست محتوا»ی شرکت آرکان هستی. از بین ایده‌ها بهترین را انتخاب و به بریف اجرایی تبدیل می‌کنی.
+  const system = `تو «استراتژیست محتوا»ی شرکت ${COMPANY_NAME} هستی. از بین ایده‌ها بهترین را انتخاب و به بریف اجرایی تبدیل می‌کنی.
 
 ${COMPANY_PROFILE}
 
@@ -41,7 +41,10 @@ ${ideasText}
 بهترین ایده را انتخاب کن (لازم نیست حتماً اولی باشد — قضاوت خودت را داشته باش) و بریف کامل محتوا بساز:
 - عنوان نهایی را در صورت نیاز بهتر کن (جذاب اما بدون کلیک‌بیت).
 - کلمه‌ی کلیدی اصلی باید عبارتی باشد که واقعاً به فارسی جستجو می‌شود.
-- ساختار (outline) باید ۴ تا ۷ بخش داشته باشد و آخرین بخش به CTA مشاوره‌ی رایگان آرکان برسد.
+- ساختار (outline) باید ۴ تا ۷ بخش داشته باشد و آخرین بخش به یک قدم بعدی روشن برسد.
+- فیلد cta باید به «ارزیابی اولیه» دعوت کند. عبارت «مشاوره‌ی رایگان» ممنوع است؛
+  آن خدمت وجود ندارد و برندگاید این عبارت را صریحاً رد کرده است.
+- فقط یک دعوت مستقیم بگذار، نه چند تا.
 - طول هدف بین ۹۰۰ تا ۱۵۰۰ کلمه باشد.`;
 
   return runAgentJSON({

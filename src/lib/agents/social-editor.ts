@@ -1,6 +1,6 @@
 import "server-only";
 import { runAgentJSON } from "@/lib/ai";
-import { BRAND_VOICE } from "@/lib/company";
+import { BRAND_VOICE, COMPANY_NAME } from "@/lib/company";
 import { lessonsBlockFor } from "./lessons";
 import { SocialReviewSchema, type SocialBrief, type SocialReview } from "./types";
 import type { SocialCheck } from "./social-checks";
@@ -55,7 +55,7 @@ export async function runSocialEditor(input: {
   const lessons = await lessonsBlockFor("social-editor");
   const label = CHANNEL_LABEL[input.channel];
 
-  const system = `تو «ویراستار شبکه‌های اجتماعی» آرکان هستی — سخت‌گیر اما منصف. کارت قضاوت کیفیت است، نه بازنویسی. ایرادهایی که می‌گیری باید آن‌قدر مشخص باشند که کپی‌رایتر دقیقاً بداند چه چیزی را کجا عوض کند.
+  const system = `تو «ویراستار شبکه‌های اجتماعی» ${COMPANY_NAME} هستی — سخت‌گیر اما منصف. کارت قضاوت کیفیت است، نه بازنویسی. ایرادهایی که می‌گیری باید آن‌قدر مشخص باشند که کپی‌رایتر دقیقاً بداند چه چیزی را کجا عوض کند.
 
 ${BRAND_VOICE}${lessons}`;
 

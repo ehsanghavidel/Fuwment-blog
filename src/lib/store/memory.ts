@@ -33,11 +33,11 @@ type MemoryState = {
 // نام کلید را با هر تغییرِ شکلِ state عوض می‌کنیم. state() فقط وقتی
 // مقداردهی می‌کند که کل شیء غایب باشد؛ پس اگر سرور dev از قبل بالا بوده،
 // stateِ جامانده فیلد جدید را ندارد و اولین دسترسی خطا می‌دهد.
-const g = globalThis as typeof globalThis & { __arkanBlogMemoryV3?: MemoryState };
+const g = globalThis as typeof globalThis & { __fuwmentBlogMemoryV1?: MemoryState };
 
 function state(): MemoryState {
-  if (!g.__arkanBlogMemoryV3) {
-    g.__arkanBlogMemoryV3 = {
+  if (!g.__fuwmentBlogMemoryV1) {
+    g.__fuwmentBlogMemoryV1 = {
       posts: new Map(),
       campaigns: new Map(),
       socialPosts: new Map(),
@@ -46,7 +46,7 @@ function state(): MemoryState {
       feedback: [],
     };
   }
-  return g.__arkanBlogMemoryV3;
+  return g.__fuwmentBlogMemoryV1;
 }
 
 export class MemoryStore implements BlogStore {

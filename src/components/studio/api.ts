@@ -6,7 +6,7 @@
  * داشته می‌شود و با هر درخواست در هدر x-studio-password می‌رود.
  */
 
-const KEY = "arkan-studio-password";
+const KEY = "fuwment-studio-password";
 
 export function getStudioPassword(): string {
   if (typeof window === "undefined") return "";

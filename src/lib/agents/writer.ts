@@ -1,6 +1,6 @@
 import "server-only";
 import { runAgentText, writerModel } from "@/lib/ai";
-import { BRAND_VOICE, COMPANY_PROFILE } from "@/lib/company";
+import { BRAND_VOICE, COMPANY_NAME, COMPANY_PROFILE } from "@/lib/company";
 import { lessonsBlockFor } from "./lessons";
 import type { Brief, Research, Review } from "./types";
 
@@ -15,7 +15,7 @@ import type { Brief, Research, Review } from "./types";
 
 async function writerSystem(): Promise<string> {
   const lessons = await lessonsBlockFor("writer");
-  return `تو «نویسنده»ی بلاگ شرکت آرکان هستی — نویسنده‌ای حرفه‌ای که فارسی روان و طبیعی می‌نویسد و از ترجمه‌زدگی بیزار است.
+  return `تو «نویسنده»ی بلاگ شرکت ${COMPANY_NAME} هستی — نویسنده‌ای حرفه‌ای که فارسی روان و طبیعی می‌نویسد و از ترجمه‌زدگی بیزار است.
 
 ${COMPANY_PROFILE}
 

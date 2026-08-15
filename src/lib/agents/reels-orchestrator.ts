@@ -7,7 +7,7 @@ import { runReelsWriter, runReelsRevision } from "./reels-writer";
 import { SOCIAL_APPROVE_THRESHOLD } from "./social-editor";
 import { runReelsChecks } from "./social-checks";
 import { writeAndReview } from "./social-loop";
-import { availableCtas } from "./reels-cta";
+import { allowedCtaIds, directCtaIds } from "./reels-cta";
 import { runSocialCritic } from "./critic";
 import type { ReelsSource } from "./reels-source";
 import type { ReelsScript, SocialBrief } from "./types";
@@ -84,7 +84,8 @@ export async function runReelsPipeline(opts: {
       };
     });
 
-    const allowedCtaIds = availableCtas(Boolean(leadMagnet)).map((c) => c.id);
+    const allowed = allowedCtaIds();
+    const direct = directCtaIds();
 
     /**
      * ویراستار اجتماعی یک `SocialBrief` می‌خواهد تا بداند محتوا قرار بوده
@@ -94,11 +95,12 @@ export async function runReelsPipeline(opts: {
      */
     const brief: SocialBrief = {
       coreMessage: `اسکریپت ریلز بر اساس: ${source.origin}`,
-      audience: "مدیران و مالکان کسب‌وکارهای کوچک و متوسط ایرانی",
+      audience:
+        "متخصصان و بنیان‌گذاران فارسی‌زبان، ۲۸ تا ۴۸ سال، با پنج سال به بالا سابقه‌ی قابل دفاع — داخل ایران یا مقیم خارج",
       keyPoints: [],
       hookAngle: "قلاب باید در سه تا پنج ثانیه‌ی اول مخاطب را متوقف کند",
       proofPoint: source.text.slice(0, 1500),
-      cta: `یکی از این‌ها: ${allowedCtaIds.join("، ")}`,
+      cta: `یکی از این‌ها: ${allowed.join("، ")}`,
     };
 
     // ── ۲ و ۳. کپی‌رایتر ریلز ⇄ ویراستار (حلقه‌ی مشترک) ──
@@ -119,7 +121,8 @@ export async function runReelsPipeline(opts: {
           ctaId: d.ctaId,
           onScreenText: d.onScreenText,
           hashtags: d.hashtags,
-          allowedCtaIds,
+          allowedCtaIds: allowed,
+          directCtaIds: direct,
         }),
       describe: (d) =>
         `${`${d.hook} ${d.body} ${d.cta}`.trim().split(/\s+/).length} کلمه، CTA: ${d.ctaId}`,

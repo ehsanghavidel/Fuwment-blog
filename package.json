@@ -1,7 +1,8 @@
 {
-  "name": "arkan-blog-agents",
+  "name": "fuwment-blog-agents",
   "version": "1.0.0",
   "private": true,
+  "description": "سیستم مولتی‌ایجنت تولید محتوای فومنت — بلاگ، اینستاگرام، لینکدین و ریلز",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

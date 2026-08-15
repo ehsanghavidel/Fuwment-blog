@@ -2,6 +2,7 @@ import "server-only";
 import { randomUUID } from "crypto";
 import { z } from "zod";
 import { runAgentJSON } from "@/lib/ai";
+import { COMPANY_NAME } from "@/lib/company";
 import { getStore, type Post } from "@/lib/store";
 import {
   CriticOutputSchema,
@@ -57,7 +58,7 @@ export async function runCritic(input: {
   seoChecks: SeoCheck[];
   revisionRounds: number;
 }): Promise<CriticOutput> {
-  const system = `تو «منتقد» سیستم تولید محتوای آرکان هستی. کارت بهبود خودِ سیستم است، نه این مقاله‌ی خاص. از هر اجرا الگو استخراج می‌کنی: چه چیزی خوب کار کرد، چه چیزی نه، و کدام ایجنت باید دفعه‌ی بعد چه‌کار متفاوتی بکند.
+  const system = `تو «منتقد» سیستم تولید محتوای ${COMPANY_NAME} هستی. کارت بهبود خودِ سیستم است، نه این مقاله‌ی خاص. از هر اجرا الگو استخراج می‌کنی: چه چیزی خوب کار کرد، چه چیزی نه، و کدام ایجنت باید دفعه‌ی بعد چه‌کار متفاوتی بکند.
 
 ایجنت‌های سیستم: ${AGENT_IDS.join(", ")}
 
@@ -125,7 +126,7 @@ export async function runSocialCritic(input: {
   parts: SocialCriticPart[];
   revisionRounds: number;
 }): Promise<CriticOutput> {
-  const system = `تو «منتقد» سیستم تولید محتوای آرکان هستی. کارت بهبود خودِ سیستم است، نه این محتوای خاص. از هر اجرا الگو استخراج می‌کنی: چه چیزی خوب کار کرد، چه چیزی نه، و کدام ایجنت باید دفعه‌ی بعد چه‌کار متفاوتی بکند.
+  const system = `تو «منتقد» سیستم تولید محتوای ${COMPANY_NAME} هستی. کارت بهبود خودِ سیستم است، نه این محتوای خاص. از هر اجرا الگو استخراج می‌کنی: چه چیزی خوب کار کرد، چه چیزی نه، و کدام ایجنت باید دفعه‌ی بعد چه‌کار متفاوتی بکند.
 
 این اجرا از نوع «تولید محتوای شبکه‌های اجتماعی» بود.
 
@@ -195,7 +196,7 @@ export async function distillFeedback(input: {
   // بازخورد مثبتِ بدون توضیح، درسی ندارد
   if (input.rating === "up" && !input.comment.trim()) return 0;
 
-  const system = `تو «منتقد» سیستم تولید محتوای آرکان هستی. بازخورد انسانی را به درس قابل‌اجرا برای ایجنت‌ها تبدیل می‌کنی.
+  const system = `تو «منتقد» سیستم تولید محتوای ${COMPANY_NAME} هستی. بازخورد انسانی را به درس قابل‌اجرا برای ایجنت‌ها تبدیل می‌کنی.
 ایجنت‌های سیستم: ${AGENT_IDS.join(", ")}
 درس را به ایجنتی نسبت بده که واقعاً مسئول آن ایراد است؛ اگر بازخورد درباره‌ی محتوای اجتماعی است، سراغ ایجنت‌های بلاگ نرو.
 اگر بازخورد آن‌قدر مبهم است که درس عمومی از آن درنمی‌آید، آرایه‌ی خالی بده.`;

@@ -22,8 +22,8 @@ export function getOpenRouter() {
     baseURL: process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1",
     apiKey: process.env.OPENROUTER_API_KEY ?? "",
     headers: {
-      "HTTP-Referer": "https://github.com/siavash-smf/arkan-blog-agents",
-      "X-Title": "Arkan Blog Agents",
+      "HTTP-Referer": "https://github.com/siavash-smf/fuwment-blog-agents",
+      "X-Title": "Fuwment Blog Agents",
     },
     // محدودکردن reasoning به سطح پایین (همان درسِ فاز ۲):
     // برخی مدل‌ها استدلال اجباری دارند و ممکن است کل بودجه‌ی توکن را صرف آن کنند.

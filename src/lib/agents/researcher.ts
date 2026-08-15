@@ -1,7 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { runAgentJSON } from "@/lib/ai";
-import { COMPANY_PROFILE } from "@/lib/company";
+import { COMPANY_NAME, COMPANY_PROFILE } from "@/lib/company";
 import { lessonsBlockFor } from "./lessons";
 import { ResearchSchema, type Brief, type Research } from "./types";
 
@@ -46,7 +46,7 @@ export async function runResearcher(input: { brief: Brief }): Promise<Research> 
   const lessons = await lessonsBlockFor("researcher");
   const { brief } = input;
 
-  const system = `تو «پژوهشگر» تیم محتوای آرکان هستی. ماده‌ی خام دقیق و قابل‌استناد برای نویسنده آماده می‌کنی. اغراق نمی‌کنی و آمار بی‌منبع نمی‌سازی.
+  const system = `تو «پژوهشگر» تیم محتوای ${COMPANY_NAME} هستی. ماده‌ی خام دقیق و قابل‌استناد برای نویسنده آماده می‌کنی. اغراق نمی‌کنی و آمار بی‌منبع نمی‌سازی.
 
 ${COMPANY_PROFILE}${lessons}`;
 

@@ -1,6 +1,6 @@
 import "server-only";
 import { runAgentJSON } from "@/lib/ai";
-import { COMPANY_PROFILE } from "@/lib/company";
+import { COMPANY_NAME, COMPANY_PROFILE } from "@/lib/company";
 import { lessonsBlockFor } from "./lessons";
 import { SocialIdeaScoutOutputSchema, type SocialIdea } from "./types";
 
@@ -21,7 +21,7 @@ export async function runSocialIdeaScout(input: {
 }): Promise<SocialIdea[]> {
   const lessons = await lessonsBlockFor("social-idea-scout");
 
-  const system = `تو «ایده‌یاب شبکه‌های اجتماعی» تیم محتوای آرکان هستی — متخصص پیداکردن حرف‌هایی که مدیر یک کسب‌وکار، وسط اسکرول کردن، برایشان می‌ایستد.
+  const system = `تو «ایده‌یاب شبکه‌های اجتماعی» تیم محتوای ${COMPANY_NAME} هستی — متخصص پیداکردن حرف‌هایی که مخاطبِ توصیف‌شده در پروفایل شرکت، وسط اسکرول کردن، برایشان می‌ایستد.
 
 ${COMPANY_PROFILE}
 
@@ -36,12 +36,12 @@ ${COMPANY_PROFILE}
     ? `\n\nمدیر محتوا این حوزه را پیشنهاد داده؛ ایده‌ها حول همین باشند: «${input.topicHint}»`
     : "";
 
-  const prompt = `۵ ایده‌ی کاروسل اینستاگرام برای آرکان پیشنهاد بده.
+  const prompt = `۵ ایده‌ی کاروسل اینستاگرام برای ${COMPANY_NAME} پیشنهاد بده.
 
 معیارهای امتیازدهی (۰ تا ۱۰):
 - آیا قلابش واقعاً اسکرول را متوقف می‌کند، یا فقط یک عنوان مؤدبانه است؟
-- آیا به دردِ واقعی و مشخصی از مدیر کسب‌وکار ایرانی می‌خورد؟
-- آیا به خدمات آرکان (استراتژی، ساختار، بازار، اجرا) وصل می‌شود؟
+- آیا به دردِ واقعی و مشخصی از مخاطبِ توصیف‌شده در پروفایل شرکت می‌خورد؟
+- آیا به یکی از محورهای محتوایی و خدمات ${COMPANY_NAME} وصل می‌شود؟
 - آیا حرف تازه‌ای دارد، یا تکرار چیزی است که همه گفته‌اند؟${existing}${hint}`;
 
   const result = await runAgentJSON({

@@ -1,6 +1,6 @@
 import "server-only";
 import { runAgentJSON } from "@/lib/ai";
-import { COMPANY_PROFILE, BRAND_VOICE } from "@/lib/company";
+import { COMPANY_NAME, COMPANY_PROFILE, BRAND_VOICE } from "@/lib/company";
 import { lessonsBlockFor } from "./lessons";
 import {
   InstagramCarouselSchema,
@@ -23,7 +23,7 @@ import type { SocialCheck } from "./social-checks";
 
 /** قواعد مشترک بین پیش‌نویس اول و بازنویسی */
 function systemPrompt(lessons: string): string {
-  return `تو «کپی‌رایتر اینستاگرام» آرکان هستی. کاروسل‌های آموزشی می‌نویسی که مدیران کسب‌وکار اسکرول را برایشان متوقف کنند.
+  return `تو «کپی‌رایتر اینستاگرام» ${COMPANY_NAME} هستی. کاروسل‌های آموزشی می‌نویسی که مخاطبِ توصیف‌شده در پروفایل شرکت اسکرول را برایشان متوقف کند.
 
 ${COMPANY_PROFILE}
 
@@ -59,7 +59,7 @@ const SHAPE_HINT = `{
   "slides": [
     { "kicker": "قلاب", "heading": "تیتر کوتاه اسلاید", "text": "یکی دو جمله" }
   ],
-  "hashtags": ["#استراتژی_کسب_وکار", "#مدیریت"],
+  "hashtags": ["#گلوبال_تلنت", "#GlobalTalent", "#مهاجرت_حرفه‌ای"],
   "cta": "دعوت به اقدام اسلاید آخر"
 }`;
 

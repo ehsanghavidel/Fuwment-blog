@@ -1,5 +1,6 @@
 import "server-only";
 import { runAgentJSON } from "@/lib/ai";
+import { COMPANY_NAME } from "@/lib/company";
 import { lessonsBlockFor } from "./lessons";
 import { SeoOutputSchema, type Brief, type SeoOutput } from "./types";
 import { runSeoChecks, type SeoCheck } from "./seo-checks";
@@ -31,7 +32,7 @@ export async function runSeo(input: {
 }): Promise<SeoResult> {
   const lessons = await lessonsBlockFor("seo");
 
-  const system = `تو «متخصص سئو»ی بلاگ آرکان هستی — سئوی فارسی را خوب می‌شناسی: متادیتای طبیعی که هم برای گوگل بهینه است هم کاربر را جذب می‌کند، نه keyword stuffing.${lessons}`;
+  const system = `تو «متخصص سئو»ی بلاگ ${COMPANY_NAME} هستی — سئوی فارسی را خوب می‌شناسی: متادیتای طبیعی که هم برای گوگل بهینه است هم کاربر را جذب می‌کند، نه keyword stuffing.${lessons}`;
 
   const basePrompt = `مقاله‌ی نهایی:
 ${input.contentMd}
