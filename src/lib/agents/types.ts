@@ -344,7 +344,7 @@ export const ReelsScriptSchema = z.object({
   body: z.string().min(150),
   /** جمله‌ی دعوت به اقدام، همان‌طور که گفته می‌شود */
   cta: z.string().min(10),
-  /** شناسه‌ی CTA انتخاب‌شده از فهرست reels-cta.ts */
+  /** شناسه‌ی CTA انتخاب‌شده از فهرست brand-cta.ts */
   ctaId: z.string().min(2),
   /** یک جمله: چرا این CTA؟ — بیرون از اسکریپت */
   ctaReason: z.string().min(10),

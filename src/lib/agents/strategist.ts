@@ -3,7 +3,7 @@ import { runAgentJSON } from "@/lib/ai";
 import { BRAND_VOICE, COMPANY_NAME, COMPANY_PROFILE } from "@/lib/company";
 import { lessonsBlockFor } from "./lessons";
 import { BriefSchema, type Brief, type Idea } from "./types";
-import { ctaListBlock, allowedCtaIds } from "./reels-cta";
+import { ctaListBlock, allowedCtaIds } from "./brand-cta";
 import type { BrandRoute } from "@/lib/company";
 
 /** توصیف هر مسیر برای پرامپت — همان تفکیکی که در COMPANY_PROFILE آمده */

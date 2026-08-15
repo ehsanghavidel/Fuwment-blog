@@ -8,7 +8,7 @@ import { runResearcher } from "./researcher";
 import { runWriter, runWriterRevision } from "./writer";
 import { runEditor, APPROVE_THRESHOLD } from "./editor";
 import { runBrandChecks, runBriefChecks, type BrandCheck } from "./brand-checks";
-import { allowedCtaIds } from "./reels-cta";
+import { allowedCtaIds } from "./brand-cta";
 import { runSeo } from "./seo";
 import { runCritic } from "./critic";
 import type { Review } from "./types";

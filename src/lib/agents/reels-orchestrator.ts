@@ -7,7 +7,7 @@ import { runReelsWriter, runReelsRevision } from "./reels-writer";
 import { SOCIAL_APPROVE_THRESHOLD } from "./social-editor";
 import { runReelsChecks } from "./social-checks";
 import { writeAndReview } from "./social-loop";
-import { allowedCtaIds, directCtaIds } from "./reels-cta";
+import { allowedCtaIds, directCtaIds } from "./brand-cta";
 import { runSocialCritic } from "./critic";
 import type { ReelsSource } from "./reels-source";
 import type { ReelsScript, SocialBrief } from "./types";

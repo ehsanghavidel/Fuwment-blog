@@ -2,7 +2,7 @@ import "server-only";
 import { runAgentJSON } from "@/lib/ai";
 import { COMPANY_NAME, COMPANY_PROFILE, BRAND_VOICE } from "@/lib/company";
 import { lessonsBlockFor } from "./lessons";
-import { ctaListBlock } from "./reels-cta";
+import { ctaListBlock } from "./brand-cta";
 import { ReelsScriptSchema, type ReelsScript, type SocialReview } from "./types";
 import type { SocialCheck } from "./social-checks";
 import type { ReelsSource } from "./reels-source";
