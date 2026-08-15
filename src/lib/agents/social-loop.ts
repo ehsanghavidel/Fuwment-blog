@@ -1,5 +1,6 @@
 import "server-only";
 import { runSocialEditor, type SocialChannel } from "./social-editor";
+import { runBrandChecks } from "./brand-checks";
 import type { SocialCheck } from "./social-checks";
 import type { makeStepRunner } from "./run-steps";
 import type { SocialBrief, SocialReview } from "./types";
@@ -39,16 +40,35 @@ export async function writeAndReview<T>(args: {
   write: () => Promise<T>;
   revise: (draft: T, review: SocialReview, failedChecks: SocialCheck[]) => Promise<T>;
   check: (draft: T) => SocialCheck[];
+  /**
+   * متنی از پیش‌نویس که چک‌های برند رویش اجرا می‌شوند — هرچه قرار است
+   * منتشر یا خوانده شود. هر کانال ساختار متفاوتی دارد، پس استخراجش کار
+   * ارکستریتور است نه این تابع.
+   */
+  brandText: (draft: T) => string;
   describe: (draft: T) => string;
 }): Promise<SocialLoopResult<T>> {
   const { step, channel, writerAgent, label, brief } = args;
+
+  /**
+   * چک‌های کانال + چک‌های برند، در یک فهرست.
+   *
+   * یکی‌کردنشان عمدی است: هر دو `{ name, pass, note }` هستند و هر دو
+   * قطعی‌اند، پس هر دو باید از همان دو مسیری بگذرند که چک‌های کانال
+   * می‌گذرند — تزریق به پرامپت ویراستار، و اجباری‌کردن بازنویسی. جدا
+   * نگه‌داشتنشان یعنی دو بار همان سیم‌کشی، و فراموش‌کردن یکی در آینده.
+   */
+  const allChecks = (draft: T): SocialCheck[] => [
+    ...args.check(draft),
+    ...runBrandChecks({ text: args.brandText(draft) }),
+  ];
 
   let draft = await step(writerAgent, `کپی‌رایتر ${label} — پیش‌نویس اول`, async () => {
     const out = await args.write();
     return { output: out, summary: `پیش‌نویس نوشته شد — ${args.describe(out)}` };
   });
 
-  let checks = args.check(draft);
+  let checks = allChecks(draft);
 
   const review1 = await step("social-editor", `ویراستار اجتماعی — ${label}`, async () => {
     const out = await runSocialEditor({
@@ -89,7 +109,7 @@ export async function writeAndReview<T>(args: {
       return { output: out, summary: `بازنویسی بر اساس ${previousReview.issues.length} ایراد` };
     });
 
-    checks = args.check(draft);
+    checks = allChecks(draft);
 
     const again = await step("social-editor", `ویراستار اجتماعی — بازبینی ${label}`, async () => {
       const out = await runSocialEditor({

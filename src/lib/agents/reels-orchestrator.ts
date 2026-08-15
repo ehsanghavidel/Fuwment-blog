@@ -130,6 +130,8 @@ export async function runReelsPipeline(opts: {
           allowedCtaIds: allowed,
           directCtaIds: direct,
         }),
+      // اسکریپت + متن روی تصویر + کپشن: هرچه مخاطب می‌شنود یا می‌بیند
+      brandText: (d) => `${d.hook}\n${d.body}\n${d.cta}\n${d.onScreenText}\n${d.caption}`,
       describe: (d) =>
         `${`${d.hook} ${d.body} ${d.cta}`.trim().split(/\s+/).length} کلمه، CTA: ${d.ctaId}`,
     });

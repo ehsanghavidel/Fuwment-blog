@@ -100,6 +100,7 @@ export async function runLinkedinPipeline(opts: {
       revise: (draft, review, failedChecks) =>
         runLinkedinRevision({ brief, draft, review, failedChecks }),
       check: (d) => runLinkedinChecks({ body: d.body, hashtags: d.hashtags }),
+      brandText: (d) => `${d.body}\n${d.cta}`,
       describe: (d) => `${[...d.body].length} کاراکتر، ${d.hashtags.length} هشتگ`,
     });
 

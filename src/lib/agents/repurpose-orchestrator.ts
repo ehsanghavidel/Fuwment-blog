@@ -87,6 +87,9 @@ export async function runRepurpose(opts: {
         runInstagramRevision({ brief, draft, review, failedChecks }),
       check: (d) =>
         runInstagramChecks({ caption: d.caption, slides: d.slides, hashtags: d.hashtags }),
+      // کپشن + متن همه‌ی اسلایدها + دعوت به اقدام
+      brandText: (d) =>
+        [d.caption, ...d.slides.map((s) => `${s.kicker} ${s.heading} ${s.text}`), d.cta].join("\n"),
       describe: (d) => `${d.slides.length} اسلاید، ${d.hashtags.length} هشتگ`,
     });
 
@@ -101,6 +104,7 @@ export async function runRepurpose(opts: {
       revise: (draft, review, failedChecks) =>
         runLinkedinRevision({ brief, draft, review, failedChecks }),
       check: (d) => runLinkedinChecks({ body: d.body, hashtags: d.hashtags }),
+      brandText: (d) => `${d.body}\n${d.cta}`,
       describe: (d) => `${[...d.body].length} کاراکتر، ${d.hashtags.length} هشتگ`,
     });
 

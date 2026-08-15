@@ -20,8 +20,25 @@ import {
  * می‌کند، همین polling ساده یک نمای زنده می‌سازد — بدون WebSocket.
  */
 
+/**
+ * مسیرهای برند — برچسب فارسی و توضیح یک‌خطی برای انتخابگر.
+ * مقادیر باید با BRAND_ROUTES در types.ts یکی بمانند.
+ */
+const ROUTE_OPTIONS = [
+  { value: "brand", label: "سطح برند", hint: "بی‌طرف نسبت به دو مسیر" },
+  { value: "global-talent", label: "Global Talent", hint: "بر پایه‌ی دستاورد و تاثیر فردی" },
+  {
+    value: "innovator-founder",
+    label: "Innovator Founder",
+    hint: "بر پایه‌ی ایده و کسب‌وکار",
+  },
+] as const;
+
+type RouteValue = (typeof ROUTE_OPTIONS)[number]["value"];
+
 export function RunPanel({ onUnauthorized }: { onUnauthorized: () => void }) {
   const [topicHint, setTopicHint] = useState("");
+  const [route, setRoute] = useState<RouteValue>("brand");
   const [run, setRun] = useState<PipelineRun | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -76,7 +93,7 @@ export function RunPanel({ onUnauthorized }: { onUnauthorized: () => void }) {
     try {
       const res = await studioFetch("/api/pipeline/run", {
         method: "POST",
-        body: JSON.stringify({ runId, topicHint: topicHint || undefined }),
+        body: JSON.stringify({ runId, topicHint: topicHint || undefined, route }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "خطای ناشناخته");
@@ -104,45 +121,83 @@ export function RunPanel({ onUnauthorized }: { onUnauthorized: () => void }) {
         <h2 className="text-title text-ink">اجرای جدید پایپ‌لاین</h2>
         <p className="mb-5 mt-1 text-sm text-ink-muted">
           موضوع دادن اختیاری است — اگر خالی بگذارید، ایده‌یاب خودش موضوع پیدا می‌کند.
+          مسیر اما اجباری است: دعوت‌به‌اقدام‌های مجاز و زاویه‌ی محتوا از همین تعیین می‌شوند.
         </p>
 
         <form
-          className="flex flex-col gap-3 sm:flex-row"
+          className="space-y-4"
           onSubmit={(e) => {
             e.preventDefault();
             if (!busy) start();
           }}
         >
-          <div className="flex-1">
-            <label htmlFor="topic-hint" className="sr-only">
-              موضوع پیشنهادی (اختیاری)
-            </label>
-            <input
-              id="topic-hint"
-              value={topicHint}
-              onChange={(e) => setTopicHint(e.target.value)}
-              placeholder="مثلاً: قیمت‌گذاری خدمات برای کسب‌وکارهای کوچک"
-              className="w-full rounded-xl border border-surface-line bg-surface-dim px-4 py-3 transition-colors placeholder:text-ink-muted/60 focus:border-brand-400 focus:bg-surface"
+          {/* ── مسیر برند ── */}
+          <fieldset disabled={busy}>
+            <legend className="mb-2 text-sm font-bold text-ink">مسیر برند</legend>
+            <div className="grid gap-2 sm:grid-cols-3">
+              {ROUTE_OPTIONS.map((opt) => {
+                const active = route === opt.value;
+                return (
+                  <label
+                    key={opt.value}
+                    className={`cursor-pointer rounded-xl border px-4 py-3 transition-colors ${
+                      active
+                        ? "border-brand-600 bg-brand-50"
+                        : "border-surface-line bg-surface-dim hover:bg-sand/50"
+                    } ${busy ? "cursor-not-allowed opacity-60" : ""}`}
+                  >
+                    <input
+                      type="radio"
+                      name="route"
+                      value={opt.value}
+                      checked={active}
+                      onChange={() => setRoute(opt.value)}
+                      className="sr-only"
+                    />
+                    <span
+                      className={`block text-sm font-bold ${active ? "text-brand-700" : "text-ink"}`}
+                    >
+                      {opt.label}
+                    </span>
+                    <span className="mt-0.5 block text-xs text-ink-muted">{opt.hint}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
+
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <div className="flex-1">
+              <label htmlFor="topic-hint" className="sr-only">
+                موضوع پیشنهادی (اختیاری)
+              </label>
+              <input
+                id="topic-hint"
+                value={topicHint}
+                onChange={(e) => setTopicHint(e.target.value)}
+                placeholder="مثلاً: چه چیزی در این مسیر «شواهد» حساب می‌شود"
+                className="w-full rounded-xl border border-surface-line bg-surface-dim px-4 py-3 transition-colors placeholder:text-ink-muted/60 focus:border-brand-400 focus:bg-surface"
+                disabled={busy}
+              />
+            </div>
+            <button
+              type="submit"
               disabled={busy}
-            />
+              className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-brand-600 px-7 py-3 font-bold text-white shadow-card transition-all hover:bg-brand-700 hover:shadow-raised disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {busy ? (
+                <>
+                  <IconSpinner className="h-4 w-4" />
+                  در حال اجرا…
+                </>
+              ) : (
+                <>
+                  <IconPlay className="h-4 w-4" />
+                  شروع
+                </>
+              )}
+            </button>
           </div>
-          <button
-            type="submit"
-            disabled={busy}
-            className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-brand-600 px-7 py-3 font-bold text-white shadow-card transition-all hover:bg-brand-700 hover:shadow-raised disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {busy ? (
-              <>
-                <IconSpinner className="h-4 w-4" />
-                در حال اجرا…
-              </>
-            ) : (
-              <>
-                <IconPlay className="h-4 w-4" />
-                شروع
-              </>
-            )}
-          </button>
         </form>
 
         {error && (
@@ -160,7 +215,11 @@ export function RunPanel({ onUnauthorized }: { onUnauthorized: () => void }) {
       {run && (
         <RunTimeline
           run={run}
-          badge={run.topicHint ? `موضوع: ${run.topicHint}` : undefined}
+          badge={
+            run.topicHint
+              ? `${ROUTE_OPTIONS.find((o) => o.value === route)?.label} · موضوع: ${run.topicHint}`
+              : ROUTE_OPTIONS.find((o) => o.value === route)?.label
+          }
         />
       )}
 

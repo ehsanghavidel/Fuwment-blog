@@ -199,6 +199,32 @@ function checkLatinDigits(md: string): BrandCheck {
   };
 }
 
+/* ── و) گیومه‌ی لاتین ────────────────────────────────────── */
+
+/**
+ * برندگاید «گیومه‌ی فارسی» را الزام کرده: «…» نه "…" و نه '…'.
+ *
+ * دو استثنا که عمداً رد نمی‌شوند، وگرنه چک روی متن سالم می‌افتد:
+ * ۱. کد، لینک و کدبلاک — آنجا گیومه‌ی لاتین نحو است، نه سلیقه.
+ * ۲. آپاستروف داخل واژه‌ی لاتین (don't, Talent's). برندگاید خودش واژه‌ی
+ *    انگلیسی را با حروف لاتین می‌خواهد، پس این شکل مشروع است.
+ */
+function checkLatinQuotes(md: string): BrandCheck {
+  const text = stripNonProse(md)
+    // آپاستروف بین دو حرف لاتین: don't, Talent's
+    .replace(/(?<=[A-Za-z])['’](?=[A-Za-z])/g, "");
+
+  const found = [...new Set(text.match(/["'“”‘’]/g) ?? [])];
+  return {
+    name: "گیومه‌ی فارسی",
+    pass: found.length === 0,
+    note:
+      found.length === 0
+        ? "گیومه‌ها فارسی‌اند"
+        : `گیومه‌ی لاتین در متن: ${found.join(" ")} — برندگاید «گیومه‌ی فارسی» را الزام کرده. به‌جای "متن" یا 'متن' بنویس «متن»`,
+  };
+}
+
 /* ── ه) نیم‌فاصله ────────────────────────────────────────── */
 
 /**
@@ -281,6 +307,7 @@ export function runBrandChecks(input: { text: string }): BrandCheck[] {
     checkWrongTerms(text),
     checkForbiddenNarrative(text),
     checkLatinDigits(text),
+    checkLatinQuotes(text),
     checkHalfSpace(text),
   ];
 }

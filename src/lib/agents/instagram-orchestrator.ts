@@ -88,6 +88,9 @@ export async function runInstagramPipeline(opts: {
         runInstagramRevision({ brief, draft, review, failedChecks }),
       check: (d) =>
         runInstagramChecks({ caption: d.caption, slides: d.slides, hashtags: d.hashtags }),
+      // کپشن + متن همه‌ی اسلایدها + دعوت به اقدام
+      brandText: (d) =>
+        [d.caption, ...d.slides.map((s) => `${s.kicker} ${s.heading} ${s.text}`), d.cta].join("\n"),
       describe: (d) => `${d.slides.length} اسلاید، ${d.hashtags.length} هشتگ`,
     });
 

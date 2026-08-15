@@ -3,6 +3,17 @@ import { runAgentJSON } from "@/lib/ai";
 import { BRAND_VOICE, COMPANY_NAME, COMPANY_PROFILE } from "@/lib/company";
 import { lessonsBlockFor } from "./lessons";
 import { BriefSchema, type Brief, type Idea } from "./types";
+import type { BrandRoute } from "@/lib/company";
+
+/** توصیف هر مسیر برای پرامپت — همان تفکیکی که در COMPANY_PROFILE آمده */
+const ROUTE_BRIEFING: Record<BrandRoute, string> = {
+  brand:
+    "سطح برند — نسبت به دو مسیر بی‌طرف بمان و هیچ‌کدام را پیش‌فرض نگیر. مقاله باید به مخاطب کمک کند خودش را بسنجد، نه اینکه او را به یک مسیر خاص هل بدهد.",
+  "global-talent":
+    "Global Talent — بر پایه‌ی دستاورد و تاثیر فردی. محتوا حول شواهد، تاثیر و رهبری فردی می‌چرخد.",
+  "innovator-founder":
+    "Innovator Founder — بر پایه‌ی ایده و کسب‌وکار، با سه معیار رسمی نوآورانه · قابل‌اجرا · مقیاس‌پذیر.",
+};
 
 /**
  * ایجنت ۲ — استراتژیست محتوا (Content Strategist)
@@ -18,6 +29,8 @@ import { BriefSchema, type Brief, type Idea } from "./types";
 export async function runStrategist(input: {
   ideas: Idea[];
   topicHint: string | null;
+  /** مسیر برند — انسان در استودیو انتخابش کرده، مدل تصمیم‌گیرنده‌اش نیست */
+  route: BrandRoute;
 }): Promise<Brief> {
   const lessons = await lessonsBlockFor("strategist");
 
@@ -42,12 +55,12 @@ ${ideasText}
 - عنوان نهایی را در صورت نیاز بهتر کن (جذاب اما بدون کلیک‌بیت).
 - کلمه‌ی کلیدی اصلی باید عبارتی باشد که واقعاً به فارسی جستجو می‌شود.
 
-— سه تصمیم هدف‌گیری (هر سه اجباری، و «همه» جواب مجاز نیست) —
-- route: کدام مسیر برند؟
-  · brand — سطح برند، بی‌طرف نسبت به دو مسیر. وقتی محتوا هنوز نمی‌داند
-    مخاطب کدام مسیر را می‌رود و قرار است کمکش کند خودش را بسنجد.
-  · global-talent — محتوایی که بر پایه‌ی دستاورد و تاثیر فردی است.
-  · innovator-founder — محتوایی که بر پایه‌ی ایده و کسب‌وکار است.
+— هدف‌گیری —
+مسیر این مقاله **از قبل تعیین شده** و تصمیم تو نیست:
+route = "${input.route}" → ${ROUTE_BRIEFING[input.route]}
+همین مقدار را عیناً در فیلد route بگذار و کل بریف را با همین مسیر هم‌خوان کن.
+
+— دو تصمیم دیگر (هر دو اجباری، و «همه» جواب مجاز نیست) —
 - audienceGroup: کدام‌یک از پنج گروه؟
   digital-tech (مهندس نرم‌افزار، دیزاینر محصول، متخصص داده، مدیر محصول) ·
   academic-research (دکترا، پسادکترا، هیئت علمی) ·
@@ -67,7 +80,7 @@ ${ideasText}
 - فقط یک دعوت مستقیم بگذار، نه چند تا.
 - طول هدف بین ۹۰۰ تا ۱۵۰۰ کلمه باشد.`;
 
-  return runAgentJSON({
+  const brief = await runAgentJSON({
     agent: "strategist",
     system,
     prompt,
@@ -75,7 +88,7 @@ ${ideasText}
     shapeHint: `{
   "title": "عنوان نهایی مقاله",
   "audience": "توصیف دقیق مخاطب این مقاله",
-  "route": "global-talent",
+  "route": "${input.route}",
   "audienceGroup": "digital-tech",
   "journeyStage": "awareness",
   "searchIntent": "نیت جستجوی کاربر",
@@ -88,4 +101,9 @@ ${ideasText}
   "cta": "متن دعوت به اقدام پایانی در یکی دو جمله"
 }`,
   });
+
+  // مسیر تصمیم انسان است، نه مدل. حتی با وجود تأکید در پرامپت و shapeHint،
+  // بازتاب درستِ یک مقدار ثابت چیزی نیست که به مدل بسپاریم — همان اصلِ
+  // «کار قطعی را به مدل نسپار» که در clampText و یکتاسازی اسلاگ هم هست.
+  return { ...brief, route: input.route };
 }

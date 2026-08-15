@@ -3,6 +3,7 @@ import { z } from "zod";
 import { runPipeline } from "@/lib/agents/orchestrator";
 import { isConfigured } from "@/lib/ai";
 import { isStudioAuthorized, unauthorized } from "@/lib/auth";
+import { BRAND_ROUTES } from "@/lib/agents/types";
 
 /**
  * POST /api/pipeline/run — اجرای کامل پایپ‌لاین.
@@ -19,6 +20,8 @@ export const dynamic = "force-dynamic";
 const BodySchema = z.object({
   runId: z.string().uuid(),
   topicHint: z.string().max(300).optional(),
+  /** مسیر برند — تعیین‌کننده‌ی CTAهای مجاز و زاویه‌ی محتوا */
+  route: z.enum(BRAND_ROUTES),
 });
 
 export async function POST(req: NextRequest) {
@@ -39,6 +42,7 @@ export async function POST(req: NextRequest) {
   const run = await runPipeline({
     runId: parsed.data.runId,
     topicHint: parsed.data.topicHint ?? null,
+    route: parsed.data.route,
   });
 
   return Response.json({ run });

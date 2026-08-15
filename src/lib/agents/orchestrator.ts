@@ -11,6 +11,7 @@ import { runBrandChecks, runBriefChecks, type BrandCheck } from "./brand-checks"
 import { runSeo } from "./seo";
 import { runCritic } from "./critic";
 import type { Review } from "./types";
+import type { BrandRoute } from "@/lib/company";
 
 /**
  * ارکستریتور — رهبر ارکستر پایپ‌لاین.
@@ -34,10 +35,17 @@ const MAX_REVISION_ROUNDS = 2;
 export async function runPipeline(opts: {
   runId: string;
   topicHint?: string | null;
+  /**
+   * مسیر برند این مقاله. استودیو همیشه می‌فرستدش؛ کرون هفتگی انسانی پشتش
+   * ندارد و پیش‌فرض «brand» می‌گیرد — یعنی محتوای سطح برند که نسبت به دو
+   * مسیر بی‌طرف است. همان چیزی که برای محتوای بدون هدف‌گیری مشخص درست است.
+   */
+  route?: BrandRoute;
 }): Promise<PipelineRun> {
   const store = getStore();
   const runId = opts.runId;
   const topicHint = opts.topicHint?.trim() || null;
+  const route: BrandRoute = opts.route ?? "brand";
 
   const run: PipelineRun = {
     id: runId,
@@ -72,7 +80,7 @@ export async function runPipeline(opts: {
 
     // ── ۲. استراتژیست ──
     const brief = await step("strategist", "استراتژیست محتوا", async () => {
-      const out = await runStrategist({ ideas, topicHint });
+      const out = await runStrategist({ ideas, topicHint, route });
 
       // هدف‌گیری مبهم باید همین‌جا بمیرد، نه ده گام بعد. بریفِ «برای همه»
       // یعنی مقاله‌ی بی‌قلاب — و هزینه‌ی کشفش بعد از نگارش، یک اجرای کامل است.
