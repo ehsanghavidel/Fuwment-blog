@@ -39,7 +39,7 @@ function briefBlock(brief: Brief, research: Research): string {
 طول هدف: حدود ${brief.targetWordCount} کلمه
 ساختار:
 ${brief.outline.map((s) => `## ${s.heading}\n${s.points.map((p) => `   - ${p}`).join("\n")}`).join("\n")}
-CTA پایانی: ${brief.cta}
+CTA پایانی (شناسه: ${brief.ctaId} — همین یکی، دعوت دوم اضافه نکن): ${brief.cta}
 
 — پژوهش —
 فکت‌های کلیدی:

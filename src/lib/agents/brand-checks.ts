@@ -280,8 +280,19 @@ const VAGUE_AUDIENCE = [
 export function runBriefChecks(input: {
   audience: string;
   title: string;
+  ctaId: string;
+  /**
+   * شناسه‌های مجاز برای مسیرِ این بریف — از allowedCtaIds(route).
+   *
+   * پارامتر است و نه import، به همان دلیلی که runReelsChecks هم همین کار
+   * را می‌کند: این فایل باید خالص و بی‌وابستگی بماند تا بشود مستقیم
+   * تستش کرد. تصمیمِ «کدام مسیر» جای ارکستریتور است، نه چک.
+   */
+  allowedCtaIds: string[];
 }): BrandCheck[] {
   const vague = findTerms(input.audience, VAGUE_AUDIENCE);
+  const ctaOk = input.allowedCtaIds.includes(input.ctaId);
+
   return [
     {
       name: "مخاطب مشخص",
@@ -290,6 +301,13 @@ export function runBriefChecks(input: {
         vague.length === 0
           ? `مخاطب مشخص است: ${input.audience.slice(0, 60)}`
           : `«${vague.join("، ")}» در توصیف مخاطب — بریف باید یکی از پنج گروه را هدف بگیرد، نه «همه». محتوایی که برای همه نوشته می‌شود برای هیچ‌کس قلاب ندارد`,
+    },
+    {
+      name: "دعوت به اقدام از فهرست مجاز",
+      pass: ctaOk,
+      note: ctaOk
+        ? `CTA انتخاب‌شده: ${input.ctaId}`
+        : `«${input.ctaId}» در فهرست مجازِ این مسیر نیست (${input.allowedCtaIds.join("، ")}) — دعوتی که خارج از مسیر محتوا باشد، مخاطب را به دری می‌فرستد که جای او نیست`,
     },
   ];
 }

@@ -3,6 +3,7 @@ import { runAgentJSON } from "@/lib/ai";
 import { BRAND_VOICE, COMPANY_NAME, COMPANY_PROFILE } from "@/lib/company";
 import { lessonsBlockFor } from "./lessons";
 import { BriefSchema, type Brief, type Idea } from "./types";
+import { ctaListBlock, allowedCtaIds } from "./reels-cta";
 import type { BrandRoute } from "@/lib/company";
 
 /** توصیف هر مسیر برای پرامپت — همان تفکیکی که در COMPANY_PROFILE آمده */
@@ -75,10 +76,17 @@ route = "${input.route}" → ${ROUTE_BRIEFING[input.route]}
 - فیلد audience را متناسب با همان گروه بنویس، مشخص و ملموس. «همه‌ی متخصصان»
   یا «عموم مخاطبان» رد می‌شود؛ محتوایی که برای همه نوشته شود قلاب ندارد.
 - ساختار (outline) باید ۴ تا ۷ بخش داشته باشد و آخرین بخش به یک قدم بعدی روشن برسد.
-- فیلد cta باید به «ارزیابی اولیه» دعوت کند. عبارت «مشاوره‌ی رایگان» ممنوع است؛
-  آن خدمت وجود ندارد و برندگاید این عبارت را صریحاً رد کرده است.
-- فقط یک دعوت مستقیم بگذار، نه چند تا.
-- طول هدف بین ۹۰۰ تا ۱۵۰۰ کلمه باشد.`;
+- طول هدف بین ۹۰۰ تا ۱۵۰۰ کلمه باشد.
+
+— دعوت به اقدام —
+${ctaListBlock(input.route)}
+
+از فهرست بالا **دقیقاً یکی** را انتخاب کن و شناسه‌اش را در ctaId بگذار.
+در فیلد cta همان دعوت را با لحن برند و متناسب با موضوع مقاله بنویس (یکی دو
+جمله) — برچسب فهرست یک نام است، نه متنی که باید عیناً نقل شود.
+مرحله‌ی سفر مخاطب را در انتخابت لحاظ کن: در awareness معمولاً دعوت واسط
+درست‌تر است، چون محتوای مرحله‌ی آگاهی نباید بفروشد.
+عبارت «مشاوره‌ی رایگان» ممنوع است؛ آن خدمت وجود ندارد.`;
 
   const brief = await runAgentJSON({
     agent: "strategist",
@@ -98,7 +106,8 @@ route = "${input.route}" → ${ROUTE_BRIEFING[input.route]}
     { "heading": "عنوان بخش", "points": ["نکته‌ای که باید پوشش داده شود"] }
   ],
   "targetWordCount": 1200,
-  "cta": "متن دعوت به اقدام پایانی در یکی دو جمله"
+  "cta": "متن دعوت به اقدام پایانی در یکی دو جمله",
+  "ctaId": "${allowedCtaIds(input.route)[0]}"
 }`,
   });
 

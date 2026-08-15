@@ -8,6 +8,7 @@ import { runResearcher } from "./researcher";
 import { runWriter, runWriterRevision } from "./writer";
 import { runEditor, APPROVE_THRESHOLD } from "./editor";
 import { runBrandChecks, runBriefChecks, type BrandCheck } from "./brand-checks";
+import { allowedCtaIds } from "./reels-cta";
 import { runSeo } from "./seo";
 import { runCritic } from "./critic";
 import type { Review } from "./types";
@@ -82,9 +83,15 @@ export async function runPipeline(opts: {
     const brief = await step("strategist", "استراتژیست محتوا", async () => {
       const out = await runStrategist({ ideas, topicHint, route });
 
-      // هدف‌گیری مبهم باید همین‌جا بمیرد، نه ده گام بعد. بریفِ «برای همه»
-      // یعنی مقاله‌ی بی‌قلاب — و هزینه‌ی کشفش بعد از نگارش، یک اجرای کامل است.
-      const briefChecks = runBriefChecks({ audience: out.audience, title: out.title });
+      // هدف‌گیری مبهم و CTAی خارج از مسیر باید همین‌جا بمیرند، نه ده گام بعد.
+      // بریفِ «برای همه» یعنی مقاله‌ی بی‌قلاب — و هزینه‌ی کشفش بعد از نگارش،
+      // یک اجرای کامل است.
+      const briefChecks = runBriefChecks({
+        audience: out.audience,
+        title: out.title,
+        ctaId: out.ctaId,
+        allowedCtaIds: allowedCtaIds(route),
+      });
       const failed = briefChecks.filter((c) => !c.pass);
       if (failed.length > 0) {
         throw new Error(
@@ -94,7 +101,7 @@ export async function runPipeline(opts: {
 
       return {
         output: out,
-        summary: `بریف «${out.title}» — ${out.route} / ${out.audienceGroup} / ${out.journeyStage} — کلیدواژه: ${out.primaryKeyword}، ${out.outline.length} بخش`,
+        summary: `بریف «${out.title}» — ${out.route} / ${out.audienceGroup} / ${out.journeyStage} — CTA: ${out.ctaId}، کلیدواژه: ${out.primaryKeyword}، ${out.outline.length} بخش`,
       };
     });
 

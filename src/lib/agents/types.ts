@@ -84,7 +84,16 @@ export const BriefSchema = z.object({
     )
     .min(3),
   targetWordCount: z.number().min(600).max(3000),
+  /** متن دعوت به اقدام، همان‌طور که در پایان مقاله می‌آید */
   cta: z.string(),
+  /**
+   * شناسه‌ی CTA انتخاب‌شده از BRAND_CTAS — همان قراردادی که ریلز دارد.
+   *
+   * جدا از `cta` است چون آن یکی متن آزاد است و قابل بررسی نیست؛ این یکی
+   * با allowedCtaIds(route) چک قطعی می‌شود و جلوی ساختن CTAی خودسر را
+   * می‌گیرد. سقف طول اینجا معنی ندارد، پس فقط min برای رد خروجی ناقص.
+   */
+  ctaId: z.string().min(2),
 });
 
 export type Brief = z.infer<typeof BriefSchema>;
