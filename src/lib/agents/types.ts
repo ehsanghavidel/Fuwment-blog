@@ -107,7 +107,18 @@ export const ResearchSchema = z.object({
   angleNotes: z.string(),
 });
 
-export type Research = z.infer<typeof ResearchSchema>;
+/** یک منبع وب — عنوان و آدرس، همان‌طور که جستجو برگردانده */
+export type Source = { title: string; url: string };
+
+/**
+ * خروجی پژوهشگر = آنچه مدل تولید می‌کند + منابعی که کد جمع کرده.
+ *
+ * ⚠️ `sources` عمداً در ResearchSchema نیست. URLها واقعیت‌اند و از پاسخ
+ * Tavily می‌آیند؛ اگر از مدل بخواهیم بازتابشان دهد، تنها کاری که اضافه
+ * کرده‌ایم باز کردن در به روی URL جعلی است. مدل هیچ‌وقت منبع نمی‌سازد —
+ * کد ضمیمه‌شان می‌کند. همان اصلِ «کار قطعی را به مدل نسپار».
+ */
+export type Research = z.infer<typeof ResearchSchema> & { sources: Source[] };
 
 /* ── ۵. ویراستار ────────────────────────────────────────── */
 

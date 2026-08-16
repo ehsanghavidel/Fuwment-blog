@@ -3,7 +3,7 @@ import { z } from "zod";
 import { runAgentJSON } from "@/lib/ai";
 import { COMPANY_NAME, COMPANY_PROFILE } from "@/lib/company";
 import { lessonsBlockFor } from "./lessons";
-import { ResearchSchema, type Brief, type Research } from "./types";
+import { ResearchSchema, type Brief, type Research, type Source } from "./types";
 
 /**
  * ایجنت ۳ — پژوهشگر (Researcher)
@@ -20,26 +20,69 @@ import { ResearchSchema, type Brief, type Research } from "./types";
 
 const QueriesSchema = z.object({ queries: z.array(z.string()).min(2).max(4) });
 
+/**
+ * سقف منابعِ ضمیمه‌شده به مقاله.
+ *
+ * تا ۴ کوئری × ۳ نتیجه = حداکثر ۱۲ نتیجه. فهرست ۱۲تایی زیر یک مقاله‌ی
+ * ۱۲۰۰ کلمه‌ای بیشتر شبیه لاگ است تا منبع، پس بعد از حذف تکراری‌ها می‌بُریم.
+ */
+const MAX_SOURCES = 6;
+
 type SearchResult = { title: string; url: string; content: string };
 
+/**
+ * جستجوی وب با Tavily.
+ *
+ * ⚠️ درس واقعی: نسخه‌ی اول این تابع `if (!res.ok) return []` بود و هیچ
+ * لاگی نداشت. کلید در .env.local یک حرف اضافه داشت (`ttvly-` به‌جای
+ * `tvly-`)، Tavily با ۴۰۱ جواب می‌داد، و پایپ‌لاین بی‌هیچ نشانه‌ای
+ * می‌گفت «جستجو بدون نتیجه». یعنی تفاوتِ «کلید خراب است» و «چیزی پیدا
+ * نشد» به بیرون درز نمی‌کرد — بدترین نوع شکست، چون شبیه کارکرد عادی است.
+ *
+ * حالا شکست بی‌صدا نیست: وضعیت HTTP و پیام خودِ Tavily لاگ می‌شوند.
+ * همچنان `[]` برمی‌گردانیم (نه throw) چون طبق طراحی این فایل، جستجوی وب
+ * اختیاری است و نبودش نباید اجرا را بکُشد.
+ */
 async function tavilySearch(query: string): Promise<SearchResult[]> {
-  const res = await fetch("https://api.tavily.com/search", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      api_key: process.env.TAVILY_API_KEY,
-      query,
-      max_results: 3,
-      search_depth: "basic",
-    }),
-  });
-  if (!res.ok) return [];
-  const data = await res.json();
-  return (data.results ?? []).map((r: any) => ({
-    title: r.title ?? "",
-    url: r.url ?? "",
-    content: String(r.content ?? "").slice(0, 800),
-  }));
+  try {
+    const res = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        api_key: process.env.TAVILY_API_KEY,
+        query,
+        max_results: 3,
+        search_depth: "basic",
+      }),
+    });
+
+    if (!res.ok) {
+      // پیام خطای واقعی Tavily را می‌خوانیم؛ «۴۰۱» به‌تنهایی نمی‌گوید چرا
+      const detail = await res.text().catch(() => "");
+      console.error(
+        `[tavily] ${res.status} ${res.statusText} برای کوئری «${query}» — ${detail.slice(0, 300)}`
+      );
+      return [];
+    }
+
+    const data = await res.json();
+    const results: SearchResult[] = (data.results ?? []).map((r: any) => ({
+      title: r.title ?? "",
+      url: r.url ?? "",
+      content: String(r.content ?? "").slice(0, 800),
+    }));
+
+    console.log(`[tavily] «${query}» → ${results.length} نتیجه`);
+    return results;
+  } catch (err) {
+    // خطای شبکه یا JSON خراب — قبلاً کل گام پژوهشگر را می‌کُشت
+    console.error(
+      `[tavily] فراخوانی برای کوئری «${query}» شکست خورد: ${
+        err instanceof Error ? err.message : String(err)
+      }`
+    );
+    return [];
+  }
 }
 
 export async function runResearcher(input: { brief: Brief }): Promise<Research> {
@@ -52,6 +95,8 @@ ${COMPANY_PROFILE}${lessons}`;
 
   // مرحله‌ی اختیاری: جستجوی واقعی وب
   let webContext = "";
+  // بیرون از بلوک شرط زندگی می‌کند، چون بعد از تولید خروجی مدل هم لازمش داریم
+  let sources: Source[] = [];
   if (process.env.TAVILY_API_KEY) {
     const { queries } = await runAgentJSON({
       agent: "researcher",
@@ -64,6 +109,10 @@ ${COMPANY_PROFILE}${lessons}`;
       shapeHint: `{ "queries": ["کوئری اول", "کوئری دوم"] }`,
     });
 
+    // کوئری‌ها را قبل از ارسال لاگ می‌کنیم: وقتی جستجو نتیجه نمی‌دهد،
+    // اولین سؤال این است که مدل اصلاً دنبال چه گشته.
+    console.log(`[researcher] ${queries.length} کوئری: ${queries.map((q) => `«${q}»`).join("، ")}`);
+
     const allResults = (await Promise.all(queries.map(tavilySearch))).flat();
     if (allResults.length > 0) {
       webContext =
@@ -71,6 +120,14 @@ ${COMPANY_PROFILE}${lessons}`;
         allResults
           .map((r) => `- ${r.title} (${r.url})\n  ${r.content}`)
           .join("\n");
+
+      // کوئری‌های مختلف اغلب به یک صفحه می‌رسند؛ URL کلید یکتایی است.
+      // نتیجه‌ی بی‌عنوان یا بی‌آدرس هم به درد فهرست منابع نمی‌خورد.
+      const seen = new Set<string>();
+      sources = allResults
+        .filter((r) => r.url && r.title && !seen.has(r.url) && seen.add(r.url))
+        .map((r) => ({ title: r.title, url: r.url }))
+        .slice(0, MAX_SOURCES);
     }
   }
 
@@ -86,7 +143,7 @@ ${COMPANY_PROFILE}${lessons}`;
 - commonQuestions: سؤال‌هایی که مخاطب واقعاً درباره‌ی این موضوع دارد (برای بخش FAQ).
 - angleNotes: توصیه‌ات به نویسنده برای متمایزکردن مقاله.`;
 
-  return runAgentJSON({
+  const out = await runAgentJSON({
     agent: "researcher",
     system,
     prompt,
@@ -98,4 +155,8 @@ ${COMPANY_PROFILE}${lessons}`;
   "angleNotes": "توصیه‌ها به نویسنده"
 }`,
   });
+
+  // منابع از کد می‌آیند، نه از مدل — بدون کلید Tavily فهرست خالی می‌ماند
+  // و مقاله هم فهرست منابع نمی‌گیرد.
+  return { ...out, sources };
 }

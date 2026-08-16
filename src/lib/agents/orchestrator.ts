@@ -9,6 +9,7 @@ import { runWriter, runWriterRevision } from "./writer";
 import { runEditor, APPROVE_THRESHOLD } from "./editor";
 import { runBrandChecks, runBriefChecks, type BrandCheck } from "./brand-checks";
 import { allowedCtaIds } from "./brand-cta";
+import { finalizeArticle } from "./article-format";
 import { runSeo } from "./seo";
 import { runCritic } from "./critic";
 import type { Review } from "./types";
@@ -108,7 +109,11 @@ export async function runPipeline(opts: {
     // ── ۳. پژوهشگر ──
     const research = await step("researcher", "پژوهشگر", async () => {
       const out = await runResearcher({ brief });
-      const web = process.env.TAVILY_API_KEY ? " (با جستجوی وب)" : " (بدون جستجوی وب)";
+      const web = out.sources.length
+        ? ` (جستجوی وب — ${out.sources.length} منبع)`
+        : process.env.TAVILY_API_KEY
+          ? " (جستجوی وب بدون نتیجه)"
+          : " (بدون جستجوی وب)";
       return {
         output: out,
         summary: `${out.keyFacts.length} فکت و ${out.commonQuestions.length} سؤال رایج${web}`,
@@ -200,13 +205,23 @@ export async function runPipeline(opts: {
       review.verdict === "approve" && review.score >= APPROVE_THRESHOLD && brandOk;
     const post = await step("publisher", "ناشر", async () => {
       const now = new Date().toISOString();
+
+      // تاریخ و منابع اینجا اضافه می‌شوند، نه در پرامپت نویسنده: هر دو
+      // داده‌ی قطعی‌اند و بعد از چک‌های برند اعمال می‌شوند تا ارقام لاتینِ
+      // تاریخ میلادی و لینک‌ها بی‌دلیل چک را نشکنند.
+      const contentMd = finalizeArticle({
+        contentMd: draft,
+        sources: research.sources,
+        updatedAt: now,
+      });
+
       const p: Post = {
         id: randomUUID(),
         runId,
         title: brief.title,
         slug: seo.slug,
         excerpt: seo.excerpt,
-        contentMd: draft,
+        contentMd,
         metaTitle: seo.metaTitle,
         metaDescription: seo.metaDescription,
         keywords: seo.keywords,
