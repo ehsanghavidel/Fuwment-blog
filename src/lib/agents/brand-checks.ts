@@ -171,6 +171,54 @@ const FORBIDDEN_NARRATIVE: RegExp[] = [
   /مسئله\s*فقط\s*(ترجمه|ارائه|نحوه‌ی ارائه)\s*است/,
 ];
 
+/**
+ * «ترجمه» وقتی موضوعش دستاورد است، نه سند.
+ *
+ * چرا جدا از FORBIDDEN_NARRATIVE: آن فهرست دنبال جمله‌ی کاملِ «فقط باید
+ * دستاوردت را ترجمه کنی» بود. ولی در یک اجرای واقعی، مقاله سه بار از
+ * همین واژه استفاده کرد — یک بار به‌عنوان تیتر بخش — بدون اینکه آن جمله‌ی
+ * دقیق را بسازد. خودِ قاب‌بندی مسئله است: «ترجمه» یعنی محتوا حاضر است و
+ * فقط زبانش غلط است، که همان القای «هر کسی واجد شرایط است» را می‌کند.
+ *
+ * ⚠️ ترجمه‌ی واقعی نباید رد شود. «ترجمه‌ی مدارک»، «ترجمه‌ی رسمی» و
+ * «مترجم» کاربردهای مشروع‌اند و در مسیر مهاجرت واقعاً لازم می‌شوند. پس
+ * به‌جای گرفتنِ خودِ واژه، فقط جایی را می‌گیریم که مفعولش از واژگان
+ * «دستاورد» برند باشد.
+ */
+const ACHIEVEMENT_WORDS = "(?:دستاورد|تجربه|سابقه|تاثیر|تأثیر|توانایی)";
+
+/**
+ * واژه‌های سند. اگر داخل عبارتِ گیرافتاده باشند، یعنی حرف از ترجمه‌ی
+ * واقعی است نه قاب‌بندی دستاورد — و نباید رد شود.
+ * نمونه‌ای که بدون این استثنا رد می‌شد: «تجربه‌تان را بنویسید و مدارک را
+ * برای ترجمه بفرستید».
+ */
+const DOCUMENT_WORDS = /مدرک|مدارک|سند|اسناد|مترجم|رسمی|متن|مقاله/;
+
+const TRANSLATION_FRAMING: RegExp[] = [
+  // «ترجمه‌ی دستاورد»، «ترجمهٔ تجربه» — شامل حالت تیتر بخش
+  new RegExp(`ترجمه[\\s\\u200cیٔ‌]*${ACHIEVEMENT_WORDS}`),
+  // «دستاوردتان را ترجمه کنید» و «تجربه‌تان را به زبان معیارها ترجمه کنید».
+  // فاصله‌ی بعد از «را» عمداً باز است، چون در جمله‌ی واقعی معمولاً یک
+  // قید وسطش می‌آید؛ مرز جمله نگه داشته می‌شود تا از جمله‌ی بعدی نپرد.
+  new RegExp(`${ACHIEVEMENT_WORDS}[^.!?؟\\n]{0,60}را[^.!?؟\\n]{0,40}ترجمه`),
+];
+
+function checkTranslationFraming(text: string): BrandCheck {
+  const hits = TRANSLATION_FRAMING.map((re) => text.match(re)?.[0]?.trim())
+    .filter((m): m is string => Boolean(m))
+    .filter((m) => !DOCUMENT_WORDS.test(m));
+
+  return {
+    name: "قاب‌بندی «ترجمه»",
+    pass: hits.length === 0,
+    note:
+      hits.length === 0
+        ? "«ترجمه» در بافت دستاورد استفاده نشده"
+        : `${hits.map((h) => `«${h}»`).join("، ")} — دستاورد «ترجمه» نمی‌شود. این قاب‌بندی القا می‌کند محتوا حاضر است و فقط زبانش غلط است، یعنی هر کسی واجد شرایط است. کار سخت، تطبیق یک تجربه‌ی واقعی با معیارهاست، نه برگرداندن آن. (ترجمه‌ی مدارک و ترجمه‌ی رسمی مشکلی ندارند.)`,
+  };
+}
+
 function checkForbiddenNarrative(text: string): BrandCheck {
   const hits = FORBIDDEN_NARRATIVE.map((re) => text.match(re)?.[0]?.trim()).filter(
     (m): m is string => Boolean(m)
@@ -391,6 +439,7 @@ export function runBrandChecks(input: { text: string }): BrandCheck[] {
     checkForbiddenClaims(text),
     checkWrongTerms(text),
     checkForbiddenNarrative(text),
+    checkTranslationFraming(text),
     checkSuperlatives(text),
     checkLatinDigits(text),
     checkLatinQuotes(text),

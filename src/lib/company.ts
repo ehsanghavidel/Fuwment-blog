@@ -265,6 +265,26 @@ export function ctasForRoute(route: BrandRoute): BrandCta[] {
    return BRAND_CTAS.filter((cta) => cta.routes.includes(route));
 }
 
+/**
+ * دامنه‌هایی که هرگز نباید در فهرست منابع مقاله بیایند.
+ *
+ * اینجا جای رقباست — سایت‌هایی که نمی‌خواهید مقاله‌ی شما به آن‌ها لینک بدهد.
+ * فهرست عمداً خالی است تا خودتان پرش کنید.
+ *
+ * فرمت: فقط دامنه، بدون پروتکل و بدون www —
+ *   "example.com"  ✓
+ *   "https://www.example.com/"  ✗
+ * زیردامنه‌ها خودکار پوشش داده می‌شوند: "example.com" شامل
+ * "blog.example.com" هم می‌شود.
+ *
+ * توجه: شبکه‌های اجتماعی و انجمن‌ها از قبل در researcher.ts فیلتر می‌شوند
+ * و لازم نیست اینجا تکرار شوند — آن یک قاعده‌ی ساختاری است، این یکی
+ * تصمیم کسب‌وکاری.
+ */
+export const BLOCKED_SOURCE_DOMAINS: string[] = [
+   // "competitor-example.com",
+];
+
 export function siteUrl(): string {
    return process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 }

@@ -71,6 +71,34 @@ h1, h2, h3, h4, h5, h6 {
 .prose-fa blockquote p:last-child {
   @apply mb-0;
 }
+/* ── واریانت فشرده — پیش‌نمایش پیش‌نویس در استودیو ────────────────
+   همان رندر مارک‌داون صفحه‌ی مقاله، ولی در مقیاس یک جعبه‌ی کوچک:
+   تیتر ۴xl و حاشیه‌ی mt-12 در ارتفاع ۳۸۴ پیکسل بدقواره می‌شود.
+   فقط اندازه و فاصله عوض می‌شود، نه رنگ و هویت. */
+.prose-fa--compact {
+  @apply text-sm leading-7;
+}
+.prose-fa--compact h1 {
+  @apply mb-3 mt-0 text-xl leading-snug sm:text-xl;
+}
+.prose-fa--compact h2 {
+  @apply mb-2 mt-6 border-r-2 pr-3 text-base;
+}
+.prose-fa--compact h3 {
+  @apply mb-2 mt-4 text-sm;
+}
+.prose-fa--compact p,
+.prose-fa--compact ul,
+.prose-fa--compact ol {
+  @apply mb-3;
+}
+.prose-fa--compact blockquote {
+  @apply my-3 px-3 py-2;
+}
+.prose-fa--compact table {
+  @apply mb-3;
+}
+
 .prose-fa a {
   @apply font-medium text-brass underline decoration-brass/40 underline-offset-4 transition-colors hover:text-brass-dark;
 }

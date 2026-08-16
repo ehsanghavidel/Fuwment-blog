@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { marked } from "marked";
 import { studioFetch } from "./api";
 import { RunTimeline } from "./RunTimeline";
 import { SocialPostCard } from "./SocialPostCard";
@@ -157,6 +158,26 @@ export function CampaignPanel({ onUnauthorized }: { onUnauthorized: () => void }
 
   const n = campaign?.narrative;
   const activeRun = runs.find((r) => r.channel === active) ?? null;
+
+  /**
+   * پیش‌نمایش مقاله با همان رندری که صفحه‌ی بلاگ دارد.
+   *
+   * قبلاً contentMd خام در یک `whitespace-pre-line` نمایش داده می‌شد، یعنی
+   * `##` و `**` و لینک‌های مارک‌داون همه به‌صورت متن دیده می‌شدند — که
+   * باعث شد فهرست منابع «بی‌لینک» به نظر برسد، در حالی که در خروجی واقعی
+   * لینک بود.
+   *
+   * useMemo لازم است، نه تزئینی: این پنل هر ۲ ثانیه poll می‌کند و بدون آن،
+   * کل مقاله در هر چرخه دوباره پارس می‌شد.
+   *
+   * `async: false` خروجی را به رشته‌ی همزمان قطعی می‌کند (هیچ افزونه‌ی
+   * async‌ای در پروژه ثبت نشده). سطح اعتماد همان صفحه‌ی بلاگ است: محتوا
+   * از پایپ‌لاین خودمان می‌آید و آنجا هم بدون سنیتایز رندر می‌شود.
+   */
+  const postHtml = useMemo(
+    () => (activeRun?.post ? marked.parse(activeRun.post.contentMd, { async: false }) : ""),
+    [activeRun?.post?.contentMd]
+  );
 
   return (
     <div className="space-y-6">
@@ -366,8 +387,11 @@ export function CampaignPanel({ onUnauthorized }: { onUnauthorized: () => void }
                 {activeRun.post.excerpt}
               </p>
 
-              <div className="max-h-96 overflow-auto whitespace-pre-line rounded-xl bg-surface-dim p-4 text-sm leading-8 text-ink-soft">
-                {activeRun.post.contentMd}
+              <div className="max-h-96 overflow-auto rounded-xl bg-surface-dim p-4">
+                <div
+                  className="prose-fa prose-fa--compact"
+                  dangerouslySetInnerHTML={{ __html: postHtml }}
+                />
               </div>
 
               {activeRun.post.status === "published" && (
