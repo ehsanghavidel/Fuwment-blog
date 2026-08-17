@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { marked } from "marked";
 import { getStore } from "@/lib/store";
-import { siteUrl } from "@/lib/company";
+import { COMPANY_NAME } from "@/lib/company";
 import { IconArrowLeft, IconClock } from "@/components/ui/icons";
 
 /**
@@ -24,13 +24,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title: post.metaTitle,
     description: post.metaDescription,
     keywords: post.keywords,
-    alternates: { canonical: `${siteUrl()}/blog/${post.slug}` },
-    openGraph: {
-      title: post.metaTitle,
-      description: post.metaDescription,
-      type: "article",
-      locale: "fa_IR",
-    },
+    // ⚠️ نه canonical و نه openGraph اینجا نمی‌گذاریم: نسخه‌ی منتشرشده روی
+    // fuwment.com/blog است و این صفحه نباید خودش را مرجع معرفی کند.
+    // متادیتای سئوی ایجنت (metaTitle/metaDescription) برای بازبینی انسانی
+    // نگه داشته شده، نه برای موتور جستجو.
+    robots: { index: false, follow: false, nocache: true },
   };
 }
 
@@ -61,7 +59,7 @@ export default async function PostPage({ params }: Props) {
     headline: post.title,
     description: post.metaDescription,
     datePublished: post.publishedAt,
-    author: { "@type": "Organization", name: "آرکان" },
+    author: { "@type": "Organization", name: COMPANY_NAME },
   };
 
   return (
@@ -131,21 +129,9 @@ export default async function PostPage({ params }: Props) {
         </section>
       )}
 
-      <aside className="mt-10 rounded-xl2 bg-pine p-8 text-center shadow-overlay">
-        <p className="text-lg font-extrabold text-white">
-          برای بررسی وضعیت کسب‌وکار شما، گفت‌وگوی اولیه رایگان است.
-        </p>
-        <p className="mx-auto mt-2 max-w-md text-sm leading-7 text-bone/75">
-          تیم آرکان ظرف ۲۴ ساعت کاری با شما تماس می‌گیرد.
-        </p>
-        <a
-          href="https://arkan-website-chatbot.vercel.app"
-          className="mt-5 inline-flex cursor-pointer items-center gap-2 rounded-xl bg-white px-6 py-3 font-bold text-ink transition-transform hover:-translate-y-0.5"
-        >
-          درخواست مشاوره
-          <IconArrowLeft className="h-4 w-4" />
-        </a>
-      </aside>
+      {/* بلوک دعوت‌به‌اقدام حذف شد: لینکش به سایت کسب‌وکار قبلی می‌رفت و
+          «تماس ظرف ۲۴ ساعت کاری» وعده‌ای بود که فومنت نداده. این صفحه
+          پیش‌نمایش داخلی است؛ دعوت واقعی در نسخه‌ی وردپرس جای خودش را دارد. */}
     </main>
   );
 }

@@ -2,26 +2,71 @@
 @tailwind components;
 @tailwind utilities;
 
-/* فونت‌های برند (استعداد/وزیرمتن) با next/font در layout.tsx بارگذاری می‌شوند */
+/* فونت‌ها (وزیرمتن + Inter) با next/font در layout.tsx بارگذاری می‌شوند */
 
 body {
   @apply bg-surface-dim text-ink antialiased;
+  /* مقیاس بدنه‌ی برند: ۱۶px / ۴۰۰ / ۱.۸ */
+  font-size: 1rem;
+  line-height: 1.8;
+  font-weight: 400;
 }
 
-/* عناوین با فونت استعداد و رنگ کاج — مثل سایت اصلی */
+/* متن فارسی راست‌چین است، نه هم‌تراز دوطرفه.
+   justify در فارسی کشیدگی‌های زشت و رودخانه‌ی سفید می‌سازد. */
+body,
+.prose-fa {
+  text-align: right;
+}
+
+/* عناوین — وزیرمتن با وزن‌های سنگین برند */
 h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-estedad), var(--font-vazirmatn), sans-serif;
+  font-family: var(--font-vazirmatn), var(--font-inter), sans-serif;
+  @apply text-navy;
 }
 
-/* فوکوس قابل‌مشاهده برای ناوبری با کیبورد — تأکید برنجی برند */
+/* فوکوس قابل‌مشاهده — فیروزه‌ای برند */
 :focus-visible {
-  outline: 2px solid theme("colors.brass.DEFAULT");
+  outline: 2px solid theme("colors.teal.DEFAULT");
   outline-offset: 2px;
   border-radius: 6px;
 }
 
 ::selection {
-  background: theme("colors.sand");
+  background: theme("colors.teal.light");
+  color: theme("colors.ink.DEFAULT");
+}
+
+/* ── دکمه‌ی اقدام ───────────────────────────────────────────────
+   ⚠️ تنها مصرف‌کننده‌ی رسمی نارنجی. در هر صفحه فقط **یک** بار.
+
+   متن جوهری #0B1F28 اجباری است، نه سلیقه‌ای: سفید روی نارنجی #F5941F
+   نسبت کنتراست ۲.۳ می‌دهد که حتی از حد AA برای متن درشت (۳.۰) هم
+   پایین‌تر است. جوهری روی همان نارنجی حدود ۸.۵ می‌دهد.
+   اگر روزی این کلاس را تغییر دادید، رنگ متن را دست نزنید. */
+.btn-action {
+  @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl
+    bg-amber px-7 py-3 text-btn text-ink shadow-card transition-all
+    hover:bg-amber-light hover:shadow-raised
+    disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+/* دکمه‌ی ثانویه — سرمه‌ای، برای کنش‌هایی که «اقدام اصلی» نیستند */
+.btn-secondary {
+  @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl
+    bg-navy px-7 py-3 text-btn text-mist shadow-card transition-all
+    hover:bg-navy-deep hover:shadow-raised
+    disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+/* ── متادیتای مقاله (تاریخ به‌روزرسانی) ─────────────────────────
+   ایتالیک در متن فارسی ممنوع است (حروف فارسی نسخه‌ی ایتالیک واقعی
+   ندارند و مرورگر آن‌ها را کج می‌کند، که بدشکل و کم‌خوان است).
+   به‌جایش وزن ۵۰۰ و رنگ خاکستری‌آبی. */
+.prose-fa .article-meta {
+  @apply mb-6 mt-0 font-medium text-slateblue-dark;
+  font-size: 0.875rem;
+  font-style: normal;
 }
 
 /* احترام به prefers-reduced-motion */
@@ -35,22 +80,23 @@ h1, h2, h3, h4, h5, h6 {
   }
 }
 
-/* ── استایل بدنه‌ی مقاله (خروجی مارک‌داون) — پالت برند آرکان ─────── */
+/* ── استایل بدنه‌ی مقاله (خروجی مارک‌داون) — مقیاس رسمی برند ─────
+   H1 ۳۲–۴۰px/۸۰۰/۱.۴ · H2 ۲۴px/۷۰۰/۱.۵ · بدنه ۱۶px/۴۰۰/۱.۸ */
 
 .prose-fa {
-  @apply text-[1.0625rem] leading-9 text-ink-soft;
+  @apply text-body text-ink-soft;
 }
 .prose-fa > *:first-child {
   @apply mt-0;
 }
 .prose-fa h1 {
-  @apply mb-6 mt-2 text-3xl font-bold leading-[1.35] text-pine sm:text-4xl sm:leading-[1.3];
+  @apply mb-6 mt-2 text-headline text-navy sm:text-display;
 }
 .prose-fa h2 {
-  @apply mb-4 mt-12 border-r-4 border-brass pr-4 text-2xl font-bold leading-snug text-pine;
+  @apply mb-4 mt-12 border-r-4 border-teal pr-4 text-title text-navy;
 }
 .prose-fa h3 {
-  @apply mb-3 mt-8 text-lg font-bold text-pine;
+  @apply mb-3 mt-8 text-lg font-bold text-navy;
 }
 .prose-fa p {
   @apply mb-5;
@@ -99,11 +145,15 @@ h1, h2, h3, h4, h5, h6 {
   @apply mb-3;
 }
 
+/* لینک: زیرخط تنها استثنای مجاز است — بدون آن، لینک از متن قابل تشخیص
+   نیست و تکیه بر رنگ به‌تنهایی برای کاربران کم‌بینا کافی نیست.
+   رنگ teal-dark است نه teal-light: این متن روی سفید می‌نشیند و آنجا
+   نسخه‌ی روشن کنتراست کمتری دارد (۲.۵۰ در برابر ۴.۸۸). */
 .prose-fa a {
-  @apply font-medium text-brass underline decoration-brass/40 underline-offset-4 transition-colors hover:text-brass-dark;
+  @apply font-medium text-teal-dark underline decoration-teal-dark/40 underline-offset-4 transition-colors hover:text-teal;
 }
 .prose-fa strong {
-  @apply font-bold text-pine;
+  @apply font-bold text-navy;
 }
 .prose-fa hr {
   @apply my-10 border-surface-line;

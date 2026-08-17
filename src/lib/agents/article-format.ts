@@ -71,11 +71,23 @@ function formatGregorian(d: Date): string {
   return `${get("day")} ${GREGORIAN_MONTHS[Number(get("month")) - 1]} ${get("year")}`;
 }
 
-/** «آخرین به‌روزرسانی: ۲۵ مرداد ۱۴۰۵ (16 August 2026)» */
+/**
+ * «آخرین به‌روزرسانی: ۲۵ مرداد ۱۴۰۵ (16 August 2026)»
+ *
+ * ⚠️ عمداً HTML خام است، نه `_…_` مارک‌داون.
+ *
+ * نسخه‌ی قبلی زیرخط مارک‌داون می‌گذاشت که به `<em>` و در نتیجه به ایتالیک
+ * رندر می‌شد — و راهنمای برند ایتالیک در متن فارسی را ممنوع کرده. حروف
+ * فارسی نسخه‌ی ایتالیکِ طراحی‌شده ندارند، پس مرورگر خودش کجشان می‌کند و
+ * نتیجه بدشکل و کم‌خوان است.
+ *
+ * با کلاس صریح، ظاهرش (وزن ۵۰۰ و خاکستری‌آبی) در CSS تعریف می‌شود نه در
+ * متن. marked این HTML را دست‌نخورده عبور می‌دهد.
+ */
 export function updatedAtLine(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  return `_آخرین به‌روزرسانی: ${formatJalali(d)} (${formatGregorian(d)})_`;
+  return `<p class="article-meta">آخرین به‌روزرسانی: ${formatJalali(d)} (${formatGregorian(d)})</p>`;
 }
 
 /** بخش «منابع» — عنوان‌ها به‌صورت لینک مارک‌داون */

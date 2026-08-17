@@ -76,9 +76,10 @@ export default function HomePage() {
           </p>
 
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+            {/* تنها دکمه‌ی نارنجی این صفحه — اقدام اصلی */}
             <Link
               href="/studio"
-              className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-brand-600 px-6 py-3 font-bold text-white shadow-raised transition-all hover:-translate-y-0.5 hover:bg-brand-700"
+              className="btn-action hover:-translate-y-0.5"
             >
               <IconPlay className="h-4 w-4" />
               شروع در استودیو

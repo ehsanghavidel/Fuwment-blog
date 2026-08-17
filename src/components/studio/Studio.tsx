@@ -76,10 +76,8 @@ export function Studio() {
             onChange={(e) => setPasswordInput(e.target.value)}
             className="mb-4 w-full rounded-xl border border-surface-line bg-surface-dim px-4 py-2.5 transition-colors focus:border-brand-400 focus:bg-surface"
           />
-          <button
-            type="submit"
-            className="w-full cursor-pointer rounded-xl bg-brand-600 py-2.5 font-bold text-white transition-colors hover:bg-brand-700"
-          >
+          {/* تنها اقدام صفحه‌ی ورود */}
+          <button type="submit" className="btn-action w-full">
             ورود
           </button>
         </form>

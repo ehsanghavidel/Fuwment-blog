@@ -7,8 +7,10 @@ import { IconArrowLeft, IconBook, IconClock } from "@/components/ui/icons";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "بلاگ",
-  description: "مقالات آرکان درباره‌ی استراتژی، ساختار، بازار و اجرا",
+  title: "پیش‌نمایش مقاله‌ها",
+  description: "پیش‌نمایش داخلی مقاله‌های تولیدشده — منتشرنشده",
+  // بلاگ عمومی روی fuwment.com/blog است؛ این نسخه نباید ایندکس شود
+  robots: { index: false, follow: false },
 };
 
 /** تخمین زمان مطالعه — حدود ۲۰۰ کلمه در دقیقه برای فارسی */
@@ -22,9 +24,9 @@ export default async function BlogPage() {
   return (
     <main className="mx-auto max-w-3xl px-4 py-14 sm:px-6">
       <header className="mb-10">
-        <h1 className="text-headline text-ink">بلاگ آرکان</h1>
+        <h1 className="text-headline text-ink">پیش‌نمایش مقاله‌ها</h1>
         <p className="mt-2 leading-8 text-ink-muted">
-          راهنماهای عملی برای مدیرانی که می‌خواهند کسب‌وکارشان را آگاهانه رشد دهند.
+          خروجی پایپ‌لاین، برای بازبینی داخلی. انتشار عمومی روی fuwment.com/blog انجام می‌شود.
         </p>
       </header>
 

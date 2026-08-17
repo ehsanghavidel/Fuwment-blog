@@ -183,7 +183,7 @@ export function RunPanel({ onUnauthorized }: { onUnauthorized: () => void }) {
             <button
               type="submit"
               disabled={busy}
-              className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-brand-600 px-7 py-3 font-bold text-white shadow-card transition-all hover:bg-brand-700 hover:shadow-raised disabled:cursor-not-allowed disabled:opacity-50"
+              className="btn-action"
             >
               {busy ? (
                 <>

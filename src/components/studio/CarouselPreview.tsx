@@ -9,7 +9,7 @@ import type { Slide } from "@/lib/store/types";
  * خلاقیت تصویری. CSS این را رایگان، فوری و کاملاً یکدست انجام می‌دهد —
  * همان اصلِ «کار قطعی را به مدل نسپار» که در seo-checks و social-checks هم دیدیم.
  *
- * رنگ‌ها فقط از توکن‌های برند می‌آیند (pine/bone/brass)، نه hex خام.
+ * رنگ‌ها فقط از توکن‌های برند می‌آیند (سرمه‌ای/خنثی/فیروزه‌ای)، نه hex خام.
  */
 export function CarouselPreview({ slides }: { slides: Slide[] }) {
   if (slides.length === 0) return null;
