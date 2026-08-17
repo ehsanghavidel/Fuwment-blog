@@ -52,7 +52,53 @@ const SOCIAL_AND_FORUM_DOMAINS = [
   "quora.com",
   "t.me",
   "telegram.me",
+  // انجمن شناخته‌شده‌ی همین موضوع — قاعده‌ی عمومی پایین فقط زیردامنه‌ی
+  // discourse.* آن را می‌گرفت، نه خودِ دامنه را
+  "tnvisaforum.org",
 ];
+
+/**
+ * واژه‌هایی که اگر **یک برچسب کامل** از دامنه یا **یک قطعه‌ی کامل** از
+ * مسیر باشند، یعنی انجمن است.
+ *
+ * ⚠️ عمداً برابری است، نه زیررشته. زیررشته وسوسه‌انگیز بود ولی منابع
+ * سالم را می‌کشت:
+ * - `weforum.org` (World Economic Forum) با «forum» تطبیق می‌خورد و حذف
+ *   می‌شد، در حالی که گزارش‌هایش منبع کاملاً معتبری است.
+ * - مسیر `.../community-sponsorship` در gov.uk نام یک مسیر واقعی ویزاست،
+ *   نه انجمن.
+ * با برابری، `discourse.tnvisaforum.org` گرفته می‌شود (برچسب «discourse»)
+ * ولی `weforum.org` (برچسب «weforum») و «community-sponsorship» سالم می‌مانند.
+ */
+const FORUM_LABELS = [
+  "discourse",
+  "forum",
+  "forums",
+  "community",
+  "communities",
+  "board",
+  "boards",
+  "discussion",
+  "discussions",
+];
+
+/** آیا این آدرس ساختار انجمن دارد؟ */
+function looksLikeForum(url: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return false;
+  }
+
+  const labels = u.hostname.toLowerCase().split(".");
+  const segments = u.pathname.toLowerCase().split("/").filter(Boolean);
+
+  return (
+    labels.some((l) => FORUM_LABELS.includes(l)) ||
+    segments.some((s) => FORUM_LABELS.includes(s))
+  );
+}
 
 /**
  * دامنه‌های نهادهای رسمی — در رتبه‌بندی امتیاز اضافه می‌گیرند.
@@ -109,6 +155,74 @@ const MIN_RELEVANCE = 0.5;
 
 /** سقف طول عنوان منبع */
 const MAX_SOURCE_TITLE = 80;
+
+/**
+ * سن مجاز سند، بر حسب سال.
+ *
+ * ⚠️ چرا اصلاً اهمیت دارد: در یک اجرا، یک PDF راهنمای Tech Nation از
+ * **۲۰۱۹** رتبه‌ی اول فهرست منابع را گرفت
+ * (`technation.io/wp-content/uploads/2019/08/…`). برای موضوعی که قوانین
+ * و معیارهایش مرتب عوض می‌شوند، سند هفت‌ساله فقط بی‌فایده نیست — گمراه‌کننده
+ * است، و چون از یک دامنه‌ی رسمی می‌آید، معتبرتر هم به نظر می‌رسد.
+ */
+const FRESH_YEARS = 2;
+
+/**
+ * جریمه‌ی هر سال کهنگی فراتر از FRESH_YEARS.
+ *
+ * عمداً «جریمه» است و نه «حذف»، چون خودِ کف مرتبط‌بودن حذف را انجام
+ * می‌دهد و لازم نیست دو مکانیزم موازی داشته باشیم:
+ * سند ۲۰۱۹ با امتیاز ۰٫۸۹ → جریمه‌ی ۵ سال × ۰٫۱۵ = ۰٫۷۵ → ۰٫۱۴ که زیر
+ * کف ۰٫۵ است و خودبه‌خود می‌افتد. سند ۳ ساله فقط ۰٫۱۵ پایین می‌آید و در
+ * فهرست می‌ماند، ولی زیر منابع تازه‌تر.
+ */
+const STALE_PENALTY_PER_YEAR = 0.15;
+
+/**
+ * سالِ سندی که در آدرس آمده، اگر پیدا شد.
+ *
+ * ⚠️ فقط دو الگوی بی‌ابهام: سال به‌عنوان **قطعه‌ی کامل مسیر**
+ * (`/2019/08/…` — قرارداد آپلود وردپرس) یا سال با جداکننده در نام فایل
+ * (`guide-2019.pdf`). تطبیق آزادِ چهار رقم، روی چیزهایی مثل `/12019/` یا
+ * شناسه‌های عددی خطای کاذب می‌داد و منبع سالم را می‌انداخت.
+ */
+function yearInUrl(url: string): number | null {
+  let path: string;
+  try {
+    path = new URL(url).pathname;
+  } catch {
+    return null;
+  }
+
+  const segments = path.split("/").filter(Boolean);
+  const years: number[] = [];
+
+  for (const seg of segments) {
+    // قطعه‌ی کامل: «/2019/»
+    if (/^(19|20)\d{2}$/.test(seg)) {
+      years.push(Number(seg));
+      continue;
+    }
+    // با جداکننده داخل نام: «guide-2019.pdf»
+    const m = seg.match(/(?:^|[-_.])((?:19|20)\d{2})(?:$|[-_.])/);
+    if (m) years.push(Number(m[1]));
+  }
+
+  if (years.length === 0) return null;
+  // اگر چند سال بود، تازه‌ترین را مبنا می‌گیریم — محافظه‌کارانه‌تر است
+  return Math.max(...years);
+}
+
+/** جریمه‌ی کهنگی برای این آدرس (۰ یعنی بدون جریمه) */
+function stalenessPenalty(url: string): { penalty: number; year: number | null } {
+  const year = yearInUrl(url);
+  if (year === null) return { penalty: 0, year: null };
+
+  const age = new Date().getFullYear() - year;
+  if (age <= FRESH_YEARS) return { penalty: 0, year };
+
+  return { penalty: (age - FRESH_YEARS) * STALE_PENALTY_PER_YEAR, year };
+}
 
 type SearchResult = { title: string; url: string; content: string; score: number | null };
 
@@ -331,6 +445,8 @@ function selectSources(results: SearchResult[]): Source[] {
   const best = new Map<string, { source: Source; rank: number; official: boolean }>();
   let lowRelevance = 0;
   let printPages = 0;
+  let forums = 0;
+  let stale = 0;
 
   for (const r of results) {
     if (!r.url || !r.title) continue;
@@ -338,6 +454,10 @@ function selectSources(results: SearchResult[]): Source[] {
     const host = hostOf(r.url);
     if (!host) continue;
     if (blocked.some((d) => hostMatches(host, d))) continue;
+    if (looksLikeForum(r.url)) {
+      forums++;
+      continue;
+    }
 
     // نسخه‌ی چاپی قبل از یکتاسازی حذف می‌شود، نه بعدش: وگرنه ممکن بود
     // همان نسخه به‌عنوان نماینده‌ی راهنما انتخاب شود و خواننده را به
@@ -349,15 +469,28 @@ function selectSources(results: SearchResult[]): Source[] {
 
     // نبودِ امتیاز نباید نتیجه را حذف کند؛ خنثی حسابش می‌کنیم
     const score = r.score ?? MIN_RELEVANCE;
-    if (score < MIN_RELEVANCE) {
-      lowRelevance++;
+    const official = isCentralGovUk(host) || OFFICIAL_DOMAINS.some((d) => hostMatches(host, d));
+
+    // کهنگی **قبل از** کف اعمال می‌شود، نه بعدش: کل ایده این است که سند
+    // قدیمی خودش زیر کف بیفتد و لازم نباشد مکانیزم حذف جداگانه بنویسیم.
+    const { penalty, year } = stalenessPenalty(r.url);
+    const rank = score + (official ? OFFICIAL_BONUS : 0) - penalty;
+
+    if (rank < MIN_RELEVANCE) {
+      if (penalty > 0) {
+        stale++;
+        console.log(
+          `[researcher] کنار گذاشته شد — سند ${year} (${new Date().getFullYear() - (year ?? 0)} ساله): ${r.url.slice(0, 80)}`
+        );
+      } else {
+        lowRelevance++;
+      }
       continue;
     }
 
-    const official = isCentralGovUk(host) || OFFICIAL_DOMAINS.some((d) => hostMatches(host, d));
     const entry = {
       source: { title: cleanTitle(r.title), url: r.url },
-      rank: score + (official ? OFFICIAL_BONUS : 0),
+      rank,
       official,
     };
 
@@ -371,7 +504,7 @@ function selectSources(results: SearchResult[]): Source[] {
   const dropped = results.length - kept.length;
   if (dropped > 0) {
     console.log(
-      `[researcher] ${dropped} نتیجه کنار رفت (${lowRelevance} بی‌ربط، ${printPages} نسخه‌ی چاپی، بقیه فیلتر یا هم‌راهنما)`
+      `[researcher] ${dropped} نتیجه کنار رفت (${lowRelevance} بی‌ربط، ${stale} کهنه، ${forums} انجمن، ${printPages} نسخه‌ی چاپی، بقیه فیلتر یا هم‌راهنما)`
     );
   }
 
@@ -388,11 +521,14 @@ function selectSources(results: SearchResult[]): Source[] {
    * کلید یکسان داشتند یعنی باگ (باید جمع می‌شدند)، و اگر دو صفحه از یک
    * راهنما کلید متفاوت گرفتند یعنی canonicalKey جایی را نگرفته.
    */
-  const lines = ranked.map(
-    (k, i) =>
-      `  ${i + 1}. ${k.rank.toFixed(2)} ${k.official ? "★" : " "} ${k.source.url}\n` +
+  const lines = ranked.map((k, i) => {
+    const { penalty, year } = stalenessPenalty(k.source.url);
+    const age = penalty > 0 ? `  ⏳ سند ${year} (−${penalty.toFixed(2)})` : "";
+    return (
+      `  ${i + 1}. ${k.rank.toFixed(2)} ${k.official ? "★" : " "} ${k.source.url}${age}\n` +
       `       کلید: ${canonicalKey(k.source.url)}`
-  );
+    );
+  });
   console.log(`[researcher] ${ranked.length} منبع نهایی:\n${lines.join("\n")}`);
 
   return ranked.map((k) => k.source);
