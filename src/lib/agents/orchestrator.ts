@@ -10,6 +10,7 @@ import { runEditor, APPROVE_THRESHOLD } from "./editor";
 import { runBrandChecks, runBriefChecks, type BrandCheck } from "./brand-checks";
 import { allowedCtaIds } from "./brand-cta";
 import { finalizeArticle } from "./article-format";
+import { syncPostToWordPress } from "@/lib/wordpress";
 import { runSeo } from "./seo";
 import { runCritic } from "./critic";
 import type { Review } from "./types";
@@ -26,7 +27,8 @@ import type { BrandRoute } from "@/lib/company";
  *
  * جریان:
  * ایده‌یاب → استراتژیست → پژوهشگر → نویسنده ⇄ ویراستار (حداکثر ۲ دور
- * بازنویسی) → سئو → ناشر → منتقد (استخراج درس برای اجراهای بعد)
+ * بازنویسی) → سئو → ناشر → انتقال به وردپرس (فقط اگر تأیید شده) →
+ * منتقد (استخراج درس برای اجراهای بعد)
  *
  * هر گام بلافاصله در store ثبت می‌شود تا استودیو بتواند پیشرفت را
  * زنده نمایش دهد (الگوی «وضعیت در دیتابیس، نه در حافظه»).
@@ -230,6 +232,9 @@ export async function runPipeline(opts: {
         status: approved ? "published" : "draft",
         createdAt: now,
         publishedAt: approved ? now : null,
+        // گام بعدی پرشان می‌کند، اگر تأیید شده باشد و وردپرس تنظیم باشد
+        wpPostId: null,
+        wpEditLink: null,
       };
       await store.createPost(p);
       return {
@@ -245,7 +250,48 @@ export async function runPipeline(opts: {
     run.postId = post.postId;
     await store.updateRun(runId, { postId: post.postId });
 
-    // ── ۸. منتقد (خودبهبودی) ──
+    // ── ۸. انتقال به وردپرس ──
+    // فقط پست‌های تأییدشده می‌روند. مقاله‌ای که ویراستار ردش کرده یا چک
+    // برند را نگذرانده، منتظر تصمیم انسان می‌ماند و از استودیو فرستاده
+    // می‌شود — وگرنه وردپرس پر از پیش‌نویس بی‌کیفیت می‌شد.
+    //
+    // مثل گام منتقد، هیچ خطایی نباید اجرای موفق را خراب کند: انتقال یک
+    // «تلاش حداکثری» است و اگر شکست بخورد، دکمه‌ی تلاش مجدد در استودیو
+    // هست. برای همین همه‌چیز داخل try/catch است و همیشه done برمی‌گردد.
+    await step<unknown>("wordpress", "انتقال به وردپرس", async () => {
+      if (!approved) {
+        return {
+          output: { skipped: "not-approved" },
+          summary: "منتقل نشد — پست تأیید نشده و منتظر تصمیم انسانی است",
+        };
+      }
+
+      try {
+        const out = await syncPostToWordPress(post.postId);
+
+        if (out.status === "sent") {
+          return { output: out, summary: `پیش‌نویس در وردپرس ساخته شد (${out.wpPostId})` };
+        }
+        if (out.status === "skipped") {
+          return {
+            output: out,
+            summary:
+              out.reason === "not-configured"
+                ? "وردپرس تنظیم نشده — از این مرحله رد شد"
+                : "از قبل در وردپرس بود",
+          };
+        }
+        return { output: out, summary: `انتقال ناموفق — ${out.error.slice(0, 90)}` };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return {
+          output: { error: message },
+          summary: `انتقال ناموفق (اجرای اصلی سالم است) — ${message.slice(0, 70)}`,
+        };
+      }
+    });
+
+    // ── ۹. منتقد (خودبهبودی) ──
     // خطای منتقد نباید اجرای موفق را خراب کند؛ درس‌گرفتن «تلاش حداکثری» است.
     await step<unknown>("critic", "منتقد — استخراج درس", async () => {
       try {

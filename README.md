@@ -305,6 +305,8 @@ npm run dev
 | `WRITER_MODEL` | مدل قوی‌تر فقط برای نویسنده (مثلاً `anthropic/claude-sonnet-4.5`) |
 | `STUDIO_PASSWORD` | قفل استودیو برای دیپلوی عمومی |
 | `CRON_SECRET` | محافظت endpoint کرون |
+| `WORDPRESS_URL` + `WORDPRESS_USER` + `WORDPRESS_APP_PASSWORD` | ساخت خودکار **پیش‌نویس** مقاله در وردپرس بعد از تأیید. رمز از Users → Profile → Application Passwords |
+| `WORDPRESS_CATEGORY_ID` | دسته‌ی پست‌ها در وردپرس؛ بدون آن همه در Uncategorized می‌افتند |
 
 ### دیپلوی روی Vercel
 

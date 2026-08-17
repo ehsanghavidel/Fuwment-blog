@@ -322,4 +322,6 @@ export const AGENT_ICONS: Record<string, (p: IconProps) => JSX.Element> = {
   "campaign-strategist": IconLayers,
   "social-editor": IconClipboardCheck,
   "social-publisher": IconSend,
+  // فاز ۶ — انتقال به وردپرس
+  wordpress: IconSend,
 };

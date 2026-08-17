@@ -176,3 +176,16 @@ create table if not exists content_campaigns (
 );
 
 create index if not exists idx_content_campaigns_status on content_campaigns(status);
+
+-- ───────────────────────────────────────────────
+-- فاز ۶ — انتقال به وردپرس
+-- ───────────────────────────────────────────────
+-- بلاگ عمومی روی وردپرس (fuwment.com) است و این پروژه فقط تولیدکننده‌ی
+-- محتواست. این دو ستون نتیجه‌ی انتقال را نگه می‌دارند.
+--
+-- هر دو nullable‌اند و پیش‌فرض ندارند — مثل score و published_at که تا
+-- مرحله‌ی بعدی خالی می‌مانند. وجود wp_post_id یعنی «این پست در وردپرس
+-- هست»، و همین کافی است تا دوباره فرستاده نشود؛ برای همین ستون جداگانه‌ای
+-- برای خطا نداریم: حالتِ «تأیید شده ولی wp_post_id خالی» یعنی ارسال نشده.
+alter table posts add column if not exists wp_post_id   int;
+alter table posts add column if not exists wp_edit_link text;

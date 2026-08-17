@@ -27,6 +27,16 @@ export type Post = {
   status: PostStatus;
   createdAt: string;
   publishedAt: string | null;
+  /**
+   * شناسه‌ی پست در وردپرس، بعد از انتقال موفق.
+   *
+   * دو نقش دارد: محافظ «تکراری نفرست»، و علامت اینکه این پست در وردپرس
+   * هست. حالتِ «منتشرشده ولی wpPostId خالی» یعنی هنوز نرفته — به همین
+   * دلیل ستون جداگانه‌ای برای خطا لازم نشد.
+   */
+  wpPostId: number | null;
+  /** لینک ویرایش در پیشخوان وردپرس */
+  wpEditLink: string | null;
 };
 
 export type StepStatus = "running" | "done" | "error" | "skipped";

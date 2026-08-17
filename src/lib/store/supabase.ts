@@ -53,6 +53,12 @@ function postToRow(p: Post) {
     status: p.status,
     created_at: p.createdAt,
     published_at: p.publishedAt,
+    // ⚠️ نام ستون باید دقیقاً snake_case همان فیلد TS باشد.
+    // partialToRow کلید را با regex به camelCase برمی‌گرداند و با کلیدهای
+    // patch مقایسه می‌کند؛ اگر رفت‌وبرگشت دقیق نباشد، فیلد بی‌صدا از
+    // updatePost حذف می‌شود — بدون خطا، بدون هیچ نشانه‌ای.
+    wp_post_id: p.wpPostId,
+    wp_edit_link: p.wpEditLink,
   };
 }
 
@@ -72,6 +78,9 @@ function postFromRow(r: any): Post {
     status: r.status,
     createdAt: r.created_at,
     publishedAt: r.published_at,
+    // `?? null` برای ردیف‌هایی که پیش از افزوده‌شدن این دو ستون ساخته شده‌اند
+    wpPostId: r.wp_post_id ?? null,
+    wpEditLink: r.wp_edit_link ?? null,
   };
 }
 

@@ -4,11 +4,13 @@ import { useEffect, useState } from "react";
 import { studioFetch } from "./api";
 import type { Post } from "@/lib/store/types";
 import {
+  IconAlert,
   IconCheck,
   IconClipboardCheck,
   IconEye,
   IconFileText,
   IconMessage,
+  IconSend,
   IconSpinner,
   IconThumbsDown,
   IconThumbsUp,
@@ -29,16 +31,38 @@ export function PostsPanel({ onUnauthorized }: { onUnauthorized: () => void }) {
   const [comment, setComment] = useState("");
   const [notice, setNotice] = useState("");
   const [sending, setSending] = useState(false);
+  /** آیا سرور متغیرهای وردپرس را دارد؟ بدون آن دکمه‌ی ارسال بی‌معنی است */
+  const [wpEnabled, setWpEnabled] = useState(false);
+  /** خطای آخرین تلاش انتقال، به تفکیک پست — گذرا، در دیتابیس نمی‌ماند */
+  const [wpError, setWpError] = useState<Record<string, string>>({});
+  const [wpSending, setWpSending] = useState<string | null>(null);
 
   async function load() {
     try {
       const res = await studioFetch("/api/posts");
-      if (res.ok) setPosts((await res.json()).posts);
+      if (res.ok) {
+        const data = await res.json();
+        setPosts(data.posts);
+        setWpEnabled(Boolean(data.wordpressEnabled));
+      }
     } catch (e) {
       if (e instanceof Error && e.message === "PASSWORD_REQUIRED") onUnauthorized();
     } finally {
       setLoading(false);
     }
+  }
+
+  /**
+   * نتیجه‌ی انتقال را در state گذرا می‌نشاند.
+   * موفقیت خطای قبلی همان پست را پاک می‌کند تا پیام کهنه نماند.
+   */
+  function applyWpResult(postId: string, wp: { status: string; error?: string } | null) {
+    setWpError((cur) => {
+      const next = { ...cur };
+      if (wp?.status === "failed") next[postId] = wp.error ?? "خطای نامشخص";
+      else delete next[postId];
+      return next;
+    });
   }
 
   useEffect(() => {
@@ -47,11 +71,30 @@ export function PostsPanel({ onUnauthorized }: { onUnauthorized: () => void }) {
   }, []);
 
   async function setStatus(post: Post, status: "draft" | "published") {
-    await studioFetch(`/api/posts/${post.id}`, {
+    const res = await studioFetch(`/api/posts/${post.id}`, {
       method: "PATCH",
       body: JSON.stringify({ status }),
     });
+    // تأیید، انتقال به وردپرس را هم راه می‌اندازد؛ نتیجه‌اش در همین پاسخ است
+    const data = await res.json().catch(() => null);
+    applyWpResult(post.id, data?.wordpress ?? null);
     load();
+  }
+
+  /** تلاش مجدد انتقال — برای پستی که تأیید شده ولی هنوز در وردپرس نیست */
+  async function sendToWordPress(post: Post) {
+    setWpSending(post.id);
+    try {
+      const res = await studioFetch(`/api/posts/${post.id}/wordpress`, { method: "POST" });
+      const data = await res.json().catch(() => null);
+      applyWpResult(post.id, data?.wordpress ?? null);
+      load();
+    } catch (e) {
+      if (e instanceof Error && e.message === "PASSWORD_REQUIRED") onUnauthorized();
+      else setWpError((c) => ({ ...c, [post.id]: e instanceof Error ? e.message : String(e) }));
+    } finally {
+      setWpSending(null);
+    }
   }
 
   async function sendFeedback(postId: string) {
@@ -172,6 +215,38 @@ export function PostsPanel({ onUnauthorized }: { onUnauthorized: () => void }) {
                 انتشار
               </button>
             )}
+
+            {/* وردپرس: یا لینک ویرایش، یا دکمه‌ی ارسال.
+                دکمه فقط برای پست تأییدشده‌ای که هنوز نرفته — و فقط وقتی
+                سرور واقعاً پیکربندی دارد، وگرنه دکمه‌ای می‌ماند که همیشه
+                شکست می‌خورد. */}
+            {post.wpEditLink ? (
+              <a
+                href={post.wpEditLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-surface-line px-3.5 py-2 font-medium text-ink transition-colors hover:border-brand-300 hover:text-brand-700"
+              >
+                <IconSend className="h-4 w-4" />
+                ویرایش در وردپرس
+              </a>
+            ) : (
+              wpEnabled &&
+              post.status === "published" && (
+                <button
+                  onClick={() => sendToWordPress(post)}
+                  disabled={wpSending === post.id}
+                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-surface-line px-3.5 py-2 font-medium text-ink transition-colors hover:border-brand-300 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {wpSending === post.id ? (
+                    <IconSpinner className="h-4 w-4" />
+                  ) : (
+                    <IconSend className="h-4 w-4" />
+                  )}
+                  {wpError[post.id] ? "تلاش مجدد" : "ارسال به وردپرس"}
+                </button>
+              )
+            )}
             <button
               onClick={() => setFeedbackFor(feedbackFor === post.id ? null : post.id)}
               aria-expanded={feedbackFor === post.id}
@@ -181,6 +256,21 @@ export function PostsPanel({ onUnauthorized }: { onUnauthorized: () => void }) {
               بازخورد
             </button>
           </div>
+
+          {/* خطای انتقال — پیام واقعی وردپرس، نه «خطایی رخ داد».
+              گذراست: با بارگذاری بعدی صفحه می‌رود، چون خودِ حالتِ
+              «تأییدشده ولی بدون لینک وردپرس» علامت کافی است. */}
+          {wpError[post.id] && (
+            <div
+              role="alert"
+              className="mt-3 flex items-start gap-2 rounded-xl bg-danger-soft px-4 py-3 text-sm leading-6 text-danger"
+            >
+              <IconAlert className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                انتقال به وردپرس ناموفق بود — {wpError[post.id]}
+              </span>
+            </div>
+          )}
 
           {feedbackFor === post.id && (
             <form
