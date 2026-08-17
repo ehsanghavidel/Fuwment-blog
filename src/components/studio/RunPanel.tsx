@@ -66,50 +66,78 @@ export function RunPanel({ onUnauthorized }: { onUnauthorized: () => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  function stopPolling() {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }
+
+  /**
+   * شروع اجرا.
+   *
+   * ⚠️ POST دیگر منتظر پایان پایپ‌لاین نمی‌ماند — بلافاصله ۲۰۲ برمی‌گرداند
+   * و کار در پس‌زمینه‌ی سرور ادامه دارد. پس **نباید** در finally به
+   * polling پایان داد؛ تنها چیزی که اجرا را تمام‌شده اعلام می‌کند، خودِ
+   * وضعیت رکورد است. (نسخه‌ی قبلی در finally قطع می‌کرد، که با پاسخ فوری
+   * یعنی UI بلافاصله یخ می‌زد.)
+   */
   async function start() {
     setError("");
     setBusy(true);
     const runId = crypto.randomUUID();
+    const startedAt = Date.now();
 
     // شروع polling قبل از POST — تا از اولین گام جا نمانیم
     pollRef.current = setInterval(async () => {
+      // محافظ نهایی: اگر سرور کشته شود و رکورد روی «running» بماند،
+      // بی‌نهایت poll نکنیم. سقف اجرای Vercel ۳۰۰ ثانیه است.
+      if (Date.now() - startedAt > 6 * 60 * 1000) {
+        stopPolling();
+        setBusy(false);
+        setError("اجرا بیش از حد انتظار طول کشید. تاریخچه را بررسی کنید.");
+        loadHistory();
+        return;
+      }
+
       try {
         const res = await studioFetch(`/api/pipeline/runs/${runId}`);
         if (res.ok) {
           const data = await res.json();
-          setRun(data.run);
-          if (data.run.status !== "running" && pollRef.current) {
-            clearInterval(pollRef.current);
-            pollRef.current = null;
-            setBusy(false);
-            loadHistory();
+          if (data.run) {
+            setRun(data.run);
+            if (data.run.status !== "running") {
+              stopPolling();
+              setBusy(false);
+              loadHistory();
+            }
           }
         }
-      } catch {
-        /* اجرای بعدی poll دوباره تلاش می‌کند */
+      } catch (e) {
+        if (e instanceof Error && e.message === "PASSWORD_REQUIRED") {
+          stopPolling();
+          setBusy(false);
+          onUnauthorized();
+        }
+        /* بقیه‌ی خطاها گذرا فرض می‌شوند؛ poll بعدی دوباره تلاش می‌کند */
       }
     }, 2000);
 
+    // POST فقط اجرا را کلید می‌زند. خطای این درخواست یعنی اصلاً شروع نشد.
     try {
       const res = await studioFetch("/api/pipeline/run", {
         method: "POST",
         body: JSON.stringify({ runId, topicHint: topicHint || undefined, route }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "خطای ناشناخته");
-      setRun(data.run);
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || "خطای ناشناخته");
+      }
     } catch (e) {
-      if (e instanceof Error && e.message === "PASSWORD_REQUIRED") {
-        onUnauthorized();
-      } else {
-        setError(e instanceof Error ? e.message : String(e));
-      }
-    } finally {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
+      stopPolling();
       setBusy(false);
+      if (e instanceof Error && e.message === "PASSWORD_REQUIRED") onUnauthorized();
+      else setError(e instanceof Error ? e.message : String(e));
       loadHistory();
     }
   }

@@ -14,7 +14,33 @@
 
 import { COMPANY_NAME, COMPANY_NAME_EN } from "@/lib/company";
 
-export type BrandCheck = { name: string; pass: boolean; note: string };
+/**
+ * شدت یک چک — تعیین می‌کند شکستش بازنویسی کامل را اجباری می‌کند یا نه.
+ *
+ * ⚠️ این تفکیک از یک اندازه‌گیری واقعی درآمد: در یک اجرا، ویراستار همان
+ * پاس اول تأیید کرد ولی یک چکِ **واژگانی** («مشتریان») دو دور بازنویسی
+ * کامل را اجباری کرد — ۶۶ ثانیه از ۲۰۱ ثانیه‌ی کل اجرا. نویسنده هم در
+ * دور اول اصلاحش نکرد و امتیاز ویراستار در دور آخر از ۸۸ به ۸۲ افت کرد.
+ * یعنی یک‌سومِ زمان خرج شد تا یک واژه عوض شود و کیفیت کمی پایین بیاید.
+ *
+ * - `blocking`: ادعا، مرز حقوقی، و برندمحوری. این‌ها اگر منتشر شوند
+ *   مسئله‌ی واقعی می‌سازند، پس ارزش یک دور بازنویسی را دارند.
+ * - `advisory`: واژگان و نگارش. به ویراستار گزارش می‌شوند و جلوی انتشار
+ *   خودکار را می‌گیرند، ولی به‌تنهایی بازنویسی راه نمی‌اندازند.
+ */
+export type CheckSeverity = "blocking" | "advisory";
+
+export type BrandCheck = {
+  name: string;
+  pass: boolean;
+  note: string;
+  severity: CheckSeverity;
+};
+
+/** چک‌های ردشده‌ای که باید بازنویسی را اجباری کنند */
+export function blockingFailures(checks: BrandCheck[]): BrandCheck[] {
+  return checks.filter((c) => !c.pass && c.severity === "blocking");
+}
 
 /**
  * نام‌های برند، از company.ts نه hardcode.
@@ -98,6 +124,7 @@ function checkForbiddenClaims(text: string): BrandCheck {
   const hits = FORBIDDEN_CLAIMS.filter((c) => wholeWord(c.term).test(text));
   return {
     name: "ادعاهای ممنوع",
+    severity: "blocking",
     pass: hits.length === 0,
     note:
       hits.length === 0
@@ -152,6 +179,7 @@ function checkWrongTerms(text: string): BrandCheck {
 
   return {
     name: "واژگان برند",
+    severity: "advisory",
     pass: hits.length === 0,
     note: hits.length === 0 ? "واژگان با راهنمای برند هم‌خوان است" : hits.join(" | "),
   };
@@ -222,6 +250,7 @@ function checkTranslationFraming(text: string): BrandCheck {
 
   return {
     name: "قاب‌بندی «ترجمه»",
+    severity: "blocking",
     pass: hits.length === 0,
     note:
       hits.length === 0
@@ -237,6 +266,7 @@ function checkForbiddenNarrative(text: string): BrandCheck {
 
   return {
     name: "روایت دشمن داستان",
+    severity: "blocking",
     pass: hits.length === 0,
     note:
       hits.length === 0
@@ -267,6 +297,7 @@ function checkLatinDigits(md: string): BrandCheck {
   const found = [...new Set(text.match(/\d+/g) ?? [])];
   return {
     name: "ارقام فارسی",
+    severity: "advisory",
     pass: found.length === 0,
     note:
       found.length === 0
@@ -317,6 +348,7 @@ function checkSuperlatives(text: string): BrandCheck {
 
   return {
     name: "صفت تبلیغاتی مطلق",
+    severity: "blocking",
     pass: hits.length === 0,
     note:
       hits.length === 0
@@ -344,6 +376,7 @@ function checkBrandInHeading(md: string): BrandCheck {
 
   return {
     name: "برند در تیتر بخش",
+    severity: "blocking",
     pass: hits.length === 0,
     note:
       hits.length === 0
@@ -398,6 +431,7 @@ function checkBrandAsSubject(md: string): BrandCheck {
 
   return {
     name: "برند فاعل پاراگراف",
+    severity: "blocking",
     pass: hits.length === 0,
     note:
       hits.length === 0
@@ -434,6 +468,7 @@ function checkCompetitorComparison(text: string): BrandCheck {
 
   return {
     name: "مقایسه با رقبا",
+    severity: "blocking",
     pass: hits.length === 0,
     note:
       hits.length === 0
@@ -460,6 +495,7 @@ function checkLatinQuotes(md: string): BrandCheck {
   const found = [...new Set(text.match(/["'“”‘’]/g) ?? [])];
   return {
     name: "گیومه‌ی فارسی",
+    severity: "advisory",
     pass: found.length === 0,
     note:
       found.length === 0
@@ -491,12 +527,87 @@ function checkHalfSpace(text: string): BrandCheck {
 
   return {
     name: "نیم‌فاصله",
+    severity: "advisory",
     pass: hits.length === 0,
     note:
       hits.length === 0
         ? "نیم‌فاصله‌ها رعایت شده‌اند"
         : `${hits.map((h) => h.label).join("، ")}${samples.length ? ` (نمونه: «${samples.join("»، «")}»)` : ""} — برندگاید نیم‌فاصله را همیشه الزام کرده: می‌شود، نمی‌دانم، شبکه‌های`,
   };
+}
+
+/* ── اصلاح خودکار واژگان ─────────────────────────────────── */
+
+/**
+ * جایگزینی‌های قطعی و بدون ابهام.
+ *
+ * ⚠️ مرزِ این فهرست سخت‌گیرانه است و باید بماند: فقط چیزی اینجا می‌آید
+ * که **در هر بافتی** جایگزینی‌اش درست باشد. اگر ذره‌ای به جمله وابسته
+ * است، جایش اینجا نیست و باید به ویراستار و بازنویسی برود.
+ *
+ * دو موردی که عمداً بیرون‌اند و نباید اضافه شوند:
+ * - «مشتری / مشتریان» → در «مشتریان استارتاپ شما» کاملاً درست است و
+ *   جایگزینی خودکار جمله را خراب می‌کند.
+ * - «وکیل» → ممکن است در جمله‌ای بیاید که دارد تفاوت وکیل و مشاور
+ *   ثبت‌شده را توضیح می‌دهد؛ آنجا حذفش معنا را وارونه می‌کند.
+ *
+ * `firstOnly` برای واژه‌هایی است که راهنمای برند می‌گوید «بار اول با
+ * معادل انگلیسی، بعد فقط فارسی». بدون آن، تکرارِ پرانتز انگلیسی در کل
+ * مقاله پخش می‌شد.
+ */
+type SafeFix = {
+  find: RegExp;
+  /** جایگزین بار اول (معمولاً با معادل انگلیسی) */
+  first: string;
+  /** جایگزین دفعات بعد؛ اگر نبود، همان `first` */
+  rest?: string;
+};
+
+const SAFE_FIXES: SafeFix[] = [
+  { find: /فیومنت|فوومنت/g, first: COMPANY_NAME },
+  {
+    find: /ویزای نخبگان/g,
+    first: "ویزای گلوبال تلنت (Global Talent)",
+    rest: "ویزای گلوبال تلنت",
+  },
+  {
+    find: /تأییدیه نخبگی|تاییدیه نخبگی/g,
+    first: "اندورسمنت (Endorsement)",
+    rest: "اندورسمنت",
+  },
+  { find: /مشاوره‌ی رایگان|مشاورهٔ رایگان|مشاوره رایگان/g, first: "ارزیابی اولیه" },
+];
+
+/**
+ * اعمال جایگزینی‌های قطعی روی متن.
+ *
+ * چرا اصلاً در کد و نه با بازنویسی مدل: یک دور بازنویسی کامل حدود ۳۰
+ * ثانیه و یک فراخوانی مدل هزینه دارد. عوض‌کردن «فیومنت» به «فومنت»
+ * ارزش آن را ندارد و اصلاً قضاوت لازم ندارد.
+ *
+ * فهرست اعمال‌شده‌ها برگردانده می‌شود تا در لاگ دیده شود چه چیزی بی‌سر‌وصدا
+ * عوض شده — اصلاح خاموشِ متن، همان‌قدر بد است که خطای خاموش.
+ */
+export function applySafeBrandFixes(text: string): {
+  text: string;
+  applied: string[];
+} {
+  let out = text;
+  const applied: string[] = [];
+
+  for (const fix of SAFE_FIXES) {
+    const matches = out.match(fix.find);
+    if (!matches) continue;
+
+    let seen = 0;
+    out = out.replace(fix.find, () => {
+      seen++;
+      return seen === 1 ? fix.first : (fix.rest ?? fix.first);
+    });
+    applied.push(`${matches.length}× «${matches[0]}» → «${fix.first}»`);
+  }
+
+  return { text: out, applied };
 }
 
 /* ── چک بریف: هدف‌گیری مبهم ──────────────────────────────── */
@@ -539,6 +650,7 @@ export function runBriefChecks(input: {
   return [
     {
       name: "مخاطب مشخص",
+    severity: "blocking",
       pass: vague.length === 0,
       note:
         vague.length === 0
@@ -547,6 +659,7 @@ export function runBriefChecks(input: {
     },
     {
       name: "دعوت به اقدام از فهرست مجاز",
+    severity: "blocking",
       pass: ctaOk,
       note: ctaOk
         ? `CTA انتخاب‌شده: ${input.ctaId}`

@@ -94,8 +94,10 @@ export async function writeAndReview<T>(args: {
    * اندازه‌گیری قطعی کد را دور زد. چیزی که کد قطعی سنجیده نباید با نظر مدل
    * نقض شود، پس شکست چک خودش به‌تنهایی بازنویسی را اجباری می‌کند.
    */
+  // فقط چک‌های مسدودکننده بازنویسی می‌سازند — همان تفکیکی که در مسیر بلاگ
+  // اعمال شد. چک‌های کانال برچسب ندارند و پیش‌فرض مسدودکننده‌اند.
   const needsRevision = (r: SocialReview, cs: SocialCheck[]) =>
-    r.verdict === "revise" || cs.some((c) => !c.pass);
+    r.verdict === "revise" || cs.some((c) => !c.pass && c.severity !== "advisory");
 
   let revisionRounds = 0;
   while (needsRevision(review, checks) && revisionRounds < MAX_SOCIAL_REVISION_ROUNDS) {

@@ -12,7 +12,19 @@ import type { Slide } from "@/lib/store";
  *    عوض کردی، آنجا هم عوض کن — وگرنه بی‌صدا از کار می‌افتد.
  */
 
-export type SocialCheck = { name: string; pass: boolean; note: string };
+/**
+ * `severity` اختیاری است و نبودش یعنی «مسدودکننده».
+ *
+ * چک‌های خودِ این فایل (طول قلاب، تعداد هشتگ، قالب) همه مسدودکننده‌اند و
+ * برچسب نمی‌گیرند. فیلد فقط برای چک‌های برند لازم است که کنار این‌ها در
+ * یک فهرست ادغام می‌شوند و بعضی‌شان توصیه‌ای‌اند.
+ */
+export type SocialCheck = {
+  name: string;
+  pass: boolean;
+  note: string;
+  severity?: "blocking" | "advisory";
+};
 
 /**
  * شمارش «کاراکترِ دیده‌شده».

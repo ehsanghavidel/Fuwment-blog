@@ -7,7 +7,13 @@ import { runStrategist } from "./strategist";
 import { runResearcher } from "./researcher";
 import { runWriter, runWriterRevision } from "./writer";
 import { runEditor, APPROVE_THRESHOLD } from "./editor";
-import { runBrandChecks, runBriefChecks, type BrandCheck } from "./brand-checks";
+import {
+  applySafeBrandFixes,
+  blockingFailures,
+  runBrandChecks,
+  runBriefChecks,
+  type BrandCheck,
+} from "./brand-checks";
 import { allowedCtaIds } from "./brand-cta";
 import { finalizeArticle } from "./article-format";
 import { syncPostToWordPress } from "@/lib/wordpress";
@@ -123,8 +129,23 @@ export async function runPipeline(opts: {
     });
 
     // ── ۴ و ۵. نویسنده ⇄ ویراستار (حلقه‌ی بازبینی) ──
+    /**
+     * اصلاح واژگانی قطعی، بلافاصله بعد از هر پیش‌نویس.
+     *
+     * این‌ها قضاوت لازم ندارند («فیومنت» همیشه غلط است) و اگر به حلقه‌ی
+     * بازنویسی می‌رفتند، هر کدام یک فراخوانی مدل و ~۳۰ ثانیه هزینه داشت.
+     * فهرست در brand-checks.ts عمداً کوتاه و بی‌ابهام است.
+     */
+    const fixDraft = (text: string, label: string): string => {
+      const { text: fixed, applied } = applySafeBrandFixes(text);
+      if (applied.length) {
+        console.log(`[brand-fix] ${label}: ${applied.join("، ")}`);
+      }
+      return fixed;
+    };
+
     let draft = await step("writer", "نویسنده — پیش‌نویس اول", async () => {
-      const out = await runWriter({ brief, research });
+      const out = fixDraft(await runWriter({ brief, research }), "پیش‌نویس اول");
       return { output: out, summary: `پیش‌نویس ${out.split(/\s+/).length} کلمه‌ای نوشته شد` };
     });
 
@@ -141,14 +162,20 @@ export async function runPipeline(opts: {
     }).then((r) => r.review);
 
     /**
-     * شرط بازنویسی: نظر ویراستار (قضاوت) **یا** ردشدن هر چک قطعی برند (کد).
+     * شرط بازنویسی: نظر ویراستار (قضاوت) **یا** ردشدن یک چک **مسدودکننده**.
      *
      * همان درسی که در social-loop.ts ثبت شده: قضاوت مدل نباید نتیجه‌ی
      * اندازه‌گیری قطعی را دور بزند. یک «تضمینی» در متن، ادعای حقوقی است —
      * امتیاز ۸۵ ویراستار آن را بی‌خطر نمی‌کند.
+     *
+     * ⚠️ ولی فقط چک‌های مسدودکننده. تا پیش از این، هر چک ردشده‌ای بازنویسی
+     * می‌ساخت و در یک اجرای اندازه‌گیری‌شده، واژه‌ی «مشتریان» دو دور کامل
+     * (۶۶ ثانیه از ۲۰۱) هزینه ساخت — در حالی که ویراستار از پاس اول تأیید
+     * کرده بود. چک‌های واژگانی همچنان به ویراستار گزارش می‌شوند و جلوی
+     * انتشار خودکار را می‌گیرند؛ فقط دیگر به‌تنهایی بازنویسی نمی‌سازند.
      */
     const needsRevision = (r: Review, cs: BrandCheck[]) =>
-      r.verdict === "revise" || cs.some((c) => !c.pass);
+      r.verdict === "revise" || blockingFailures(cs).length > 0;
 
     let revisionRounds = 0;
     while (needsRevision(review, brandChecks) && revisionRounds < MAX_REVISION_ROUNDS) {
@@ -157,13 +184,16 @@ export async function runPipeline(opts: {
       const failedBrand = brandChecks.filter((c) => !c.pass);
 
       draft = await step("writer", `نویسنده — بازنویسی ${round}`, async () => {
-        const out = await runWriterRevision({
-          brief,
-          research,
-          draft,
-          review,
-          failedBrandChecks: failedBrand,
-        });
+        const out = fixDraft(
+          await runWriterRevision({
+            brief,
+            research,
+            draft,
+            review,
+            failedBrandChecks: failedBrand,
+          }),
+          `بازنویسی ${round}`
+        );
         return {
           output: out,
           summary: `بازنویسی بر اساس ${review.issues.length} ایراد ویراستار و ${failedBrand.length} چک ردشده`,
