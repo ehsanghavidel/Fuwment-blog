@@ -282,6 +282,9 @@ export function ctasForRoute(route: BrandRoute): BrandCta[] {
  * تصمیم کسب‌وکاری.
  */
 export const BLOCKED_SOURCE_DOMAINS: string[] = [
+   "uklifeinfo.co.uk",
+   "homamigration.org",
+   "go2tr.com",
    // "competitor-example.com",
 ];
 
