@@ -25,6 +25,13 @@ export async function runInstagramStrategist(input: {
   topicHint: string | null;
   route: BrandRoute;
   language?: "fa" | "en";
+  /**
+    * موضوع قطعی از برنامه‌ریز هفتگی. وقتی پر باشد، انتخابی در کار نیست.
+    *
+    * ⚠️ عمداً از topicHint جداست. topicHint قرارداد «حوزه‌ی پیشنهادی»
+    * نرم است که استودیو می‌فرستد؛ بازتعریفش یعنی یک اسم با دو معنی.
+    */
+  assignedTopic?: string;
 }): Promise<SocialBrief> {
   const lessons = await lessonsBlockFor("instagram-strategist");
 
@@ -48,7 +55,14 @@ route = "${input.route}" → ${ROUTE_BRIEFING[input.route]}
 دو فیلد را هم باید خودت تعیین کنی:
 - audienceGroup: کدام‌یک از پنج گروه مخاطب؟ (digital-tech، academic-research، arts-culture، engineering-medical، entrepreneurship)
 - journeyStage: کدام مرحله از سفر؟ (unaware، curious، evaluating، decision، in-journey، success، referral)
-اگر برای هرکدام جوابت «همه» بود، یعنی بریف هنوز آماده نیست — یکی را انتخاب کن.${lessons}`;
+اگر برای هرکدام جوابت «همه» بود، یعنی بریف هنوز آماده نیست — یکی را انتخاب کن.
+${input.assignedTopic ? `
+⚠️ موضوع این اجرا از قبل تعیین شده و انتخاب تو نیست:
+«${input.assignedTopic}»
+تنها کارت ساختن بریف از همین موضوع است. ایده‌ی بهتر پیشنهاد نده، موضوع را
+گسترش نده، و به موضوع دیگری منحرف نشو. قاعده‌ی «بهترین ایده را انتخاب کن»
+که بالاتر آمد، در این حالت اصلاً موضوعیت ندارد.
+` : ""}${lessons}`;
 
   const ideasBlock = input.ideas
     .map(
@@ -63,7 +77,7 @@ route = "${input.route}" → ${ROUTE_BRIEFING[input.route]}
 
 ${ideasBlock}${hint}
 
-یکی را انتخاب کن و برایش بریف اجتماعی بنویس.`;
+${input.assignedTopic ? "برای موضوع تعیین‌شده بریف اجتماعی بنویس." : "یکی را انتخاب کن و برایش بریف اجتماعی بنویس."}`;
 
   const result = await runAgentJSON({
     agent: "instagram-strategist",
