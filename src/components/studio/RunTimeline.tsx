@@ -128,7 +128,7 @@ export function RunTimeline({ run, badge }: { run: PipelineRun; badge?: string }
           className="mt-4 flex items-start gap-2 rounded-xl bg-danger-soft px-4 py-3 text-sm leading-6 text-danger"
         >
           <IconAlert className="mt-0.5 h-4 w-4 shrink-0" />
-          {run.error}
+          <span dir="auto">{run.error}</span>
         </div>
       )}
     </section>

@@ -32,7 +32,9 @@ export function CarouselPreview({ slides }: { slides: Slide[] }) {
           role="listitem"
           className="relative flex aspect-[4/5] w-60 shrink-0 snap-center flex-col justify-between rounded-xl2 bg-pine p-6 pb-11 text-bone shadow-raised sm:w-64"
         >
-          <span className="font-sans text-xs font-medium text-brass">{s.kicker}</span>
+          <span dir="auto" className="font-sans text-xs font-medium text-brass">
+            {s.kicker}
+          </span>
 
           {/*
             تیتر و متن یک بلوک‌اند، نه دو آیتم مستقل.
@@ -42,9 +44,13 @@ export function CarouselPreview({ slides }: { slides: Slide[] }) {
             محتوا می‌نشیند — همان جایی که در طرح واقعی اسلاید هم می‌نشیند.
           */}
           <div className="space-y-2">
-            <h4 className="font-heading text-lg font-bold leading-snug">{s.heading}</h4>
+            <h4 dir="auto" className="font-heading text-lg font-bold leading-snug">
+              {s.heading}
+            </h4>
 
-            <p className="font-sans text-sm leading-6 text-bone/80">{s.text}</p>
+            <p dir="auto" className="font-sans text-sm leading-6 text-bone/80">
+              {s.text}
+            </p>
           </div>
 
           <span className="absolute bottom-4 left-5 font-sans text-xs text-bone/50">

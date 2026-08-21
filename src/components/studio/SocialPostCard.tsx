@@ -97,7 +97,7 @@ export function SocialPostCard({
       <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <h3 className="inline-flex items-center gap-2 font-bold text-ink">
           <PlatformIcon className="h-5 w-5 text-ink-muted" />
-          {post.title}
+          <span dir="auto">{post.title}</span>
           <span className="rounded-full bg-surface-dim px-2.5 py-0.5 text-xs font-medium text-ink-muted">
             {platformLabel}
           </span>
@@ -124,7 +124,8 @@ export function SocialPostCard({
       {/* در ریلز، دلیل انتخاب CTA بیرون از اسکریپت نمایش داده می‌شود */}
       {isReels && post.extras.ctaReason && (
         <p className="mb-4 rounded-xl border-r-2 border-brass bg-surface-dim px-4 py-3 text-sm leading-6 text-ink-muted">
-          <b className="font-bold text-ink">چرا این دعوت به اقدام؟</b> {post.extras.ctaReason}
+          <b className="font-bold text-ink">چرا این دعوت به اقدام؟</b>{" "}
+          <span dir="auto">{post.extras.ctaReason}</span>
         </p>
       )}
 
@@ -133,7 +134,10 @@ export function SocialPostCard({
         {isReels && (
           <h4 className="mb-1.5 text-sm font-bold text-ink">اسکریپت (برای بلندخوانی)</h4>
         )}
-        <div className="whitespace-pre-line rounded-xl bg-surface-dim p-4 text-sm leading-8 text-ink-soft">
+        <div
+          dir="auto"
+          className="whitespace-pre-line rounded-xl bg-surface-dim p-4 text-sm leading-8 text-ink-soft"
+        >
           {post.body}
         </div>
       </div>
@@ -144,7 +148,10 @@ export function SocialPostCard({
           {post.extras.onScreenText && (
             <div>
               <h4 className="mb-1.5 text-sm font-bold text-ink">متن روی تصویر (قلاب)</h4>
-              <p className="rounded-xl bg-pine px-4 py-3 text-center font-heading text-base font-bold leading-7 text-bone">
+              <p
+                dir="auto"
+                className="rounded-xl bg-pine px-4 py-3 text-center font-heading text-base font-bold leading-7 text-bone"
+              >
                 {post.extras.onScreenText}
               </p>
             </div>
@@ -152,7 +159,10 @@ export function SocialPostCard({
           {post.extras.caption && (
             <div>
               <h4 className="mb-1.5 text-sm font-bold text-ink">کپشن پیشنهادی</h4>
-              <p className="whitespace-pre-line rounded-xl bg-surface-dim px-4 py-3 text-sm leading-7 text-ink-soft">
+              <p
+                dir="auto"
+                className="whitespace-pre-line rounded-xl bg-surface-dim px-4 py-3 text-sm leading-7 text-ink-soft"
+              >
                 {post.extras.caption}
               </p>
             </div>
@@ -162,7 +172,11 @@ export function SocialPostCard({
 
       <div className="mt-3 flex flex-wrap gap-1.5">
         {post.hashtags.map((h) => (
-          <span key={h} className="rounded-full bg-brand-50 px-2.5 py-1 text-xs text-brand-600">
+          <span
+            key={h}
+            dir="auto"
+            className="rounded-full bg-brand-50 px-2.5 py-1 text-xs text-brand-600"
+          >
             {h}
           </span>
         ))}
@@ -254,7 +268,8 @@ export function SocialPostCard({
                 <IconX className="mt-0.5 h-3.5 w-3.5 shrink-0 text-danger" />
               )}
               <span className={c.pass ? "text-ink-muted" : "text-danger"}>
-                <b className="font-bold">{c.name}</b> — {c.note}
+                <b className="font-bold">{c.name}</b> —{" "}
+                <span dir="auto">{c.note}</span>
               </span>
             </li>
           ))}

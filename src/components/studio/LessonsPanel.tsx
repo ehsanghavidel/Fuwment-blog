@@ -121,7 +121,9 @@ export function LessonsPanel({ onUnauthorized }: { onUnauthorized: () => void })
                   )}
                 </span>
               </div>
-              <p className="text-sm leading-7 text-ink-soft">{l.lesson}</p>
+              <p dir="auto" className="text-sm leading-7 text-ink-soft">
+                {l.lesson}
+              </p>
             </div>
 
             <button

@@ -246,17 +246,23 @@ export function CampaignPanel({ onUnauthorized }: { onUnauthorized: () => void }
           <h2 className="mb-4 text-title text-ink">روایت مادر</h2>
 
           <div className="mb-5 rounded-xl border-r-2 border-brass bg-surface-dim p-4">
-            <p className="font-heading text-lg font-bold leading-8 text-ink">{n.bigIdea}</p>
+            <p dir="auto" className="font-heading text-lg font-bold leading-8 text-ink">
+              {n.bigIdea}
+            </p>
           </div>
 
           <dl className="grid gap-4 sm:grid-cols-2">
             <div>
               <dt className="mb-1 text-xs font-bold text-ink-muted">تنش</dt>
-              <dd className="text-sm leading-7 text-ink-soft">{n.tension}</dd>
+              <dd dir="auto" className="text-sm leading-7 text-ink-soft">
+                {n.tension}
+              </dd>
             </div>
             <div>
               <dt className="mb-1 text-xs font-bold text-ink-muted">پاسخ آرکان</dt>
-              <dd className="text-sm leading-7 text-ink-soft">{n.resolution}</dd>
+              <dd dir="auto" className="text-sm leading-7 text-ink-soft">
+                {n.resolution}
+              </dd>
             </div>
           </dl>
 
@@ -266,6 +272,7 @@ export function CampaignPanel({ onUnauthorized }: { onUnauthorized: () => void }
               {n.pillars.map((p) => (
                 <span
                   key={p}
+                  dir="auto"
                   className="rounded-full bg-brand-50 px-3 py-1 text-xs text-brand-600"
                 >
                   {p}
@@ -291,7 +298,9 @@ export function CampaignPanel({ onUnauthorized }: { onUnauthorized: () => void }
                     <meta.Icon className="h-3.5 w-3.5 text-ink-muted" />
                     {meta.label}
                   </p>
-                  <p className="text-sm leading-7 text-ink-muted">{angle}</p>
+                  <p dir="auto" className="text-sm leading-7 text-ink-muted">
+                    {angle}
+                  </p>
                 </div>
               );
             })}
@@ -463,7 +472,9 @@ export function CampaignPanel({ onUnauthorized }: { onUnauthorized: () => void }
                 ) : (
                   <IconSpinner className="h-4 w-4 shrink-0 text-brand-500" />
                 )}
-                <span className="min-w-0 flex-1 truncate text-ink-soft">{c.theme}</span>
+                <span dir="auto" className="min-w-0 flex-1 truncate text-ink-soft">
+                  {c.theme}
+                </span>
                 <span className="shrink-0 text-xs text-ink-muted">
                   {c.runIds.filter((r) => r.status === "done").length.toLocaleString("fa-IR")}/
                   {c.runIds.length.toLocaleString("fa-IR")} کانال

@@ -490,7 +490,7 @@ export function SocialPanel({ onUnauthorized }: { onUnauthorized: () => void }) 
                     >
                       <option value="">— مقاله‌ی مبدأ را انتخاب کنید —</option>
                       {posts.map((p) => (
-                        <option key={p.id} value={p.id}>
+                        <option key={p.id} value={p.id} dir="auto">
                           {p.title}
                         </option>
                       ))}
