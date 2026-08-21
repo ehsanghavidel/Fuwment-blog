@@ -34,9 +34,37 @@ export type SocialCheck = {
  * نقطه‌کدها پیمایش می‌کنیم تا شمارش به آنچه اینستاگرام نشان می‌دهد نزدیک
  * باشد. نیم‌فاصله (‌) عمداً شمرده می‌شود، چون پلتفرم‌ها هم می‌شمارند.
  */
+
+
 function charCount(s: string): number {
   return [...s].length;
 }
+
+/**
+ * شمارش اموجی — با گرافیم، نه با regex.
+ *
+ * ⚠️ `\p{Extended_Pictographic}` جواب غلط می‌دهد و غلط بودنش دو طرفه است:
+ *   «سلام 👨‍👩‍👧 و ✌️ و 🇬🇧» → سه اموجیِ دیده‌شده
+ *   match(/\p{Extended_Pictographic}/gu) → ۴  (خانواده سه‌تا شمرده می‌شود)
+ *   و پرچم 🇬🇧 اصلاً Extended_Pictographic نیست، پس شمرده نمی‌شود.
+ *
+ * یعنی کپشنی با دقیقاً ۳ اموجی رد می‌شد و یک دور بازنویسی بی‌دلیل
+ * راه می‌افتاد — همان تله‌ی «چک قطعی غلط بدتر از نداشتن چک است».
+ *
+ * Intl.Segmenter واحد شمارش را همان چیزی می‌کند که چشم می‌بیند.
+ */
+
+const EMOJI_LIMIT = 3;
+
+function countEmoji(text: string): number {
+  const segmenter = new Intl.Segmenter("fa", { granularity: "grapheme" });
+  let count = 0;
+  for (const { segment } of segmenter.segment(text)) {
+    if (/\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(segment)) count++;
+  }
+  return count;
+}
+
 
 const URL_RE = /(https?:\/\/|www\.)/i;
 const HASHTAG_RE = /^#[^\s#]+$/;
@@ -127,9 +155,16 @@ export function runInstagramChecks(input: {
   // ویراستار اجتماعی سپرده شده (platformFit).
 
   checks.push({
-    name: "تعداد هشتگ‌ها",
-    pass: hashtags.length >= 8 && hashtags.length <= 15,
-    note: `${hashtags.length} هشتگ (بازه‌ی مطلوب ۸–۱۵)`,
+    name: "تعداد هشتگ‌های کاروسل",
+    pass: hashtags.length >= 3 && hashtags.length <= 5,
+    note: `${hashtags.length} هشتگ (بازه‌ی مطلوب ۳–۵)`,
+  });
+
+  const emojiCount = countEmoji(caption);
+  checks.push({
+    name: "تعداد اموجی",
+    pass: emojiCount <= EMOJI_LIMIT,
+    note: `${emojiCount} اموجی در کپشن (حداکثر ${EMOJI_LIMIT} — قاعده‌ی برندگاید)`,
   });
 
   const badTags = hashtags.filter((h) => !HASHTAG_RE.test(h));
@@ -297,7 +332,7 @@ export function runReelsChecks(input: {
 
   const badTags = hashtags.filter((h) => !HASHTAG_RE.test(h));
   checks.push({
-    name: "تعداد هشتگ‌ها",
+    name: "تعداد هشتگ‌های ریلز",
     pass: hashtags.length >= 3 && hashtags.length <= 5 && badTags.length === 0,
     note:
       badTags.length > 0
@@ -377,7 +412,7 @@ export function runLinkedinChecks(input: {
 
   const badTags = hashtags.filter((h) => !HASHTAG_RE.test(h));
   checks.push({
-    name: "تعداد هشتگ‌ها",
+    name: "تعداد هشتگ‌های لینکدین",
     pass: hashtags.length >= 3 && hashtags.length <= 5 && badTags.length === 0,
     note:
       badTags.length > 0

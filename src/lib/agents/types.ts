@@ -301,7 +301,11 @@ export const InstagramCarouselSchema = z.object({
   // ⚠️ بازه‌ی ۵–۸ در constraint جدول social_posts هم هست (supabase/schema.sql).
   //    اگر یکی را عوض کردی، آن یکی را هم عوض کن.
   slides: z.array(SlideSchema).min(5).max(8),
-  hashtags: z.array(z.string()).min(8).max(15),
+  // ۳ تا ۵ هشتگ — هم‌راستا با لینکدین و ریلز، و با برندگاید (حداکثر ۸).
+  // بازه‌ی قبلی min(8).max(15) بود، یعنی اسکیما ساختاراً قاعده‌ی برند را
+  // نقض می‌کرد و اینستاگرام تنها قالبی بود که از بقیه جدا افتاده بود.
+  // ⚠️ چک «تعداد هشتگ‌های کاروسل» در social-checks.ts هم با همین بازه می‌خواند.
+  hashtags: z.array(z.string()).min(3).max(5),
   cta: z.string().min(5),
 });
 
