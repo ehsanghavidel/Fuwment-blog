@@ -10,6 +10,7 @@ import { runInstagramChecks } from "./social-checks";
 import { writeAndReview } from "./social-loop";
 import { runSocialCritic } from "./critic";
 import type { InstagramCarousel } from "./types";
+import type { BrandRoute } from "./brand-cta";
 
 /**
  * ارکستریتور اینستاگرام — پایپ‌لاین سوم سیستم.
@@ -28,10 +29,20 @@ import type { InstagramCarousel } from "./types";
 export async function runInstagramPipeline(opts: {
   runId: string;
   topicHint?: string | null;
+  /**
+   * مسیر برند این کاروسل. استودیو همیشه می‌فرستدش؛ کمپین و کرون پیش‌فرض
+   * «brand» می‌گیرند — محتوای سطح برند که نسبت به دو مسیر بی‌طرف است.
+   * دقیقاً همان قرارداد runPipeline بلاگ.
+   */
+  route?: BrandRoute;
+  /** زبان خروجی. پیش‌فرض فارسی تا هیچ مسیر موجودی رفتار عوض نکند. */
+  language?: "fa" | "en";
 }): Promise<PipelineRun> {
   const store = getStore();
   const runId = opts.runId;
   const topicHint = opts.topicHint?.trim() || null;
+  const route = opts.route ?? "brand";
+  const language = opts.language ?? "fa";
 
   const run: PipelineRun = {
     id: runId,
@@ -69,10 +80,10 @@ export async function runInstagramPipeline(opts: {
 
     // ── ۲. استراتژیست اینستاگرام ──
     const brief = await step("instagram-strategist", "استراتژیست اینستاگرام", async () => {
-      const out = await runInstagramStrategist({ ideas, topicHint });
+      const out = await runInstagramStrategist({ ideas, topicHint, route, language });
       return {
         output: out,
-        summary: `بریف ساخته شد — ${out.keyPoints.length} نکته‌ی کلیدی`,
+        summary: `بریف ساخته شد — ${out.keyPoints.length} نکته‌ی کلیدی — ${route} / ${out.audienceGroup ?? "؟"} / ${out.journeyStage ?? "؟"}`,
       };
     });
 

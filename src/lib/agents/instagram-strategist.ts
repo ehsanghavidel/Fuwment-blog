@@ -3,6 +3,7 @@ import { runAgentJSON } from "@/lib/ai";
 import { COMPANY_NAME, COMPANY_PROFILE, BRAND_VOICE } from "@/lib/company";
 import { lessonsBlockFor } from "./lessons";
 import { SocialBriefSchema, type SocialBrief, type SocialIdea } from "./types";
+import { ROUTE_BRIEFING, type BrandRoute } from "./brand-cta";
 
 /**
  * ایجنت ۲ (پایپ‌لاین اینستاگرام) — استراتژیست اینستاگرام
@@ -22,6 +23,8 @@ import { SocialBriefSchema, type SocialBrief, type SocialIdea } from "./types";
 export async function runInstagramStrategist(input: {
   ideas: SocialIdea[];
   topicHint: string | null;
+  route: BrandRoute;
+  language?: "fa" | "en";
 }): Promise<SocialBrief> {
   const lessons = await lessonsBlockFor("instagram-strategist");
 
@@ -36,7 +39,16 @@ ${BRAND_VOICE}
 - keyPoints باید «ادعا» باشند، نه تیتر. هر نکته باید مستقل خوانده و فهمیده شود.
 - **هیچ عدد، درصد یا آماری از خودت نساز.** برخلاف بازآفرینی، اینجا مقاله‌ای نیست که از آن نقل کنی. proofPoint باید یک مثال یا موقعیت ملموس و قابل‌تشخیص باشد (مثلاً «متخصصی که ده سال سابقه دارد، ولی وقتی می‌خواهد شواهدش را بنویسد به دو خط هم نمی‌رسد») نه یک آمار ساختگی.
 - hookAngle باید درد مخاطب را بگوید، نه موضوع را.
-- بریف را پلتفرم‌خنثی بنویس؛ از «سوایپ کن» و اصطلاحات مخصوص یک شبکه استفاده نکن.${lessons}`;
+- بریف را پلتفرم‌خنثی بنویس؛ از «سوایپ کن» و اصطلاحات مخصوص یک شبکه استفاده نکن.
+
+مسیر این اجرا از قبل تعیین شده و انتخاب تو نیست:
+route = "${input.route}" → ${ROUTE_BRIEFING[input.route]}
+ایده‌ای که به مسیر دیگری تعلق دارد، حتی اگر خوب باشد، اینجا بی‌مصرف است.
+
+دو فیلد را هم باید خودت تعیین کنی:
+- audienceGroup: کدام‌یک از پنج گروه مخاطب؟ (digital-tech، academic-research، arts-culture، engineering-medical، entrepreneurship)
+- journeyStage: کدام مرحله از سفر؟ (unaware، curious، evaluating، decision، in-journey، success، referral)
+اگر برای هرکدام جوابت «همه» بود، یعنی بریف هنوز آماده نیست — یکی را انتخاب کن.${lessons}`;
 
   const ideasBlock = input.ideas
     .map(
@@ -53,7 +65,7 @@ ${ideasBlock}${hint}
 
 یکی را انتخاب کن و برایش بریف اجتماعی بنویس.`;
 
-  return runAgentJSON({
+  const result = await runAgentJSON({
     agent: "instagram-strategist",
     system,
     prompt,
@@ -65,7 +77,13 @@ ${ideasBlock}${hint}
   "keyPoints": ["ادعای مستقل اول", "ادعای دوم", "ادعای سوم"],
   "hookAngle": "دردی که مخاطب را متوقف می‌کند",
   "proofPoint": "مثال یا موقعیت ملموس (نه آمار ساختگی)",
-  "cta": "دعوت طبیعی به قدم بعدی"
+  "cta": "دعوت طبیعی به قدم بعدی",
+  "audienceGroup": "digital-tech",
+  "journeyStage": "curious"
 }`,
   });
+
+  // route و language تصمیم اجرا هستند، نه خروجی مدل — قطعی چسبانده می‌شوند.
+  // این‌طور احتمال شکست اسکیما روی این دو فیلد صفر است.
+  return { ...result, route: input.route, language: input.language ?? "fa" };
 }

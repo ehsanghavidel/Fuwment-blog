@@ -17,6 +17,8 @@ export const dynamic = "force-dynamic";
 const BodySchema = z.object({
   runId: z.string().uuid(),
   topicHint: z.string().max(300).optional(),
+  route: z.enum(["brand", "global-talent", "innovator-founder"]).optional(),
+  language: z.enum(["fa", "en"]).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -37,6 +39,8 @@ export async function POST(req: NextRequest) {
   const run = await runInstagramPipeline({
     runId: parsed.data.runId,
     topicHint: parsed.data.topicHint ?? null,
+    route: parsed.data.route,
+    language: parsed.data.language,
   });
 
   return Response.json({ run });

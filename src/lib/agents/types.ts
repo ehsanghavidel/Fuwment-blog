@@ -283,6 +283,30 @@ export const SocialBriefSchema = z.object({
   /** شاهد/مثال، فقط از دل مقاله‌ی مبدأ */
   proofPoint: z.string(),
   cta: z.string(),
+
+  /* ── فیلدهای برنامه‌ریزی (فاز ۲) ─────────────────────────
+   *
+   * ⚠️ هر چهارتا عمداً اختیاری‌اند. `SocialBriefSchema` چهار تولیدکننده
+   * دارد و سه‌تایشان (repurposer، instagram-strategist،
+   * linkedin-angle-finder) خروجی مدل‌اند. فیلد اجباری بدون هماهنگ‌کردن
+   * پرامپتشان یعنی runAgentJSON دو بار تلاش می‌کند و بعد throw — تا شش
+   * فراخوانی سوخته و یک اجرای مرده.
+   *
+   * اجبار جای دیگری اعمال می‌شود: چک قطعی، فقط در مسیر اینستاگرام.
+   * همان الگوی runBriefChecks که در بلاگ داریم.
+   */
+
+  /** تصمیم اجراست، نه قضاوت مدل — به‌صورت قطعی چسبانده می‌شود */
+  route: z.enum(BRAND_ROUTES).optional(),
+
+  /** پیش‌فرض دارد، پس بعد از parse همیشه موجود است */
+  language: z.enum(["fa", "en"]).default("fa"),
+
+  /** کدام‌یک از پنج گروه مخاطب — قضاوت مدل */
+  audienceGroup: z.enum(AUDIENCE_GROUPS).optional(),
+
+  /** کدام مرحله از هفت مرحله‌ی سفر — قضاوت مدل */
+  journeyStage: z.enum(JOURNEY_STAGES).optional(),
 });
 
 export type SocialBrief = z.infer<typeof SocialBriefSchema>;
