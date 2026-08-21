@@ -97,6 +97,28 @@ function wordWithSuffix(term: string): RegExp {
   return new RegExp(`(^|${BOUNDARY})${escaped}${PERSIAN_SUFFIX}($|${BOUNDARY})`);
 }
 
+/* ── کمک‌کننده‌های انگلیسی ────────────────────────────────── */
+
+/**
+ * مرز کلمه‌ی انگلیسی. \b استاندارد کافی نیست چون عبارت‌های ما چنداژه‌ای‌اند
+ * و بعضی‌شان علامت دارند (#1، 100%).
+ */
+
+/** `cs: true` یعنی تطبیق حساس به بزرگی و کوچکی حروف — برای املای نام برند */
+type EnTerm = { term: string; why: string; cs?: boolean };
+
+function wholeWordEn(term: string, caseSensitive = false): RegExp {
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(
+    `(^|[^A-Za-z0-9])${escaped}(?![A-Za-z0-9])`,
+    caseSensitive ? "" : "i"
+  );
+}
+
+function findTermsEn(text: string, list: EnTerm[]): EnTerm[] {
+  return list.filter((t) => wholeWordEn(t.term, t.cs).test(text));
+}
+
 /* ── الف) ادعاهای ممنوع ──────────────────────────────────── */
 
 /**
@@ -130,7 +152,7 @@ function checkForbiddenClaims(text: string): BrandCheck {
       hits.length === 0
         ? "هیچ ادعای تضمینی یا نرخ موفقیت در متن نیست"
         : hits.map((h) => `«${h.term}» — ${h.why}`).join(" | ") +
-          " | جایگزین مجاز: «کاری می‌کنیم پرونده در بهترین شکل ممکن ارائه شود.»",
+        " | جایگزین مجاز: «کاری می‌کنیم پرونده در بهترین شکل ممکن ارائه شود.»",
   };
 }
 
@@ -650,7 +672,7 @@ export function runBriefChecks(input: {
   return [
     {
       name: "مخاطب مشخص",
-    severity: "blocking",
+      severity: "blocking",
       pass: vague.length === 0,
       note:
         vague.length === 0
@@ -659,7 +681,7 @@ export function runBriefChecks(input: {
     },
     {
       name: "دعوت به اقدام از فهرست مجاز",
-    severity: "blocking",
+      severity: "blocking",
       pass: ctaOk,
       note: ctaOk
         ? `CTA انتخاب‌شده: ${input.ctaId}`
@@ -670,12 +692,219 @@ export function runBriefChecks(input: {
 
 /* ── اجرای همه ───────────────────────────────────────────── */
 
+/* ══ چک‌های انگلیسی ═══════════════════════════════════════════
+ *
+ * ⚠️ این‌ها ترجمه‌ی فهرست‌های فارسی نیستند و نباید بشوند.
+ *
+ * سه تفاوت ساختاری:
+ * ۱. «lawyer» در فارسی توصیه‌ای بود؛ اینجا مسدودکننده است، چون عنوان
+ *    حفاظت‌شده است و استفاده‌ی نادرستش تخلف قانونی است نه نگارشی.
+ * ۲. فهرست جایگاه نظارتی (REGULATED_STATUS_EN) معادل فارسی ندارد.
+ *    سطح مجوز فومنت «Level 1 — Advice and Assistance» است؛ ادعای
+ *    نمایندگی فراتر از آن، فراتر از اختیار است.
+ * ۳. مخاطب انگلیسی نهاد و شریک بریتانیایی است، نه متقاضی. ریسک بیشتر
+ *    است، نه کمتر.
+ *
+ * چهار چک نگارشی فارسی (ارقام، گیومه، نیم‌فاصله، اصلاح خودکار) اینجا
+ * اجرا نمی‌شوند. اگر می‌شدند، هر عدد و هر گیومه‌ی انگلیسی رد می‌شد و
+ * هیچ پست انگلیسی هرگز «تمیز» نمی‌ماند.
+ */
+
+const FORBIDDEN_CLAIMS_EN: EnTerm[] = [
+  { term: "guarantee", why: "outcome guarantee — no outcome is guaranteed on these routes" },
+  { term: "guaranteed", why: "outcome guarantee" },
+  { term: "100%", why: "absolute certainty claim" },
+  { term: "100 percent", why: "absolute certainty claim" },
+  { term: "risk-free", why: "absolute certainty claim" },
+  { term: "no risk", why: "absolute certainty claim" },
+  { term: "success rate", why: "success-rate claim — not published, in figures or in words" },
+  { term: "approval rate", why: "success-rate claim in different wording" },
+  { term: "acceptance rate", why: "success-rate claim in different wording" },
+  { term: "proven results", why: "proven-outcome claim without published data" },
+  { term: "proven track record", why: "proven-outcome claim without published data" },
+  { term: "will be approved", why: "certainty claim — the rules on these routes change" },
+  { term: "last chance", why: "fear framing — the hero comes from ambition, not urgency" },
+  { term: "final opportunity", why: "fear framing" },
+  { term: "before it's too late", why: "fear framing" },
+  { term: "don't miss out", why: "fear framing" },
+  { term: "hassle-free", why: "understates the real difficulty of the route" },
+  { term: "effortless", why: "understates the real difficulty of the route" },
+  { term: "fast-track", why: "implies preferential processing that does not exist" },
+];
+
+/**
+ * ادعاهای جایگاه نظارتی.
+ *
+ * «immigration advice» و «immigration adviser» عمداً اینجا نیستند —
+ * فومنت واقعاً تحت نظارت IAA ثبت شده (F202639410) و حق دارد این را
+ * بگوید. چیزی که ممنوع است «legal» است.
+ */
+const REGULATED_STATUS_EN: EnTerm[] = [
+  { term: "lawyer", why: "protected title — an IAA-registered adviser is not a lawyer" },
+  { term: "lawyers", why: "protected title" },
+  { term: "solicitor", why: "protected title under UK legal services law" },
+  { term: "solicitors", why: "protected title" },
+  { term: "barrister", why: "protected title" },
+  { term: "attorney", why: "protected title (and a non-UK term)" },
+  { term: "law firm", why: "Fuwment is not a law firm" },
+  { term: "legal advice", why: "outside the licence — use «immigration advice»" },
+  { term: "legal representation", why: "outside the licence" },
+  { term: "represent you at appeal", why: "IAA Level 1 is Advice and Assistance only" },
+  { term: "Home Office approved", why: "false authority — IAA regulates, it does not approve services" },
+  { term: "government approved", why: "false authority claim" },
+  { term: "official partner", why: "false authority claim" },
+  { term: "OISC", why: "former regulator name — the correct name is IAA" },
+];
+
+const WRONG_TERMS_EN: EnTerm[] = [
+  { term: "Fuwement", why: "brand-name misspelling — it is «Fuwment»" },
+  { term: "Fuwmnet", why: "brand-name misspelling — it is «Fuwment»" },
+  { term: "Fuvment", why: "brand-name misspelling — it is «Fuwment»" },
+  { term: "FUWMENT", why: "all-caps is for the logo only — «Fuwment»", cs: true },
+  { term: "FuWment", why: "capitalisation — «Fuwment»", cs: true },
+  { term: "Elite visa", why: "wrong route name — «Global Talent visa»" },
+  { term: "Genius visa", why: "wrong route name — «Global Talent visa»" },
+  { term: "Exceptional Talent visa", why: "former route name — «Global Talent visa»" },
+  { term: "client", why: "«applicant» or «candidate» in public content" },
+  { term: "clients", why: "«applicants» or «candidates» in public content" },
+  { term: "free consultation", why: "this service does not exist — it is «initial assessment»" },
+  { term: "permanent residency", why: "non-UK concept — «Indefinite Leave to Remain (ILR)»" },
+  { term: "green card", why: "non-UK concept" },
+  { term: "sponsorship", why: "Global Talent needs no sponsor — check this is not a Skilled Worker mix-up" },
+  { term: "expert", why: "expertise claim without a verifiable title — prefer «mentor»" },
+];
+
+const SUPERLATIVES_EN = [
+  "best", "#1", "number one", "leading", "top-rated", "unrivalled", "unrivaled",
+  "unmatched", "unparalleled", "world-class", "premier", "most trusted",
+  "most experienced", "industry-leading", "gold standard",
+];
+
+const COMPETITOR_COMPARISON_EN = [
+  "unlike other agencies", "unlike other consultants", "better than",
+  "cheaper than", "most agencies fail", "typical consultants",
+];
+
+const FORBIDDEN_NARRATIVE_EN: RegExp[] = [
+  /\b(hidden|invisible|secret)\s+criteria\b/i,
+  /\bcriteria\s+are\s+(hidden|invisible|unclear|unknowable)\b/i,
+  /\bthe\s+system\s+is\s+(unreadable|illegible|opaque)\b/i,
+  /\b(hidden|unwritten)\s+rules\b/i,
+  /\byou'?re\s+already\s+qualified,?\s+you\s+just\b/i,
+  /\bit'?s\s+(just|only)\s+a\s+matter\s+of\s+(presentation|framing|storytelling)\b/i,
+  /\byou\s+just\s+need\s+to\s+(present|frame|tell)\s+it\b/i,
+];
+
+/**
+ * قاب‌بندی «translate».
+ * استثنا مثل نسخه‌ی فارسی: ترجمه‌ی مدارک کاربرد مشروع است.
+ */
+const TRANSLATION_FRAMING_EN =
+  /\btranslat\w*\s+(your\s+|their\s+)?(achievements?|experience|impact|track record|expertise)\b/i;
+const DOCUMENT_WORDS_EN = /\b(document|documents|certified|official|translator)\b/i;
+
+function listCheckEn(
+  name: string,
+  severity: "blocking" | "advisory",
+  text: string,
+  list: { term: string; why: string }[],
+  okNote: string
+): BrandCheck {
+  const hits = findTermsEn(text, list);
+  return {
+    name,
+    severity,
+    pass: hits.length === 0,
+    note:
+      hits.length === 0
+        ? okNote
+        : hits.map((h) => `«${h.term}» — ${h.why}`).join(" | "),
+  };
+}
+
+function runBrandChecksEn(text: string): BrandCheck[] {
+  const superlativeHits = SUPERLATIVES_EN.filter((t) => wholeWordEn(t).test(text));
+  const competitorHits = COMPETITOR_COMPARISON_EN.filter((t) => wholeWordEn(t).test(text));
+  const narrativeHits = FORBIDDEN_NARRATIVE_EN.map((re) => text.match(re)?.[0]?.trim()).filter(
+    (m): m is string => Boolean(m)
+  );
+  const translationHit = text.match(TRANSLATION_FRAMING_EN)?.[0]?.trim();
+  const translationBad = Boolean(translationHit) && !DOCUMENT_WORDS_EN.test(translationHit!);
+
+  return [
+    listCheckEn(
+      "ادعاهای ممنوع (انگلیسی)",
+      "blocking",
+      text,
+      FORBIDDEN_CLAIMS_EN,
+      "no guarantee or success-rate claim in the text"
+    ),
+    listCheckEn(
+      "جایگاه نظارتی (انگلیسی)",
+      "blocking",
+      text,
+      REGULATED_STATUS_EN,
+      "no protected title or false authority claim"
+    ),
+    listCheckEn(
+      "واژگان برند (انگلیسی)",
+      "advisory",
+      text,
+      WRONG_TERMS_EN,
+      "vocabulary matches the brand guide"
+    ),
+    {
+      name: "صفت تبلیغاتی مطلق (انگلیسی)",
+      severity: "blocking",
+      pass: superlativeHits.length === 0,
+      note:
+        superlativeHits.length === 0
+          ? "no absolute superiority claim"
+          : superlativeHits.map((t) => `«${t}»`).join("، "),
+    },
+    {
+      name: "مقایسه با رقبا (انگلیسی)",
+      severity: "blocking",
+      pass: competitorHits.length === 0,
+      note:
+        competitorHits.length === 0
+          ? "the text does not compare itself to competitors"
+          : competitorHits.map((t) => `«${t}»`).join("، "),
+    },
+    {
+      name: "روایت دشمن داستان (انگلیسی)",
+      severity: "blocking",
+      pass: narrativeHits.length === 0,
+      note:
+        narrativeHits.length === 0
+          ? "the text does not claim the criteria are hidden"
+          : `${narrativeHits.map((h) => `«${h}»`).join("، ")} — این روایت القا می‌کند هر کسی واجد شرایط است و فقط بلد نیست خودش را ارائه کند.`,
+    },
+    {
+      name: "قاب‌بندی «translate» (انگلیسی)",
+      severity: "blocking",
+      pass: !translationBad,
+      note: translationBad
+        ? `«${translationHit}» — دستاورد «ترجمه» نمی‌شود. (ترجمه‌ی مدارک مشکلی ندارد.)`
+        : "«translate» در بافت دستاورد استفاده نشده",
+    },
+    checkBrandInHeading(text),
+  ];
+}
+
 /**
  * ورودی `text` می‌تواند مارک‌داون مقاله یا متن پیوسته‌ی محتوای اجتماعی باشد.
  * چکِ ارقام خودش مارک‌داون را تمیز می‌کند؛ بقیه روی متن خام کار می‌کنند.
  */
-export function runBrandChecks(input: { text: string }): BrandCheck[] {
-  const { text } = input;
+export function runBrandChecks(input: {
+  text: string;
+  /** پیش‌فرض «fa» تا هیچ فراخوانی موجود بلاگ نشکند */
+  language?: "fa" | "en";
+}): BrandCheck[] {
+  const { text, language = "fa" } = input;
+
+  if (language === "en") return runBrandChecksEn(text);
+
   return [
     checkForbiddenClaims(text),
     checkWrongTerms(text),
