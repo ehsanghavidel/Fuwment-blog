@@ -17,12 +17,37 @@ import type { SocialCheck } from "./social-checks";
  *
  * نکته‌ی آموزشی: برخلاف نویسنده‌ی بلاگ که متن آزاد مارک‌داون می‌دهد، این
  * ایجنت خروجی **ساختاریافته** می‌دهد (آرایه‌ای از اسلایدها). چون هر اسلاید
- * بعداً جداگانه در یک قاب ۱:۱ رندر می‌شود، شکل داده باید تضمین‌شده باشد —
+ * بعداً جداگانه در یک قاب ۴:۵ رندر می‌شود، شکل داده باید تضمین‌شده باشد —
  * نه یک رشته که بعداً بخواهیم پارسش کنیم.
  */
 
+
+/**
+ * قواعد مخصوص زبان خروجی.
+ *
+ * ⚠️ انگلیسی «ترجمه‌ی» فارسی نیست. قاعده‌ی صریح برندگاید: ساختار ترجمه
+ * می‌شود، جمله‌ها از نو نوشته می‌شوند. اگر فقط بگوییم «به انگلیسی بنویس»،
+ * خروجی انگلیسیِ ترجمه‌شده از فارسی می‌شود که برای مخاطب بریتانیایی
+ * مصنوعی می‌خواند — و آن مخاطب نهاد و شریک بالقوه است، نه متقاضی.
+ */
+const FA_BLOCK = `
+زبان خروجی: **فارسی**.
+- اعداد داخل متن را فارسی بنویس.
+- هشتگ‌ها ترکیبی از فارسی و انگلیسی.`;
+
+const EN_BLOCK = `
+زبان خروجی: **انگلیسی**. کل خروجی — عنوان، کپشن، تیتر و متن اسلایدها، هشتگ‌ها و CTA — باید انگلیسی باشد. هیچ جمله‌ی فارسی در خروجی نباشد.
+
+این ترجمه نیست. از نو به انگلیسی بنویس:
+- جمله‌های انگلیسی کوتاه‌ترند. جمله‌ی فارسیِ ترجمه‌شده در انگلیسی بلند و پیچیده می‌شود — نکن.
+- مخاطب انگلیسی‌زبان اینجا با مخاطب فارسی فرق دارد: نهادها، دانشگاه‌ها، همکاران بین‌المللی و متخصصان غیرایرانی. لحن حرفه‌ای و مستقیم، بدون صمیمیت محاوره‌ای.
+- اصطلاحات رسمی را به شکل انگلیسیِ خودشان بنویس: Global Talent visa، Innovator Founder visa، endorsement، Indefinite Leave to Remain (ILR).
+- اعداد را لاتین بنویس.
+- هشتگ‌ها همه انگلیسی.
+- هرگز «lawyer»، «solicitor» یا «legal advice» ننویس — این‌ها در بریتانیا عناوین حفاظت‌شده‌اند. اگر لازم شد، «immigration advice» درست است.`;
+
 /** قواعد مشترک بین پیش‌نویس اول و بازنویسی */
-function systemPrompt(lessons: string): string {
+function systemPrompt(lessons: string, language: "fa" | "en"): string {
   return `تو «کپی‌رایتر اینستاگرام» ${COMPANY_NAME} هستی. کاروسل‌های آموزشی می‌نویسی که مخاطبِ توصیف‌شده در پروفایل شرکت اسکرول را برایشان متوقف کند.
 
 ${COMPANY_PROFILE}
@@ -37,9 +62,9 @@ ${BRAND_VOICE}
   · اسلاید آخر = دعوت به اقدام.
 - heading هر اسلاید باید در اندازه‌ی بندانگشتی خوانا باشد: کوتاه، بدون جمله‌ی وابسته. text حداکثر دو جمله‌ی کوتاه.
 - **هیچ لینکی در کپشن نگذار.** اینستاگرام لینک کپشن را کلیک‌پذیر نمی‌کند؛ به‌جایش بنویس «لینک در بایو».
-- ۸ تا ۱۵ هشتگ، هرکدام با # و بدون فاصله، بدون تکرار. ترکیبی از فارسی و انگلیسی. هشتگ اسپم ممنوع (#فالو، #لایک، #فالوبک).
+- ۳ تا ۵ هشتگ، هرکدام با # و بدون فاصله، بدون تکرار. هشتگ اسپم ممنوع (#فالو، #لایک، #فالوبک).
 - ایموجی کم و کاربردی. لحن برند اجازه‌ی لحن تبلیغاتی داغ نمی‌دهد.
-- اعداد داخل متن را فارسی بنویس.${lessons}`;
+${language === "fa" ? FA_BLOCK : EN_BLOCK}${lessons}`;
 }
 
 function briefBlock(brief: SocialBrief): string {
@@ -63,6 +88,16 @@ const SHAPE_HINT = `{
   "cta": "دعوت به اقدام اسلاید آخر"
 }`;
 
+const SHAPE_HINT_EN = `{
+  "title": "short internal title",
+  "caption": "first sentence is the hook, under 125 characters",
+  "slides": [
+    { "kicker": "hook", "heading": "short slide heading", "text": "one or two short sentences" }
+  ],
+  "hashtags": ["#GlobalTalent", "#UKVisa", "#TechTalent"],
+  "cta": "call to action on the last slide"
+}`;
+
 export async function runInstagramWriter(input: {
   brief: SocialBrief;
 }): Promise<InstagramCarousel> {
@@ -70,13 +105,13 @@ export async function runInstagramWriter(input: {
 
   return runAgentJSON({
     agent: "instagram-writer",
-    system: systemPrompt(lessons),
+    system: systemPrompt(lessons, input.brief.language),
     prompt: `${briefBlock(input.brief)}
 
-یک کاروسل اینستاگرام کامل بنویس.`,
+${input.brief.language === "en" ? "Write a complete Instagram carousel in English." : "یک کاروسل اینستاگرام کامل بنویس."}`,
     temperature: 0.8,
     schema: InstagramCarouselSchema,
-    shapeHint: SHAPE_HINT,
+    shapeHint: input.brief.language === "en" ? SHAPE_HINT_EN : SHAPE_HINT,
   });
 }
 
@@ -109,10 +144,10 @@ ${input.failedChecks.map((c) => `- ${c.name}: ${c.note}`).join("\n") || "- (هم
 
   return runAgentJSON({
     agent: "instagram-writer",
-    system: systemPrompt(lessons),
+    system: systemPrompt(lessons, input.brief.language),
     prompt,
     temperature: 0.6,
     schema: InstagramCarouselSchema,
-    shapeHint: SHAPE_HINT,
+    shapeHint: input.brief.language === "en" ? SHAPE_HINT_EN : SHAPE_HINT,
   });
 }
