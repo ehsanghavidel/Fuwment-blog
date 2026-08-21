@@ -29,6 +29,8 @@ const AGENT_LABELS: Record<string, string> = {
   "reels-writer": "کپی‌رایتر ریلز",
   "campaign-strategist": "استراتژیست کمپین",
   "social-editor": "ویراستار اجتماعی",
+  // فاز ۷ — برنامه‌ریزی هفتگی
+  "weekly-planner": "برنامه‌ریز هفتگی",
 };
 
 export function LessonsPanel({ onUnauthorized }: { onUnauthorized: () => void }) {

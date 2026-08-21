@@ -218,6 +218,8 @@ export const AGENT_IDS = [
   "social-editor",
   // فاز ۵ — کمپین چندکاناله
   "campaign-strategist",
+  // فاز ۷ — برنامه‌ریزی هفتگی
+  "weekly-planner",
 ] as const;
 
 export const CriticOutputSchema = z.object({
@@ -423,3 +425,32 @@ export const SocialReviewSchema = z.object({
 export type SocialReview = z.infer<typeof SocialReviewSchema>;
 
 export type CriticOutput = z.infer<typeof CriticOutputSchema>;
+
+/* ── ۷. برنامه‌ریز هفتگی ─────────────────────────────────── */
+
+/**
+ * یک اسلات هفته — فقط چیزهایی که مدل تصمیم می‌گیرد.
+ *
+ * ⚠️ زبان، مسیر، گروه مخاطب و نوع محتوا اینجا نیستند. آن‌ها از
+ * WEEKLY_GRID می‌آیند و در کد چسبانده می‌شوند. اگر از مدل پرسیده
+ * شوند، نسبت ۷۰/۲۰/۱۰ برندگاید هرگز تضمین نمی‌شود.
+ *
+ * hook و painPoint اینجا هستند چون در مسیر هفتگی ایده‌یاب دور زده
+ * می‌شود، و آن‌ها تنها جایی بودند که سیستم می‌پرسید «آیا این واقعاً
+ * اسکرول را متوقف می‌کند؟». برنامه‌ریز آن کار را می‌کند، ولی یک بار
+ * برای کل هفته و با دید کل شبکه.
+ */
+export const WeeklySlotSchema = z.object({
+  day: z.number().int().min(0).max(6),
+  journeyStage: z.enum(JOURNEY_STAGES),
+  topic: z.string().min(10),
+  hook: z.string().min(10),
+  painPoint: z.string().min(10),
+});
+
+export const WeeklyPlanSchema = z.object({
+  slots: z.array(WeeklySlotSchema).length(7),
+});
+
+export type WeeklySlot = z.infer<typeof WeeklySlotSchema>;
+export type WeeklyPlan = z.infer<typeof WeeklyPlanSchema>;
