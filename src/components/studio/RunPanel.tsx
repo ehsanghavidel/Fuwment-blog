@@ -51,7 +51,11 @@ export function RunPanel({ onUnauthorized }: { onUnauthorized: () => void }) {
       if (res.ok) {
         const runs: PipelineRun[] = (await res.json()).runs;
         // اجراهای بازآفرینی تاریخچه‌ی خودشان را در تب «شبکه‌های اجتماعی» دارند
-        setHistory(runs.filter((r) => r.kind !== "repurpose"));
+        // فهرست سفید، نه سیاه. قبلاً هر kindی جز repurpose اینجا می‌آمد، یعنی
+        // اجراهای اینستاگرام و ریلز و لینکدین هم در تاریخچه‌ی پنل بلاگ ظاهر
+        // می‌شدند. با برنامه‌ریز هفتگی این به هفت رکورد در هفته می‌رسید و فهرست
+        // عملاً بی‌استفاده می‌شد.
+        setHistory(runs.filter((r) => r.kind === "blog"));
       }
     } catch (e) {
       if (e instanceof Error && e.message === "PASSWORD_REQUIRED") onUnauthorized();
@@ -168,11 +172,10 @@ export function RunPanel({ onUnauthorized }: { onUnauthorized: () => void }) {
                 return (
                   <label
                     key={opt.value}
-                    className={`cursor-pointer rounded-xl border px-4 py-3 transition-colors ${
-                      active
+                    className={`cursor-pointer rounded-xl border px-4 py-3 transition-colors ${active
                         ? "border-brand-600 bg-brand-50"
                         : "border-surface-line bg-surface-dim hover:bg-sand/50"
-                    } ${busy ? "cursor-not-allowed opacity-60" : ""}`}
+                      } ${busy ? "cursor-not-allowed opacity-60" : ""}`}
                   >
                     <input
                       type="radio"
