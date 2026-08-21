@@ -189,3 +189,43 @@ create index if not exists idx_content_campaigns_status on content_campaigns(sta
 -- برای خطا نداریم: حالتِ «تأیید شده ولی wp_post_id خالی» یعنی ارسال نشده.
 alter table posts add column if not exists wp_post_id   int;
 alter table posts add column if not exists wp_edit_link text;
+-- ── افزودن قالب استوری ──────────────────────────────────────
+-- همان الگوی drop/add که برای ریلز استفاده شد.
+--
+-- شکل استوری: هر «ست استوری» یک ردیف است، نه سه ردیف. یک اجرای
+-- استوری‌ساز سه استوری یک روز را با هم تولید می‌کند و با هم تأیید
+-- می‌شوند؛ پس مثل کاروسل، یک مجموعه‌ی مرتب است.
+-- بازه‌ی ۱ تا ۳: معمولاً سه‌تا، ولی یک استوری فوریِ تکی هم باید بشود.
+alter table social_posts drop constraint if exists social_posts_format_check;
+alter table social_posts add constraint social_posts_format_check
+  check (format in ('carousel','post','reels','story'));
+
+alter table social_posts drop constraint if exists social_posts_shape;
+alter table social_posts add constraint social_posts_shape check (
+  (format = 'carousel' and jsonb_array_length(slides) between 5 and 8)
+  or (format = 'story' and jsonb_array_length(slides) between 1 and 3)
+  or (format in ('post','reels') and jsonb_array_length(slides) = 0)
+);
+
+-- ── ستون‌های فازهای بعد ─────────────────────────────────────
+-- الان اضافه می‌شوند تا یک بار SQL دستی اجرا شود، نه سه بار.
+--
+-- ⚠️ نام‌گذاری: partialToRow فقط camelCaseِ ساده را به snake_case
+--    تبدیل می‌کند. نامی با رقم یا حروف بزرگ پیاپی (imageURL, slide1Path)
+--    بی‌صدا حذف می‌شود. پس: language, dmKeyword, imagePaths.
+
+alter table social_posts add column if not exists language text not null default 'fa';
+alter table social_posts drop constraint if exists social_posts_language_check;
+alter table social_posts add constraint social_posts_language_check
+  check (language in ('fa','en'));
+
+-- کلیدواژه‌ی دعوت به دایرکت — باید در کل جدول یکتا باشد، وگرنه دو پست
+-- مختلف با یک کلیدواژه یعنی پاسخ خودکار نمی‌داند کدام را بفرستد.
+alter table social_posts add column if not exists dm_keyword text;
+create unique index if not exists idx_social_posts_dm_keyword
+  on social_posts(dm_keyword) where dm_keyword is not null;
+
+-- مسیر فایل‌های رندرشده در Supabase Storage، به ترتیب اسلاید
+alter table social_posts add column if not exists image_paths jsonb not null default '[]';
+
+create index if not exists idx_social_posts_language on social_posts(language);
