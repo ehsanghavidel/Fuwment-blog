@@ -84,8 +84,12 @@ export async function runPipeline(opts: {
       const out = await runIdeaScout({
         topicHint,
         existingTitles: existingPosts.map((p) => p.title),
+        route,
       });
-      return { output: out, summary: `${out.length} ایده تولید شد؛ بهترین: «${out[0].title}»` };
+      return {
+        output: out,
+        summary: `${out.length} ایده در مسیر ${route} تولید شد؛ بالاترین امتیاز: «${out[0].title}»`,
+      };
     });
 
     // ── ۲. استراتژیست ──

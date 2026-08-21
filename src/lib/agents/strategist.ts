@@ -3,18 +3,9 @@ import { runAgentJSON } from "@/lib/ai";
 import { BRAND_VOICE, COMPANY_NAME, COMPANY_PROFILE } from "@/lib/company";
 import { lessonsBlockFor } from "./lessons";
 import { BriefSchema, type Brief, type Idea } from "./types";
-import { ctaListBlock, allowedCtaIds } from "./brand-cta";
+import { ctaListBlock, allowedCtaIds, ROUTE_BRIEFING } from "./brand-cta";
 import type { BrandRoute } from "@/lib/company";
 
-/** توصیف هر مسیر برای پرامپت — همان تفکیکی که در COMPANY_PROFILE آمده */
-const ROUTE_BRIEFING: Record<BrandRoute, string> = {
-  brand:
-    "سطح برند — نسبت به دو مسیر بی‌طرف بمان و هیچ‌کدام را پیش‌فرض نگیر. مقاله باید به مخاطب کمک کند خودش را بسنجد، نه اینکه او را به یک مسیر خاص هل بدهد.",
-  "global-talent":
-    "Global Talent — بر پایه‌ی دستاورد و تاثیر فردی. محتوا حول شواهد، تاثیر و رهبری فردی می‌چرخد.",
-  "innovator-founder":
-    "Innovator Founder — بر پایه‌ی ایده و کسب‌وکار، با سه معیار رسمی نوآورانه · قابل‌اجرا · مقیاس‌پذیر.",
-};
 
 /**
  * ایجنت ۲ — استراتژیست محتوا (Content Strategist)

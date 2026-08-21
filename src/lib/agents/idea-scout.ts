@@ -3,6 +3,7 @@ import { runAgentJSON } from "@/lib/ai";
 import { COMPANY_NAME, COMPANY_PROFILE } from "@/lib/company";
 import { lessonsBlockFor } from "./lessons";
 import { IdeaScoutOutputSchema, type Idea } from "./types";
+import { ROUTE_BRIEFING, type BrandRoute } from "./brand-cta";
 
 /**
  * ایجنت ۱ — ایده‌یاب (Idea Scout)
@@ -15,6 +16,7 @@ import { IdeaScoutOutputSchema, type Idea } from "./types";
 export async function runIdeaScout(input: {
   topicHint: string | null;
   existingTitles: string[];
+  route: BrandRoute;
 }): Promise<Idea[]> {
   const lessons = await lessonsBlockFor("idea-scout");
 
@@ -31,7 +33,8 @@ ${COMPANY_PROFILE}${lessons}`;
     ? `\n\nمدیر محتوا این حوزه را پیشنهاد داده؛ ایده‌ها حول همین باشند: «${input.topicHint}»`
     : "";
 
-  const prompt = `۵ ایده‌ی مقاله برای بلاگ ${COMPANY_NAME} پیشنهاد بده.
+  const routeBlock = `\n\nمسیر این اجرا **از قبل تعیین شده** و انتخاب تو نیست:\nroute = "${input.route}" → ${ROUTE_BRIEFING[input.route]}\nهر ۵ ایده باید با همین مسیر هم‌خوان باشند. ایده‌ای که به مسیر دیگری تعلق دارد، حتی اگر خوب باشد، اینجا بی‌مصرف است.`;
+  const prompt = `۵ ایده‌ی مقاله برای بلاگ ${COMPANY_NAME} پیشنهاد بده.${routeBlock}
 
 معیارهای امتیازدهی (۰ تا ۱۰):
 - آیا مخاطبِ توصیف‌شده در پروفایل شرکت واقعاً این را در گوگل جستجو می‌کند؟
