@@ -65,6 +65,51 @@ function countEmoji(text: string): number {
   return count;
 }
 
+/**
+ * تشخیص زبان متن با نسبت حروف — نه با فهرست واژه.
+ *
+ * چرا لازم شد: `language` را به لایه‌ی چک برند وصل کردیم ولی کپی‌رایتر
+ * هنوز فارسی می‌نویسد. نتیجه در اولین اجرای انگلیسی: چک‌های انگلیسی روی
+ * متن فارسی اجرا شدند، هیچ واژه‌ی ممنوعی پیدا نکردند، و ۱۶ از ۱۶ سبز شد
+ * در حالی که **هیچ گاردی روی آن پست نبود**. شکست بی‌صدا، با ظاهر موفقیت.
+ *
+ * این چک همان حالت را می‌گیرد، و مهم‌تر: هر ناهماهنگی زبانی در آینده را
+ * هم می‌گیرد. اعتماد به «دو لایه هماهنگ می‌مانند» کافی نیست.
+ *
+ * فقط حروف شمرده می‌شوند؛ رقم، نشانه و فاصله بی‌اثرند.
+ */
+function persianLetterRatio(text: string): number {
+  const persian = (text.match(/[\u0600-\u06FF]/gu) ?? []).length;
+  const latin = (text.match(/[A-Za-z]/gu) ?? []).length;
+  const total = persian + latin;
+  return total === 0 ? -1 : persian / total;
+}
+
+export function checkLanguageMatch(text: string, expected: "fa" | "en"): SocialCheck {
+  const ratio = persianLetterRatio(text);
+
+  // متن بدون حرف — چیزی برای قضاوت نیست
+  if (ratio < 0) {
+    return { name: "تطابق زبان", severity: "blocking", pass: true, note: "متن حرفی ندارد" };
+  }
+
+  const pct = Math.round(ratio * 100);
+
+  // آستانه‌ها نامتقارن‌اند و باید باشند: متن فارسی طبیعتاً واژه‌های لاتین
+  // دارد (Global Talent، Innovator Founder)، ولی متن انگلیسیِ سالم تقریباً
+  // هیچ حرف فارسی ندارد.
+  const pass = expected === "fa" ? ratio >= 0.5 : ratio <= 0.15;
+
+  return {
+    name: "تطابق زبان",
+    severity: "blocking",
+    pass,
+    note: pass
+      ? `متن ${expected === "fa" ? "فارسی" : "انگلیسی"} است (${pct}٪ حروف فارسی)`
+      : `زبان درخواستی «${expected}» بود ولی متن ${pct}٪ حروف فارسی دارد — چک‌های برند روی زبان اشتباه اجرا می‌شوند و عملاً هیچ گاردی وجود ندارد`,
+  };
+}
+
 
 const URL_RE = /(https?:\/\/|www\.)/i;
 const HASHTAG_RE = /^#[^\s#]+$/;

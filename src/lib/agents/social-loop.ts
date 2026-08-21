@@ -1,9 +1,10 @@
 import "server-only";
 import { runSocialEditor, type SocialChannel } from "./social-editor";
 import { runBrandChecks } from "./brand-checks";
-import type { SocialCheck } from "./social-checks";
+import { checkLanguageMatch, type SocialCheck } from "./social-checks";
 import type { makeStepRunner } from "./run-steps";
 import type { SocialBrief, SocialReview } from "./types";
+
 
 /**
  * حلقه‌ی مشترک «بنویس → چک قطعی → ویراستار → در صورت نیاز بازنویس».
@@ -60,7 +61,9 @@ export async function writeAndReview<T>(args: {
    */
   const allChecks = (draft: T): SocialCheck[] => [
     ...args.check(draft),
-    ...runBrandChecks({ text: args.brandText(draft) }),
+    // اول از همه: اگر زبان متن با زبان بریف نخواند، بقیه‌ی چک‌ها بی‌معنی‌اند
+    checkLanguageMatch(args.brandText(draft), brief.language),
+    ...runBrandChecks({ text: args.brandText(draft), language: brief.language }),
   ];
 
   let draft = await step(writerAgent, `کپی‌رایتر ${label} — پیش‌نویس اول`, async () => {
