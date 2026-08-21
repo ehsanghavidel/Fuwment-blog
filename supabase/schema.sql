@@ -229,3 +229,36 @@ create unique index if not exists idx_social_posts_dm_keyword
 alter table social_posts add column if not exists image_paths jsonb not null default '[]';
 
 create index if not exists idx_social_posts_language on social_posts(language);
+-- ── هفته‌ی محتوایی ──────────────────────────────────────────
+--
+-- والدِ هفت اجرای اینستاگرام. دقیقاً الگوی content_campaigns:
+-- والد جدول خودش را دارد و فرزندها رکورد pipeline_runs معمولی با
+-- kind واقعی خودشان می‌گیرند. RunKind دست نمی‌خورد.
+--
+-- ⚠️ week_start را همیشه با src/lib/week.ts حساب کن، نه با now().
+--    ستون date بی‌منطقه است و همین درست است — ولی مقدارش باید در کد
+--    با Asia/Tehran صریح ساخته شود. تهران UTC+3:30 است، پس هر شب یک
+--    بازه‌ی ۳٫۵ ساعته هست که «امروز» در UTC و تهران فرق می‌کند. اگر
+--    از تاریخ سرور بگیری، اجرای شب‌هنگام در هفته‌ی اشتباه می‌افتد و
+--    چون unique است یا رکورد تکراری می‌سازد یا هفته را جا می‌اندازد.
+create table if not exists content_weeks (
+  id           uuid primary key,
+  -- شنبه‌ی همان هفته به وقت تهران. هفته‌ی محتوایی، هفته‌ی مخاطب است.
+  week_start   date not null unique,
+  -- هفت اسلات: [{ day, language, route, audienceGroup, contentType,
+  --               journeyStage, topic, hook, painPoint }]
+  plan         jsonb not null default '[]',
+  -- [{ runId, day, status }]
+  run_ids      jsonb not null default '[]',
+  status       text not null default 'running' check (status in ('running','done','error')),
+  error        text,
+  created_at   timestamptz not null default now(),
+  finished_at  timestamptz
+);
+
+create index if not exists idx_content_weeks_status on content_weeks(status);
+
+-- پیوند فرزند به والد. nullable چون هر محتوای اجتماعی به هفته تعلق ندارد
+-- (اجرای دستی، کمپین، بازآفرینی).
+alter table social_posts add column if not exists week_id uuid;
+create index if not exists idx_social_posts_week on social_posts(week_id);
