@@ -326,4 +326,8 @@ export const AGENT_ICONS: Record<string, (p: IconProps) => JSX.Element> = {
   wordpress: IconSend,
   // فاز ۷ — برنامه‌ریزی هفتگی
   "weekly-planner": IconLayers,
+  // گام قطعی، نه ایجنت: در AGENT_IDS نیست چون پرامپت ندارد و درس نمی‌گیرد.
+  // همان آیکون برنامه‌ریز را می‌گیرد تا در تایم‌لاین پیدا باشد که این
+  // اسلات از برنامه‌ی هفتگی نازل شده، نه از ایده‌یاب.
+  "weekly-slot": IconLayers,
 };
