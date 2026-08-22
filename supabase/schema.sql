@@ -262,3 +262,31 @@ create index if not exists idx_content_weeks_status on content_weeks(status);
 -- (اجرای دستی، کمپین، بازآفرینی).
 alter table social_posts add column if not exists week_id uuid;
 create index if not exists idx_social_posts_week on social_posts(week_id);
+
+-- ───────────────────────────────────────────────
+-- فاز ۸ — تصویرهای رندرشده‌ی کاروسل (Supabase Storage)
+-- ───────────────────────────────────────────────
+
+-- مسیر فایل‌ها در ستون social_posts.image_paths می‌نشیند (بالاتر).
+-- خودِ فایل‌ها اینجا.
+
+-- ساخت bucket، اگر نبود.
+insert into storage.buckets (id, name, public)
+values ('social-assets', 'social-assets', true)
+on conflict (id) do nothing;
+
+-- ⚠️ خط بالا برای bucketی که **از قبل ساخته شده** هیچ کاری نمی‌کند.
+--    «on conflict do nothing» یعنی اگر id موجود باشد، ردیف دست‌نخورده
+--    می‌ماند — از جمله public. bucket این پروژه با public = false ساخته
+--    شده بود و آن insert بی‌صدا از رویش رد می‌شد.
+--
+--    پس update جداگانه لازم است. این خط هم دوباره‌اجراپذیر است.
+update storage.buckets set public = true where id = 'social-assets';
+
+-- چرا عمومی؟ توضیح کامل در CLAUDE.md بخش «امنیت». خلاصه: مسیرها UUID
+-- دارند، محتوا قرار است روی اینستاگرام عمومی منتشر شود، و استودیو پشت
+-- Basic Auth است پس URL جایی درز نمی‌کند. در عوض getPublicUrl یک الحاق
+-- رشته است — بدون انقضا و بدون هیچ فراخوانی شبکه‌ای.
+--
+-- نوشتن نیازی به policy ندارد: سرور با SUPABASE_SERVICE_ROLE_KEY کار
+-- می‌کند و کلید سرویس از RLS عبور می‌کند. خواندن هم عمومی است.
