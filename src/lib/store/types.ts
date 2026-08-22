@@ -312,6 +312,7 @@ export interface BlogStore {
   // هفته‌های محتوایی
   createWeek(week: ContentWeek): Promise<void>;
   updateWeek(id: string, patch: Partial<ContentWeek>): Promise<void>;
+  getWeek(id: string): Promise<ContentWeek | null>;
   /** محافظ «دوباره نساز» — ستون week_start در دیتابیس unique است */
   getWeekByStart(weekStart: string): Promise<ContentWeek | null>;
 

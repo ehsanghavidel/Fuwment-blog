@@ -125,6 +125,10 @@ export class MemoryStore implements BlogStore {
     if (cur) state().weeks.set(id, { ...cur, ...patch });
   }
 
+  async getWeek(id: string) {
+    return state().weeks.get(id) ?? null;
+  }
+
   async getWeekByStart(weekStart: string) {
     return [...state().weeks.values()].find((w) => w.weekStart === weekStart) ?? null;
   }

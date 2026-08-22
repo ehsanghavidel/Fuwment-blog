@@ -46,12 +46,37 @@ import { runSocialCritic, type SocialCriticPart } from "./critic";
  * ۴. **ایده‌یاب در این مسیر اجرا نمی‌شود.** برنامه‌ریز `topic` و `hook` و
  *    `painPoint` را ساخته، پس ورودی استراتژیست کامل است. توضیحش بالای
  *    `assignedSlot` در `instagram-orchestrator.ts`.
+ *
+ * ── چرا دو تابع، نه یکی ──
+ *
+ * `planWeek` و `runWeek` عمداً جدا هستند و پشت سر هم صدا زده نمی‌شوند.
+ *
+ * اجرای هفته یعنی هفت پایپ‌لاین موازی و حدود ۳۵ فراخوانی مدل. اگر
+ * برنامه بد باشد — هفت موضوع شبیه هم، یا مرحله‌ی سفر یک‌نواخت — باید
+ * **پیش از** سوزاندن آن هفت اجرا معلوم شود، نه بعدش.
+ *
+ * و این همان الگویی است که کل سیستم دارد: ناشر بلاگ فقط با تأیید
+ * ویراستار منتشر می‌کند، محتوای اجتماعی همیشه «پیش‌نویس» می‌ماند تا
+ * انسان تأیید کند، و انتقال به وردپرس دکمه‌ی جداست. برنامه‌ی هفته هم
+ * یک خروجی میانی است که انسان باید ببیندش.
  */
-export async function runWeeklyPipeline(opts: {
+
+/**
+ * فاز ۱ — فقط برنامه‌ریزی.
+ *
+ * ردیف `content_weeks` را با `plan` می‌سازد و همان‌جا می‌ایستد.
+ * هیچ اجرای اینستاگرامی راه نمی‌افتد. یک فراخوانی مدل.
+ *
+ * وضعیت `"running"` می‌ماند چون constraint دیتابیس فقط
+ * running/done/error را می‌پذیرد و «برنامه‌ریزی‌شده» حالت سومی نیست
+ * که ارزش drop/recreate کردن constraint را داشته باشد. تفکیکش از روی
+ * داده خوانده می‌شود: `plan.length > 0 && runIds.length === 0`.
+ */
+export async function planWeek(opts: {
   /** لحظه‌ی مرجع برای محاسبه‌ی هفته. پیش‌فرض: همین حالا */
   at?: Date;
   /**
-   * اجازه‌ی بازتولید هفته‌ای که از قبل وجود دارد.
+   * اجازه‌ی برنامه‌ریزی دوباره‌ی هفته‌ای که از قبل وجود دارد.
    *
    * پیش‌فرض `false` است چون ستون `week_start` در دیتابیس **unique** است و
    * insert دوم با خطای مبهم Postgres می‌شکند. با محافظ، پیام روشن می‌گیریم.
@@ -62,11 +87,10 @@ export async function runWeeklyPipeline(opts: {
   const ws = computeWeekStart(opts.at ?? new Date());
 
   // ── محافظ تکرار ──
-  // پیش از هر فراخوانی مدل، وگرنه هفت اجرا انجام می‌شود و بعد insert
-  // می‌شکند — گران‌ترین ترتیب ممکن.
+  // پیش از فراخوانی مدل، نه بعدش.
   const existing = await store.getWeekByStart(ws);
   if (existing && !opts.force) {
-    console.log(`[weekly] هفته‌ی ${ws} از قبل وجود دارد (${existing.status}) — تولید نشد`);
+    console.log(`[weekly] هفته‌ی ${ws} از قبل برنامه دارد (${existing.plan.length} اسلات) — دوباره ساخته نشد`);
     return existing;
   }
 
@@ -81,11 +105,9 @@ export async function runWeeklyPipeline(opts: {
     finishedAt: null,
   };
   await store.createWeek(week);
-  console.log(`[weekly] هفته‌ی ${ws} شروع شد — ${week.id}`);
+  console.log(`[weekly] برنامه‌ریزی هفته‌ی ${ws} — ${week.id}`);
 
   try {
-    /* ── ۱. برنامه‌ریز ── */
-
     // حافظه‌ی تکرار: عنوان محتواهای اخیر اینستاگرام.
     // ⚠️ فیلتر تاریخ سمت کد است، نه کوئری: listSocialPosts پارامتر بازه
     // ندارد و افزودنش به قرارداد store برای یک مصرف‌کننده زود است.
@@ -136,7 +158,62 @@ export async function runWeeklyPipeline(opts: {
       `[weekly] برنامه ساخته شد — ${slots.length} اسلات، ${stages.size} مرحله‌ی متمایز از سفر`
     );
 
-    /* ── ۲. شناسه‌ی اجراها، پیش از شروع ── */
+    return week;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[weekly] برنامه‌ریزی هفته‌ی ${ws} شکست: ${message}`);
+    week.status = "error";
+    week.error = message;
+    week.finishedAt = new Date().toISOString();
+    await store.updateWeek(week.id, {
+      status: "error",
+      error: message,
+      finishedAt: week.finishedAt,
+    });
+    return week;
+  }
+}
+
+/**
+ * فاز ۲ — اجرای هفت اسلاتِ یک برنامه‌ی موجود.
+ *
+ * برنامه را نمی‌سازد؛ فقط اجرا می‌کند. اگر هفته برنامه نداشته باشد یا
+ * از قبل اجرا شده باشد، بدون سوزاندن هیچ فراخوانی مدلی برمی‌گردد.
+ */
+export async function runWeek(opts: {
+  weekId: string;
+  /** اجازه‌ی اجرای دوباره‌ی هفته‌ای که قبلاً اجرا شده */
+  force?: boolean;
+}): Promise<ContentWeek> {
+  const store = getStore();
+
+  const week = await store.getWeek(opts.weekId);
+  if (!week) throw new Error(`هفته‌ی ${opts.weekId} پیدا نشد`);
+
+  // ── دو محافظ، هر دو پیش از فراخوانی مدل ──
+  if (week.plan.length === 0) {
+    throw new Error(
+      `هفته‌ی ${week.weekStart} هنوز برنامه ندارد — اول planWeek را اجرا کن`
+    );
+  }
+  if (week.runIds.length > 0 && !opts.force) {
+    console.log(
+      `[weekly] هفته‌ی ${week.weekStart} از قبل اجرا شده (${week.runIds.length} اجرا) — دوباره اجرا نشد`
+    );
+    return week;
+  }
+
+  const ws = week.weekStart;
+  const slots = week.plan;
+  console.log(`[weekly] اجرای هفته‌ی ${ws} — ${slots.length} اسلات`);
+
+  week.status = "running";
+  week.error = null;
+  week.finishedAt = null;
+  await store.updateWeek(week.id, { status: "running", error: null, finishedAt: null });
+
+  try {
+    /* ── ۱. شناسه‌ی اجراها، پیش از شروع ── */
 
     // مثل کمپین: شناسه‌ها را قبل از اجرا می‌سازیم و ذخیره می‌کنیم تا
     // استودیو بتواند بلافاصله هر هفت را poll کند، حتی پیش از ساخته‌شدن
@@ -149,7 +226,7 @@ export async function runWeeklyPipeline(opts: {
     week.runIds = refs;
     await store.updateWeek(week.id, { runIds: refs });
 
-    /* ── ۳. هفت اجرای موازی ── */
+    /* ── ۲. هفت اجرای موازی ── */
 
     /**
      * قطعه‌های منتقد، از داخل اجراها جمع می‌شوند.
@@ -220,7 +297,7 @@ export async function runWeeklyPipeline(opts: {
       `[weekly] ${finalRefs.length - failed.length} از ${finalRefs.length} اجرا موفق بود`
     );
 
-    /* ── ۴. یک منتقد برای کل هفته ── */
+    /* ── ۳. یک منتقد برای کل هفته ── */
 
     /**
      * ⚠️ این بخش از یک خطر واقعی درآمد، نه از سلیقه.
@@ -271,7 +348,7 @@ export async function runWeeklyPipeline(opts: {
       }
     }
 
-    /* ── ۵. بستن هفته ── */
+    /* ── ۴. بستن هفته ── */
 
     week.status = failed.length === finalRefs.length ? "error" : "done";
     week.error =
@@ -290,7 +367,7 @@ export async function runWeeklyPipeline(opts: {
     return week;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`[weekly] هفته‌ی ${ws} شکست: ${message}`);
+    console.error(`[weekly] اجرای هفته‌ی ${ws} شکست: ${message}`);
     week.status = "error";
     week.error = message;
     week.finishedAt = new Date().toISOString();

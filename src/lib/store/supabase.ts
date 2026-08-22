@@ -359,6 +359,11 @@ export class SupabaseStore implements BlogStore {
     if (error) throw new Error(`به‌روزرسانی هفته ناموفق بود: ${error.message}`);
   }
 
+  async getWeek(id: string) {
+    const { data } = await client().from("content_weeks").select("*").eq("id", id).maybeSingle();
+    return data ? weekFromRow(data) : null;
+  }
+
   async getWeekByStart(weekStart: string) {
     const { data } = await client()
       .from("content_weeks")
