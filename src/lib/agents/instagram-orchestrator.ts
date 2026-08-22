@@ -8,8 +8,8 @@ import { runInstagramWriter, runInstagramRevision } from "./instagram-writer";
 import { SOCIAL_APPROVE_THRESHOLD } from "./social-editor";
 import { runInstagramChecks } from "./social-checks";
 import { writeAndReview } from "./social-loop";
-import { runSocialCritic } from "./critic";
-import type { InstagramCarousel } from "./types";
+import { runSocialCritic, type SocialCriticPart } from "./critic";
+import type { InstagramCarousel, SocialIdea } from "./types";
 import type { BrandRoute } from "./brand-cta";
 
 /**
@@ -37,14 +37,44 @@ export async function runInstagramPipeline(opts: {
   route?: BrandRoute;
   /** زبان خروجی. پیش‌فرض فارسی تا هیچ مسیر موجودی رفتار عوض نکند. */
   language?: "fa" | "en";
-  /** والدِ این اجرا، اگر از یک هفته‌ی محتوایی آمده باشد */
+  /**
+   * اسلاتِ از پیش تعیین‌شده‌ی برنامه‌ریز هفتگی.
+   *
+   * وقتی پر باشد، **ایده‌یاب اجرا نمی‌شود**. دلیلش دو چیز است:
+   *
+   * ۱. کار ایده‌یاب اکتشاف است و اینجا اکتشاف تمام شده. اجرایش یعنی یک
+   *    فراخوانی مدل با دمای ۰٫۹ که تنها کار اضافه‌اش فرصت گم‌کردن موضوع
+   *    است — همان ریزشی که در کمپین دیده شد.
+   * ۲. هفت اجرای موازی همگی `listSocialPosts` را در یک لحظه می‌خوانند و
+   *    کار همدیگر را نمی‌بینند، پس مکانیزم ضدتکرارِ ایده‌یاب بین اجراهای
+   *    هم‌زمان کور است. تمایز را برنامه‌ریز تضمین می‌کند، نه ایده‌یاب.
+   *
+   * برنامه‌ریز `hook` و `painPoint` را هم می‌سازد، دقیقاً به همان شکلی
+   * که ایده‌یاب می‌ساخت — پس ورودی استراتژیست تغییری نمی‌کند.
+   */
+  assignedSlot?: { topic: string; hook: string; painPoint: string };
+  /** والدِ این اجرا، اگر از یک هفته آمده باشد */
   weekId?: string | null;
+  /**
+   * وقتی پر باشد، گام منتقدِ **داخل این اجرا** اجرا نمی‌شود و نتیجه
+   * به‌جایش اینجا تحویل داده می‌شود.
+   *
+   * ⚠️ این فلگ از یک خطر واقعی درآمد. `saveLessons` در critic.ts یک
+   * read-modify-write بدون قفل است و `MAX_ACTIVE_LESSONS_PER_AGENT = 8`.
+   * هفت منتقد هم‌زمان تا ۲۱ درسِ به‌شدت هم‌بسته روی همان چهار ایجنت
+   * می‌ریزند و کل حافظه‌ی خودبهبودی را با یک بچ پاک می‌کنند.
+   *
+   * `runSocialCritic` از قبل آرایه می‌گیرد، پس مسیر هفتگی یک منتقد در
+   * سطح هفته می‌زند و این گام را خاموش می‌کند.
+   */
+  collectForCritic?: (part: SocialCriticPart) => void;
 }): Promise<PipelineRun> {
   const store = getStore();
   const runId = opts.runId;
   const topicHint = opts.topicHint?.trim() || null;
   const route = opts.route ?? "brand";
   const language = opts.language ?? "fa";
+  const assignedSlot = opts.assignedSlot ?? null;
   const weekId = opts.weekId ?? null;
 
   const run: PipelineRun = {
@@ -66,24 +96,44 @@ export async function runInstagramPipeline(opts: {
   const step = makeStepRunner(run);
 
   try {
-    // عنوان محتواهای قبلی اینستاگرام، برای پرهیز از تکرار
-    const existing = await store.listSocialPosts({ platform: "instagram" });
-
     // ── ۱. ایده‌یاب اجتماعی ──
-    const ideas = await step("social-idea-scout", "ایده‌یاب اجتماعی", async () => {
-      const out = await runSocialIdeaScout({
-        topicHint,
-        existingTitles: existing.map((p) => p.title),
+    // در مسیر هفتگی دور زده می‌شود؛ دلیلش بالای assignedSlot نوشته شده.
+    let ideas: SocialIdea[];
+    if (assignedSlot) {
+      ideas = [
+        {
+          title: assignedSlot.topic,
+          hook: assignedSlot.hook,
+          painPoint: assignedSlot.painPoint,
+          // امتیاز و دلیل صوری‌اند: این ایده انتخاب نمی‌شود، تحمیل می‌شود.
+          score: 10,
+          reason: "موضوع از برنامه‌ی هفتگی آمده و انتخابی در کار نیست",
+        },
+      ];
+    } else {
+      // عنوان محتواهای قبلی اینستاگرام، برای پرهیز از تکرار
+      const existing = await store.listSocialPosts({ platform: "instagram" });
+      ideas = await step("social-idea-scout", "ایده‌یاب اجتماعی", async () => {
+        const out = await runSocialIdeaScout({
+          topicHint,
+          existingTitles: existing.map((p) => p.title),
+        });
+        return {
+          output: out,
+          summary: `${out.length} ایده تولید شد؛ بهترین: «${out[0].title}»`,
+        };
       });
-      return {
-        output: out,
-        summary: `${out.length} ایده تولید شد؛ بهترین: «${out[0].title}»`,
-      };
-    });
+    }
 
     // ── ۲. استراتژیست اینستاگرام ──
     const brief = await step("instagram-strategist", "استراتژیست اینستاگرام", async () => {
-      const out = await runInstagramStrategist({ ideas, topicHint, route, language });
+      const out = await runInstagramStrategist({
+        ideas,
+        topicHint,
+        route,
+        language,
+        assignedTopic: assignedSlot?.topic,
+      });
       return {
         output: out,
         summary: `بریف ساخته شد — ${out.keyPoints.length} نکته‌ی کلیدی — ${route} / ${out.audienceGroup ?? "؟"} / ${out.journeyStage ?? "؟"}`,
@@ -146,25 +196,36 @@ export async function runInstagramPipeline(opts: {
     await store.updateRun(runId, { socialPostIds: run.socialPostIds });
 
     // ── ۶. منتقد (خودبهبودی) ──
-    // خطای منتقد نباید اجرای موفق را خراب کند.
-    await step<unknown>("critic", "منتقد — استخراج درس", async () => {
-      try {
-        const out = await runSocialCritic({
-          context: `نوع اجرا: کاروسل مستقل اینستاگرام${topicHint ? ` — موضوع درخواستی: «${topicHint}»` : " (انتخاب آزاد ایده‌یاب)"}`,
-          parts: [{ label: "کاروسل اینستاگرام", ...ig }],
-          revisionRounds: ig.revisionRounds,
-        });
-        return {
-          output: out,
-          summary: `امتیاز کلی ${out.overallScore}/100 — ${out.lessons.length} درس برای اجراهای بعدی ذخیره شد`,
-        };
-      } catch (err) {
-        return {
-          output: { error: err instanceof Error ? err.message : String(err) },
-          summary: "استخراج درس ناموفق بود (اجرای اصلی سالم است)",
-        };
-      }
-    });
+    // در مسیر هفتگی خاموش است و نتیجه به ارکستریتور هفته تحویل می‌شود؛
+    // دلیلش بالای collectForCritic نوشته شده.
+    if (opts.collectForCritic) {
+      opts.collectForCritic({
+        label: `کاروسل ${assignedSlot ? `«${assignedSlot.topic}»` : "اینستاگرام"}`,
+        draft: ig.draft,
+        review: ig.review,
+        checks: ig.checks,
+      });
+    } else {
+      // خطای منتقد نباید اجرای موفق را خراب کند.
+      await step<unknown>("critic", "منتقد — استخراج درس", async () => {
+        try {
+          const out = await runSocialCritic({
+            context: `نوع اجرا: کاروسل مستقل اینستاگرام${topicHint ? ` — موضوع درخواستی: «${topicHint}»` : " (انتخاب آزاد ایده‌یاب)"}`,
+            parts: [{ label: "کاروسل اینستاگرام", ...ig }],
+            revisionRounds: ig.revisionRounds,
+          });
+          return {
+            output: out,
+            summary: `امتیاز کلی ${out.overallScore}/100 — ${out.lessons.length} درس برای اجراهای بعدی ذخیره شد`,
+          };
+        } catch (err) {
+          return {
+            output: { error: err instanceof Error ? err.message : String(err) },
+            summary: "استخراج درس ناموفق بود (اجرای اصلی سالم است)",
+          };
+        }
+      });
+    }
 
     run.status = "done";
     run.finishedAt = new Date().toISOString();
