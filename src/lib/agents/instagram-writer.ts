@@ -3,6 +3,7 @@ import { runAgentJSON } from "@/lib/ai";
 import { COMPANY_NAME, COMPANY_PROFILE, BRAND_VOICE } from "@/lib/company";
 import { lessonsBlockFor } from "./lessons";
 import {
+  SLIDE_LIMITS,
   InstagramCarouselSchema,
   type InstagramCarousel,
   type SocialBrief,
@@ -61,6 +62,7 @@ ${BRAND_VOICE}
   · اسلایدهای میانی = هر کدام دقیقاً یک ایده.
   · اسلاید آخر = دعوت به اقدام.
 - heading هر اسلاید باید در اندازه‌ی بندانگشتی خوانا باشد: کوتاه، بدون جمله‌ی وابسته. text حداکثر دو جمله‌ی کوتاه.
+- **سقف‌های سخت هر اسلاید — این‌ها شمرده می‌شوند، حدس نیستند:** kicker حداکثر ${SLIDE_LIMITS.kicker} کاراکتر، heading حداکثر ${SLIDE_LIMITS.heading}، text حداکثر ${SLIDE_LIMITS.text}. رد شدن از این‌ها محتوا را برای بازنویسی برمی‌گرداند. **کوتاه بنویس، نه اینکه بلند بنویسی.** این متن‌ها روی تصویر می‌نشینند و جای اضافه‌ای وجود ندارد.
 - **هیچ لینکی در کپشن نگذار.** اینستاگرام لینک کپشن را کلیک‌پذیر نمی‌کند؛ به‌جایش بنویس «لینک در بایو».
 - ۳ تا ۵ هشتگ، هرکدام با # و بدون فاصله، بدون تکرار. هشتگ اسپم ممنوع (#فالو، #لایک، #فالوبک).
 - ایموجی کم و کاربردی. لحن برند اجازه‌ی لحن تبلیغاتی داغ نمی‌دهد.

@@ -313,12 +313,64 @@ export const SocialBriefSchema = z.object({
 
 export type SocialBrief = z.infer<typeof SocialBriefSchema>;
 
-/** یک اسلاید کاروسل — سقف طول‌ها مثل سئو با clampText مهار می‌شود */
+/**
+ * سقف طول هر بخش اسلاید — یک عدد، یک منبع.
+ *
+ * سه مصرف‌کننده دارد و هر سه باید از همین بخوانند: پرامپت کپی‌رایتر
+ * (تا مدل عدد را بداند)، چک قطعی در social-checks (تا اندازه بگیرد)،
+ * و تور نجات در ناشر. اگر جدا نوشته می‌شدند، اولین تغییر یکی را جا
+ * می‌گذاشت.
+ *
+ * ⚠️ فاز ۳ (رندرکننده) این‌ها را هم لازم دارد. وقتی `slide-spec.ts`
+ * ساخته شد، جای درستشان آنجاست و این ثابت باید منتقل شود.
+ */
+export const SLIDE_LIMITS = { kicker: 24, heading: 40, text: 140 } as const;
+
+/**
+ * یک اسلاید کاروسل.
+ *
+ * ⚠️ اینجا عمداً `clampText` نیست — و این از یک باگ واقعی درآمد.
+ *
+ * نسخه‌ی قبلی سقف‌ها را با `.transform` می‌بُرید. سه پیامد داشت:
+ *
+ * ۱. متنِ بریده با «…» در دیتابیس می‌نشست، نه فقط در نمایش. یعنی
+ *    رندرکننده‌ی تصویر هم همان متن بریده را می‌گرفت و سه‌نقطه به خودِ
+ *    کاروسل منتقل می‌شد.
+ * ۲. ویراستار از تیترهای بریده شکایت می‌کرد — درست، ولی نویسنده
+ *    مقصر نبود؛ کد بریده بودشان.
+ * ۳. و بدتر: چکِ «طول متن اسلایدها» در social-checks **مرده** بود.
+ *    clampText همیشه ≤۴۰ برمی‌گرداند، پس شرط `charCount > 40` هرگز
+ *    درست نمی‌شد و چک همیشه سبز بود. اطمینان کاذب.
+ *
+ * حالا سقف در پرامپت صریح است، چک زنده است و شکستنش یک دور بازنویسی
+ * می‌سازد، و `clampSlides` در ناشر فقط تور نجات است برای وقتی که مدل
+ * بعد از بازنویسی هم کوتاه ننوشته.
+ */
 export const SlideSchema = z.object({
-  kicker: z.string().transform((s) => clampText(s, 24)),
-  heading: z.string().min(3).transform((s) => clampText(s, 40)),
-  text: z.string().transform((s) => clampText(s, 140)),
+  kicker: z.string(),
+  heading: z.string().min(3),
+  text: z.string(),
 });
+
+/**
+ * تور نجاتِ ناشر — آخرین خط دفاع، نه مسیر عادی.
+ *
+ * ⚠️ عمداً بعد از حلقه‌ی بازنویسی اجرا می‌شود، نه پیش از چک‌ها. اگر
+ * جای چک بنشیند، دوباره همان چکِ مرده را می‌سازد.
+ *
+ * `kicker` چک قطعی ندارد (سنجشش خطای کاذب می‌داد و به پرامپت سپرده
+ * شده)، پس تنها مهارش همین‌جاست.
+ */
+export function clampSlides<T extends { kicker: string; heading: string; text: string }>(
+  slides: T[]
+): T[] {
+  return slides.map((s) => ({
+    ...s,
+    kicker: clampText(s.kicker, SLIDE_LIMITS.kicker),
+    heading: clampText(s.heading, SLIDE_LIMITS.heading),
+    text: clampText(s.text, SLIDE_LIMITS.text),
+  }));
+}
 
 export const InstagramCarouselSchema = z.object({
   title: z.string().min(4),

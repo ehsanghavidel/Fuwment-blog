@@ -9,6 +9,7 @@ import { SOCIAL_APPROVE_THRESHOLD } from "./social-editor";
 import { runInstagramChecks, runLinkedinChecks } from "./social-checks";
 import { writeAndReview } from "./social-loop";
 import { runSocialCritic } from "./critic";
+import { clampSlides } from "./types";
 import type { InstagramCarousel, LinkedInPost } from "./types";
 
 /**
@@ -120,7 +121,8 @@ export async function runRepurpose(opts: {
         format: "carousel",
         title: ig.draft.title,
         body: ig.draft.caption,
-        slides: ig.draft.slides,
+        // همان تور نجات ناشر اینستاگرام — این مسیر هم کاروسل می‌سازد
+        slides: clampSlides(ig.draft.slides),
         hashtags: ig.draft.hashtags,
         cta: ig.draft.cta,
         checks: ig.checks,

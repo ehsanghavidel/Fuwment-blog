@@ -9,6 +9,7 @@ import { SOCIAL_APPROVE_THRESHOLD } from "./social-editor";
 import { runInstagramChecks } from "./social-checks";
 import { writeAndReview } from "./social-loop";
 import { runSocialCritic, type SocialCriticPart } from "./critic";
+import { clampSlides } from "./types";
 import type { InstagramCarousel, SocialIdea } from "./types";
 import type { BrandRoute } from "./brand-cta";
 
@@ -192,7 +193,10 @@ export async function runInstagramPipeline(opts: {
         format: "carousel",
         title: ig.draft.title,
         body: ig.draft.caption,
-        slides: ig.draft.slides,
+        // تور نجات: اگر مدل بعد از بازنویسی هم بلند نوشته، اینجا مهار
+        // می‌شود. مسیر عادی نیست — چکِ «طول متن اسلایدها» باید قبلش
+        // گرفته باشدش.
+        slides: clampSlides(ig.draft.slides),
         hashtags: ig.draft.hashtags,
         cta: ig.draft.cta,
         checks: ig.checks,

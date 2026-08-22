@@ -1,4 +1,5 @@
 import type { Slide } from "@/lib/store";
+import { SLIDE_LIMITS } from "./types";
 
 /**
  * چک‌های قطعی محتوای اجتماعی — بدون LLM.
@@ -177,9 +178,14 @@ export function runInstagramChecks(input: {
     note: `${slides.length} اسلاید (بازه‌ی مطلوب ۵–۸)`,
   });
 
-  // متن اسلاید باید روی تصویر خوانا باشد
+  // متن اسلاید باید روی تصویر خوانا باشد.
+  //
+  // ⚠️ این چک تا پیش از این **مرده** بود: SlideSchema سقف‌ها را با
+  // clampText می‌بُرید، پس heading همیشه ≤۴۰ می‌رسید و شرط هرگز درست
+  // نمی‌شد. حالا اسکیما نمی‌بُرد و این واقعاً اندازه می‌گیرد.
   const longSlide = slides.findIndex(
-    (s) => charCount(s.heading) > 40 || charCount(s.text) > 140
+    (s) =>
+      charCount(s.heading) > SLIDE_LIMITS.heading || charCount(s.text) > SLIDE_LIMITS.text
   );
   checks.push({
     name: "طول متن اسلایدها",
@@ -187,7 +193,7 @@ export function runInstagramChecks(input: {
     note:
       longSlide === -1
         ? "همه‌ی اسلایدها در حد خوانایی روی تصویرند"
-        : `اسلاید ${longSlide + 1} بلند است (تیتر ≤۴۰ و متن ≤۱۴۰ کاراکتر)`,
+        : `اسلاید ${longSlide + 1} بلند است — تیتر ${charCount(slides[longSlide].heading)} (سقف ${SLIDE_LIMITS.heading}) و متن ${charCount(slides[longSlide].text)} (سقف ${SLIDE_LIMITS.text}) کاراکتر`,
   });
 
   // ⚠️ اینجا عمداً چکی برای «آیا اسلاید آخر دعوت به اقدام دارد؟» نداریم.
