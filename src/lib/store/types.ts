@@ -143,6 +143,13 @@ export type SocialPost = {
   cta: string;
   /** فیلدهای مخصوص قالب (فعلاً فقط ریلز) */
   extras: SocialExtras;
+  /**
+   * هفته‌ی محتوایی‌ای که این محتوا از آن آمده.
+   *
+   * nullable است چون هر محتوای اجتماعی به هفته تعلق ندارد — اجرای دستی
+   * استودیو، کمپین و بازآفرینی همه null می‌گیرند.
+   */
+  weekId: string | null;
   /** خروجی چک‌های قطعی (social-checks) برای نمایش در استودیو */
   checks: SocialCheckRecord[];
   score: number | null;
@@ -187,6 +194,53 @@ export type Campaign = {
   /** تا وقتی استراتژیست تمام نشده، خالی است */
   narrative: CampaignNarrativeData | null;
   runIds: CampaignRunRef[];
+  status: RunStatus;
+  error: string | null;
+  createdAt: string;
+  finishedAt: string | null;
+};
+
+/* ── هفته‌ی محتوایی ──────────────────────────────────────── */
+
+/**
+ * یک اسلات از هفته — پیکربندی شبکه به‌علاوه‌ی چیزی که برنامه‌ریز ساخته.
+ *
+ * مثل CampaignNarrativeData: شکل داده اینجا تعریف می‌شود و اعتبارسنجی‌اش
+ * با zod در agents/types.ts. لایه‌ی store به ایجنت‌ها وابسته نمی‌شود.
+ */
+export type WeeklySlotData = {
+  /** ۰ = شنبه … ۶ = جمعه */
+  day: number;
+  language: "fa" | "en";
+  route: string;
+  audienceGroup: string | null;
+  contentType: string;
+  journeyStage: string;
+  topic: string;
+  hook: string;
+  painPoint: string;
+};
+
+/** اجرای هر اسلات، با شناسه‌ی رکورد pipeline_runs خودش */
+export type WeekRunRef = {
+  day: number;
+  runId: string;
+  status: RunStatus;
+};
+
+/**
+ * هفته‌ی محتوایی — والدِ هفت اجرای اینستاگرام.
+ *
+ * دقیقاً الگوی Campaign: والد جدول خودش را دارد و فرزندها رکورد
+ * pipeline_runs معمولی با kind واقعی خودشان می‌گیرند. RunKind دست نمی‌خورد.
+ */
+export type ContentWeek = {
+  id: string;
+  /** شنبه‌ی همان هفته به وقت تهران، YYYY-MM-DD — با src/lib/week.ts */
+  weekStart: string;
+  /** تا وقتی برنامه‌ریز تمام نشده، خالی است */
+  plan: WeeklySlotData[];
+  runIds: WeekRunRef[];
   status: RunStatus;
   error: string | null;
   createdAt: string;
@@ -254,6 +308,12 @@ export interface BlogStore {
   updateCampaign(id: string, patch: Partial<Campaign>): Promise<void>;
   getCampaign(id: string): Promise<Campaign | null>;
   listCampaigns(limit?: number): Promise<Campaign[]>;
+
+  // هفته‌های محتوایی
+  createWeek(week: ContentWeek): Promise<void>;
+  updateWeek(id: string, patch: Partial<ContentWeek>): Promise<void>;
+  /** محافظ «دوباره نساز» — ستون week_start در دیتابیس unique است */
+  getWeekByStart(weekStart: string): Promise<ContentWeek | null>;
 
   // درس‌ها (حافظه‌ی خودبهبودی)
   addLesson(lesson: Lesson): Promise<void>;

@@ -37,12 +37,15 @@ export async function runInstagramPipeline(opts: {
   route?: BrandRoute;
   /** زبان خروجی. پیش‌فرض فارسی تا هیچ مسیر موجودی رفتار عوض نکند. */
   language?: "fa" | "en";
+  /** والدِ این اجرا، اگر از یک هفته‌ی محتوایی آمده باشد */
+  weekId?: string | null;
 }): Promise<PipelineRun> {
   const store = getStore();
   const runId = opts.runId;
   const topicHint = opts.topicHint?.trim() || null;
   const route = opts.route ?? "brand";
   const language = opts.language ?? "fa";
+  const weekId = opts.weekId ?? null;
 
   const run: PipelineRun = {
     id: runId,
@@ -121,6 +124,7 @@ export async function runInstagramPipeline(opts: {
         cta: ig.draft.cta,
         checks: ig.checks,
         extras: {},
+        weekId,
         score: ig.review.score,
         // انتشار روی اینستاگرام دستی است؛ انسان تأیید می‌کند
         status: "draft",

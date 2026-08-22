@@ -10,6 +10,7 @@ import type {
   PostStatus,
   SocialPlatform,
   SocialPost,
+  ContentWeek,
 } from "./types";
 
 /**
@@ -132,6 +133,8 @@ function socialPostToRow(p: SocialPost) {
     cta: p.cta,
     checks: p.checks,
     extras: p.extras,
+    // camelCase ساده — رفت‌وبرگشت partialToRow سالم است (weekId ↔ week_id)
+    week_id: p.weekId,
     score: p.score,
     status: p.status,
     created_at: p.createdAt,
@@ -154,6 +157,7 @@ function socialPostFromRow(r: any): SocialPost {
     checks: r.checks ?? [],
     // رکوردهای ساخته‌شده پیش از افزودن این ستون
     extras: r.extras ?? {},
+    weekId: r.week_id ?? null,
     score: r.score,
     status: r.status,
     createdAt: r.created_at,
@@ -182,6 +186,32 @@ function campaignFromRow(r: any): Campaign {
     // شیء خالی یعنی «هنوز ساخته نشده» — به null تبدیلش می‌کنیم تا UI
     // مجبور نباشد هر دو حالت را بشناسد
     narrative: n && Object.keys(n).length > 0 ? n : null,
+    runIds: r.run_ids ?? [],
+    status: r.status,
+    error: r.error,
+    createdAt: r.created_at,
+    finishedAt: r.finished_at,
+  };
+}
+
+function weekToRow(w: ContentWeek) {
+  return {
+    id: w.id,
+    week_start: w.weekStart,
+    plan: w.plan,
+    run_ids: w.runIds,
+    status: w.status,
+    error: w.error,
+    created_at: w.createdAt,
+    finished_at: w.finishedAt,
+  };
+}
+
+function weekFromRow(r: any): ContentWeek {
+  return {
+    id: r.id,
+    weekStart: r.week_start,
+    plan: r.plan ?? [],
     runIds: r.run_ids ?? [],
     status: r.status,
     error: r.error,
@@ -316,6 +346,26 @@ export class SupabaseStore implements BlogStore {
       .order("created_at", { ascending: false })
       .limit(limit);
     return (data ?? []).map(campaignFromRow);
+  }
+
+  async createWeek(week: ContentWeek) {
+    const { error } = await client().from("content_weeks").insert(weekToRow(week));
+    if (error) throw new Error(`ثبت هفته ناموفق بود: ${error.message}`);
+  }
+
+  async updateWeek(id: string, patch: Partial<ContentWeek>) {
+    const row = partialToRow(patch, weekToRow as any);
+    const { error } = await client().from("content_weeks").update(row).eq("id", id);
+    if (error) throw new Error(`به‌روزرسانی هفته ناموفق بود: ${error.message}`);
+  }
+
+  async getWeekByStart(weekStart: string) {
+    const { data } = await client()
+      .from("content_weeks")
+      .select("*")
+      .eq("week_start", weekStart)
+      .maybeSingle();
+    return data ? weekFromRow(data) : null;
   }
 
   async addLesson(lesson: Lesson) {

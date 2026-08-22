@@ -125,6 +125,8 @@ export async function runRepurpose(opts: {
         cta: ig.draft.cta,
         checks: ig.checks,
         extras: {},
+        // این محتوا به هفته‌ی محتوایی تعلق ندارد
+        weekId: null,
         score: ig.review.score,
         // همیشه draft: انتشار روی شبکه‌ی اجتماعی دستی است و باید انسان
         // تأییدش کند (human-in-the-loop، مثل ناشر بلاگ).
@@ -147,6 +149,8 @@ export async function runRepurpose(opts: {
         cta: li.draft.cta,
         checks: li.checks,
         extras: {},
+        // این محتوا به هفته‌ی محتوایی تعلق ندارد
+        weekId: null,
         score: li.review.score,
         status: "draft",
         createdAt: now,

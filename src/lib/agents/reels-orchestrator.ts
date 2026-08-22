@@ -173,6 +173,8 @@ export async function runReelsPipeline(opts: {
           caption,
           ctaReason: d.ctaReason,
         },
+        // این محتوا به هفته‌ی محتوایی تعلق ندارد
+        weekId: null,
         score: reels.review.score,
         status: "draft",
         createdAt: now,
