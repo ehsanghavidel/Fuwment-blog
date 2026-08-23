@@ -176,6 +176,38 @@ export function blockAlignFor(role: SlideRole): BlockAlign {
 }
 
 /**
+ * سهم فضای آزادِ **بالای** بلوک، در حالت وسط‌چین.
+ *
+ * ⚠️ عمداً ۰٫۵ نیست. مرکز نوری بالاتر از مرکز هندسی است: چشم انتظار
+ * دارد وزن اصلی کمی بالاتر بنشیند، و بلوکی که دقیقاً وسط ریاضی قاب
+ * است پایین‌افتاده به نظر می‌رسد. نسبت متعارف ۴۵/۵۵ است.
+ *
+ * ۴۵٪ بالا، ۵۵٪ پایین. روی قاب ۱۳۵۰ با بلوک ۶۰۰ پیکسلی، یعنی حدود
+ * ۲۴ پیکسل جابه‌جایی به بالا — کم، ولی همان مقداری که «وسط» را از
+ * «کمی افتاده» جدا می‌کند.
+ *
+ * ⚠️ روی حالت `bottom` اعمال نمی‌شود: آنجا لنگر خودِ لبه است و فضای
+ * آزادی برای تقسیم نمی‌ماند.
+ */
+export const OPTICAL_TOP_SHARE = 0.45;
+
+/**
+ * مختصات بالای بلوک محتوا.
+ *
+ * اینجاست نه در رندرکننده، چون پیش‌نمایش هم به همان نسبت نیاز دارد
+ * (هرچند با فاصله‌گذارهای flex اعمالش می‌کند). یک تعریف، دو مصرف‌کننده —
+ * همان دلیلی که `blockHeightPx` اینجاست.
+ */
+export function blockTopPx(align: BlockAlign, blockHeight: number): number {
+  const regionTop = PAD.top;
+  const regionBottom = CANVAS.height - PAD.bottom;
+  if (align === "bottom") return regionBottom - blockHeight;
+
+  const free = regionBottom - regionTop - blockHeight;
+  return regionTop + Math.max(0, free * OPTICAL_TOP_SHARE);
+}
+
+/**
  * ارتفاع بلوک محتوا — کیکر، تیتر و متن با فاصله‌هایشان.
  *
  * اینجاست نه در رندرکننده، چون پیش‌نمایش هم به همان قاعده نیاز دارد

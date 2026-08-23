@@ -10,6 +10,7 @@ import {
   PAD,
   SAFE_INSET,
   TYPE,
+  OPTICAL_TOP_SHARE,
   accentFor,
   blockAlignFor,
   roleFor,
@@ -76,9 +77,20 @@ export function CarouselPreview({ slides }: { slides: Slide[] }) {
               */
               display: "flex",
               flexDirection: "column",
-              justifyContent: blockAlignFor(role) === "bottom" ? "flex-end" : "center",
             }}
           >
+            {/*
+              فاصله‌گذارها نسبت مرکز نوری را می‌سازند: ۴۵٪ بالا، ۵۵٪
+              پایین. `justifyContent: center` نمی‌توانست — آن ۵۰/۵۰
+              می‌دهد و بلوک را کمی افتاده نشان می‌داد.
+              در حالت پایین‌لنگر، تمام فضا به بالا می‌رود.
+            */}
+            <div
+              style={{
+                flexGrow: blockAlignFor(role) === "bottom" ? 1 : OPTICAL_TOP_SHARE,
+              }}
+            />
+
             {/* کیکر عضو بلوک است، نه لنگرشده به بالای قاب */}
             <div>
               <span
@@ -118,6 +130,12 @@ export function CarouselPreview({ slides }: { slides: Slide[] }) {
                 {slide.text}
               </p>
             </div>
+
+            <div
+              style={{
+                flexGrow: blockAlignFor(role) === "bottom" ? 0 : 1 - OPTICAL_TOP_SHARE,
+              }}
+            />
 
             <span
               dir="ltr"

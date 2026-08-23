@@ -13,6 +13,7 @@ import {
   accentFor,
   blockAlignFor,
   blockHeightPx,
+  blockTopPx,
   isInsideSafeArea,
   lineHeightPx,
   roleFor,
@@ -153,21 +154,12 @@ export function renderSlide(
   const blockHeight = blockHeightPx(headingLines.length, bodyLines.length);
 
   /**
-   * لنگر عمودی — صریح، چون فلکس‌باکسی در کار نیست.
+   * لنگر عمودی — محاسبه‌اش در `slide-spec` است، نه اینجا.
    *
-   * ⚠️ کیکر **داخل** بلوک است، نه لنگرشده به بالای قاب. نسخه‌ی قبلی
-   * کیکر را بالا می‌چسباند و فقط تیتر و متن را وسط‌چین می‌کرد؛ نتیجه
-   * یک فاصله‌ی محاسبه‌شده‌ی ~۳۵۰ پیکسلی بینشان بود که طراحی نشده بود.
-   *
-   * حالا ناحیه‌ی چیدمان کل فضای بین دو پدینگ است و بلوک — با کیکرش —
-   * یا وسطش می‌نشیند یا ته آن.
+   * ⚠️ کیکر **داخل** بلوک است، نه لنگرشده به بالای قاب. و «وسط» یعنی
+   * مرکز نوری (۴۵/۵۵)، نه مرکز هندسی — دلیل هر دو در `slide-spec`.
    */
-  const regionTop = PAD.top;
-  const regionBottom = CANVAS.height - PAD.bottom;
-  const blockTop =
-    blockAlignFor(role) === "bottom"
-      ? regionBottom - blockHeight
-      : Math.max(regionTop, regionTop + (regionBottom - regionTop - blockHeight) / 2);
+  const blockTop = blockTopPx(blockAlignFor(role), blockHeight);
 
   /**
    * `top` بالای جعبه‌ی خط است، نه خط پایه. تبدیلش با `baseline()`
