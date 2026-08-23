@@ -9,6 +9,7 @@ import { SOCIAL_APPROVE_THRESHOLD } from "./social-editor";
 import { runInstagramChecks } from "./social-checks";
 import { writeAndReview } from "./social-loop";
 import { runSocialCritic, type SocialCriticPart } from "./critic";
+import { renderSlidesForPost } from "@/lib/storage";
 import { clampSlides } from "./types";
 import type { InstagramCarousel, SocialIdea } from "./types";
 import type { BrandRoute } from "./brand-cta";
@@ -201,7 +202,10 @@ export async function runInstagramPipeline(opts: {
         cta: ig.draft.cta,
         checks: ig.checks,
         extras: {},
+        language,
         weekId,
+        imagePaths: [],
+        renderedAt: null,
         score: ig.review.score,
         // انتشار روی اینستاگرام دستی است؛ انسان تأیید می‌کند
         status: "draft",
@@ -221,6 +225,34 @@ export async function runInstagramPipeline(opts: {
 
     run.socialPostIds = [published.instagramId];
     await store.updateRun(runId, { socialPostIds: run.socialPostIds });
+
+    /**
+     * ── ۵٫۵. رندر تصویر اسلایدها ──
+     *
+     * گام جدا، بعد از ناشر — مثل گام وردپرس. ناشر یک کار دارد: ساختن
+     * ردیف. اگر رندر داخلش می‌رفت، «ذخیره‌ی متن» و «ساخت تصویر» یک
+     * موفقیت/شکست مشترک پیدا می‌کردند.
+     *
+     * ⚠️ شکستش اجرا را نمی‌کشد: `renderSlidesForPost` هیچ‌وقت throw
+     * نمی‌کند و union برمی‌گرداند. کاروسلی که متنش سالم است و تصویرش
+     * ساخته نشده هنوز ارزشمند است — دکمه‌ی «رندر دوباره» در استودیو
+     * هست. برعکسش نه: تصویر بدون متن هیچ ارزشی ندارد.
+     *
+     * شناسه‌ی `slide-render` در `AGENT_IDS` نیست — کد قطعی است، درس
+     * نمی‌گیرد. فقط آیکون دارد، مثل `social-publisher` و `wordpress`.
+     */
+    await step<unknown>("slide-render", "رندر تصویر اسلایدها", async () => {
+      const result = await renderSlidesForPost(published.instagramId);
+      return {
+        output: result,
+        summary:
+          result.status === "rendered"
+            ? `${result.count.toLocaleString("fa-IR")} تصویر ۱۰۸۰×۱۳۵۰ ساخته و آپلود شد`
+            : result.status === "skipped"
+              ? `رندر انجام نشد (${result.reason}) — متن سالم است`
+              : `رندر ناموفق بود: ${result.error} — با دکمه‌ی «رندر دوباره» تلاش کنید`,
+      };
+    });
 
     // ── ۶. منتقد (خودبهبودی) ──
     // در مسیر هفتگی خاموش است و نتیجه به ارکستریتور هفته تحویل می‌شود؛

@@ -173,8 +173,12 @@ export async function runReelsPipeline(opts: {
           caption,
           ctaReason: d.ctaReason,
         },
+        // این مسیرها هنوز فقط فارسی تولید می‌کنند
+        language: "fa",
         // این محتوا به هفته‌ی محتوایی تعلق ندارد
         weekId: null,
+        imagePaths: [],
+        renderedAt: null,
         score: reels.review.score,
         status: "draft",
         createdAt: now,

@@ -120,8 +120,12 @@ export async function runLinkedinPipeline(opts: {
         cta: li.draft.cta,
         checks: li.checks,
         extras: {},
+        // این مسیرها هنوز فقط فارسی تولید می‌کنند
+        language: "fa",
         // این محتوا به هفته‌ی محتوایی تعلق ندارد
         weekId: null,
+        imagePaths: [],
+        renderedAt: null,
         score: li.review.score,
         status: "draft",
         createdAt: now,

@@ -9,6 +9,7 @@ import { SOCIAL_APPROVE_THRESHOLD } from "./social-editor";
 import { runInstagramChecks, runLinkedinChecks } from "./social-checks";
 import { writeAndReview } from "./social-loop";
 import { runSocialCritic } from "./critic";
+import { renderSlidesForPost } from "@/lib/storage";
 import { clampSlides } from "./types";
 import type { InstagramCarousel, LinkedInPost } from "./types";
 
@@ -127,8 +128,12 @@ export async function runRepurpose(opts: {
         cta: ig.draft.cta,
         checks: ig.checks,
         extras: {},
+        // این مسیرها هنوز فقط فارسی تولید می‌کنند
+        language: "fa",
         // این محتوا به هفته‌ی محتوایی تعلق ندارد
         weekId: null,
+        imagePaths: [],
+        renderedAt: null,
         score: ig.review.score,
         // همیشه draft: انتشار روی شبکه‌ی اجتماعی دستی است و باید انسان
         // تأییدش کند (human-in-the-loop، مثل ناشر بلاگ).
@@ -151,8 +156,12 @@ export async function runRepurpose(opts: {
         cta: li.draft.cta,
         checks: li.checks,
         extras: {},
+        // این مسیرها هنوز فقط فارسی تولید می‌کنند
+        language: "fa",
         // این محتوا به هفته‌ی محتوایی تعلق ندارد
         weekId: null,
+        imagePaths: [],
+        renderedAt: null,
         score: li.review.score,
         status: "draft",
         createdAt: now,
@@ -177,6 +186,21 @@ export async function runRepurpose(opts: {
 
     run.socialPostIds = [published.instagramId, published.linkedinId];
     await store.updateRun(runId, { socialPostIds: run.socialPostIds });
+
+    // این مسیر هم کاروسل می‌سازد، پس همان گام رندر را می‌گیرد.
+    // توضیح کاملش بالای همین گام در instagram-orchestrator.ts.
+    await step<unknown>("slide-render", "رندر تصویر اسلایدها", async () => {
+      const result = await renderSlidesForPost(published.instagramId);
+      return {
+        output: result,
+        summary:
+          result.status === "rendered"
+            ? `${result.count.toLocaleString("fa-IR")} تصویر ۱۰۸۰×۱۳۵۰ ساخته و آپلود شد`
+            : result.status === "skipped"
+              ? `رندر انجام نشد (${result.reason}) — متن سالم است`
+              : `رندر ناموفق بود: ${result.error}`,
+      };
+    });
 
     // ── ۵. منتقد (خودبهبودی) ──
     // مثل پایپ‌لاین بلاگ: خطای منتقد نباید اجرای موفق را خراب کند.

@@ -135,6 +135,9 @@ function socialPostToRow(p: SocialPost) {
     extras: p.extras,
     // camelCase ساده — رفت‌وبرگشت partialToRow سالم است (weekId ↔ week_id)
     week_id: p.weekId,
+    language: p.language,
+    image_paths: p.imagePaths,
+    rendered_at: p.renderedAt,
     score: p.score,
     status: p.status,
     created_at: p.createdAt,
@@ -158,6 +161,10 @@ function socialPostFromRow(r: any): SocialPost {
     // رکوردهای ساخته‌شده پیش از افزودن این ستون
     extras: r.extras ?? {},
     weekId: r.week_id ?? null,
+    // ردیف‌های پیش از این فازها
+    language: r.language ?? "fa",
+    imagePaths: r.image_paths ?? [],
+    renderedAt: r.rendered_at ?? null,
     score: r.score,
     status: r.status,
     createdAt: r.created_at,

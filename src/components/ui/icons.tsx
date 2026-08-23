@@ -330,4 +330,6 @@ export const AGENT_ICONS: Record<string, (p: IconProps) => JSX.Element> = {
   // همان آیکون برنامه‌ریز را می‌گیرد تا در تایم‌لاین پیدا باشد که این
   // اسلات از برنامه‌ی هفتگی نازل شده، نه از ایده‌یاب.
   "weekly-slot": IconLayers,
+  // فاز ۸ — رندر تصویر. کد قطعی، پس در AGENT_IDS نیست.
+  "slide-render": IconEye,
 };
