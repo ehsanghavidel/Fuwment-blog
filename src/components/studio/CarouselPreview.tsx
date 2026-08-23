@@ -1,66 +1,166 @@
 "use client";
 
 import type { Slide } from "@/lib/store/types";
+import {
+  CANVAS,
+  COLOR,
+  COUNTER_BASELINE_FROM_BOTTOM,
+  GAP,
+  OPACITY,
+  PAD,
+  SAFE_INSET,
+  TYPE,
+  accentFor,
+  blockAlignFor,
+  roleFor,
+} from "@/lib/slide-spec";
 
 /**
- * پیش‌نمایش کاروسل — قاب‌های ۴:۵ با HTML/CSS، بدون تولید تصویر با AI.
+ * پیش‌نمایش کاروسل — همان مشخصاتِ رندرکننده، فقط کوچک‌شده.
  *
- * نسبت ۴:۵ (معادل ۱۰۸۰×۱۳۵۰) نسبت پیشنهادی فعلی اینستاگرام برای پست فید
- * است. پیش‌نمایش عمداً همان نسبت خروجی نهایی را دارد، وگرنه متنی که در
- * قاب مربع جا می‌شود در قاب عمودی جای دیگری می‌نشیند و پیش‌نمایش دروغ
- * می‌گوید — همان چیزی که اصلاً برای دیدنش ساخته شده.
+ * ⚠️ هیچ عدد چیدمانی اینجا نوشته نشده. همه از `slide-spec.ts` می‌آید و
+ * در `SCALE` ضرب می‌شود. نسخه‌ی قبلی کلاس‌های تیلویند داشت (`p-6`،
+ * `text-lg`، `leading-6`) که هیچ ربطی به عددهای ۱۰۸۰ نداشتند — یعنی
+ * پیش‌نمایش چیزی را نشان می‌داد که خروجی نبود.
  *
- * نکته‌ی آموزشی: کاری که اینجا لازم است «چیدمان قطعی با هویت برند» است، نه
- * خلاقیت تصویری. CSS این را رایگان، فوری و کاملاً یکدست انجام می‌دهد —
- * همان اصلِ «کار قطعی را به مدل نسپار» که در seo-checks و social-checks هم دیدیم.
+ * حالا واگرایی **ساختاراً ممکن نیست**: اگر کسی پدینگ را در spec عوض
+ * کند، هر دو با هم عوض می‌شوند.
  *
- * رنگ‌ها فقط از توکن‌های برند می‌آیند (سرمه‌ای/خنثی/فیروزه‌ای)، نه hex خام.
+ * تنها چیزی که هنوز از تیلویند می‌آید ظرفِ بیرونی است (اسکرول افقی،
+ * گوشه‌ی گرد، سایه) — که بخشی از رابط استودیوست، نه از خودِ اسلاید.
  */
+
+/** عرض چیپ پیش‌نمایش بر حسب پیکسل مرورگر */
+const PREVIEW_WIDTH = 260;
+const SCALE = PREVIEW_WIDTH / CANVAS.width;
+
+/** px واقعیِ اسلاید → px پیش‌نمایش */
+const s = (px: number) => `${(px * SCALE).toFixed(2)}px`;
+
+function rgba(hex: string, alpha: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
 export function CarouselPreview({ slides }: { slides: Slide[] }) {
   if (slides.length === 0) return null;
 
   return (
     <div
-      dir="rtl"
       className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-3"
       role="list"
       aria-label="پیش‌نمایش اسلایدهای کاروسل"
     >
-      {slides.map((s, i) => (
-        <figure
-          key={i}
-          role="listitem"
-          className="relative flex aspect-[4/5] w-60 shrink-0 snap-center flex-col justify-between rounded-xl2 bg-pine p-6 pb-11 text-bone shadow-raised sm:w-64"
-        >
-          <span dir="auto" className="font-sans text-xs font-medium text-brass">
-            {s.kicker}
-          </span>
+      {slides.map((slide, i) => {
+        const role = roleFor(i, slides.length);
+        const accent = accentFor(role);
 
-          {/*
-            تیتر و متن یک بلوک‌اند، نه دو آیتم مستقل.
-            در قاب مربع، justify-between سه آیتم را با فاصله‌ی قابل قبول
-            پخش می‌کرد. با ۶۰ پیکسل ارتفاع بیشتر، همان چیدمان متن را از
-            تیترش جدا می‌کرد. حالا فاصله‌ی اضافی یک‌جا بین کیکر و بلوک
-            محتوا می‌نشیند — همان جایی که در طرح واقعی اسلاید هم می‌نشیند.
-          */}
-          <div className="space-y-2">
-            <h4 dir="auto" className="font-heading text-lg font-bold leading-snug">
-              {s.heading}
-            </h4>
+        return (
+          <figure
+            key={i}
+            role="listitem"
+            dir="rtl"
+            className="relative shrink-0 snap-center overflow-hidden rounded-xl2 shadow-raised"
+            style={{
+              width: s(CANVAS.width),
+              height: s(CANVAS.height),
+              background: COLOR.bg,
+              color: COLOR.fg,
+              paddingInline: s(PAD.x),
+              paddingTop: s(PAD.top),
+              paddingBottom: s(PAD.bottom),
+              // چیدمان عمودی: کیکر بالا، بلوک محتوا پایین — همان چیزی که
+              // رندرکننده صریح حسابش می‌کند.
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <span
+              dir="auto"
+              style={{
+                fontSize: s(TYPE.kicker.size),
+                fontWeight: TYPE.kicker.weight,
+                lineHeight: TYPE.kicker.lineHeight,
+                color: accent,
+              }}
+            >
+              {slide.kicker}
+            </span>
 
-            <p dir="auto" className="font-sans text-sm leading-6 text-bone/80">
-              {s.text}
-            </p>
-          </div>
+            {/*
+              ناحیه‌ی چیدمان: از زیر کیکر تا پدینگ پایین. بلوک یا وسطش
+              می‌نشیند (کاور و میانی) یا ته آن (اقدام) — همان محاسبه‌ای
+              که رندرکننده صریح انجام می‌دهد.
+            */}
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: blockAlignFor(role) === "bottom" ? "flex-end" : "center",
+              }}
+            >
+              <h4
+                dir="auto"
+                style={{
+                  fontSize: s(TYPE.heading.size),
+                  fontWeight: TYPE.heading.weight,
+                  lineHeight: TYPE.heading.lineHeight,
+                }}
+              >
+                {slide.heading}
+              </h4>
+              <p
+                dir="auto"
+                style={{
+                  marginTop: s(GAP.headingToBody),
+                  fontSize: s(TYPE.body.size),
+                  fontWeight: TYPE.body.weight,
+                  lineHeight: TYPE.body.lineHeight,
+                  color: rgba(COLOR.fg, OPACITY.body),
+                }}
+              >
+                {slide.text}
+              </p>
+            </div>
 
-          <span className="absolute bottom-4 left-5 font-sans text-xs text-bone/50">
-            {(i + 1).toLocaleString("fa-IR")}/{slides.length.toLocaleString("fa-IR")}
-          </span>
+            <span
+              dir="ltr"
+              style={{
+                position: "absolute",
+                insetInlineEnd: s(PAD.x),
+                bottom: s(COUNTER_BASELINE_FROM_BOTTOM - TYPE.counter.size),
+                fontSize: s(TYPE.counter.size),
+                fontWeight: TYPE.counter.weight,
+                color: rgba(COLOR.fg, OPACITY.counter),
+              }}
+            >
+              {(i + 1).toLocaleString("fa-IR")}/{slides.length.toLocaleString("fa-IR")}
+            </span>
 
-          {/* نوار برنجی روی اسلاید قلاب، برای اینکه اسلاید اول در نگاه اول پیدا باشد */}
-          {i === 0 && <span className="absolute right-0 top-6 h-8 w-1 rounded-l bg-brass" />}
-        </figure>
-      ))}
+            {/*
+              ناحیه‌ی امن گرید، فقط روی اسلاید اول.
+              گرید پروفایل به ۳:۴ برش می‌زند و عملاً فقط همین اسلاید
+              آنجا دیده می‌شود — پس همین یکی راهنما می‌گیرد.
+            */}
+            {role === "cover" && (
+              <span
+                aria-hidden
+                title="ناحیه‌ی امن گرید پروفایل (۳:۴)"
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  bottom: 0,
+                  left: s(SAFE_INSET),
+                  right: s(SAFE_INSET),
+                  border: `1px dashed ${rgba(COLOR.action, 0.55)}`,
+                  pointerEvents: "none",
+                }}
+              />
+            )}
+          </figure>
+        );
+      })}
     </div>
   );
 }
