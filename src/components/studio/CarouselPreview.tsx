@@ -69,37 +69,32 @@ export function CarouselPreview({ slides }: { slides: Slide[] }) {
               paddingInline: s(PAD.x),
               paddingTop: s(PAD.top),
               paddingBottom: s(PAD.bottom),
-              // چیدمان عمودی: کیکر بالا، بلوک محتوا پایین — همان چیزی که
-              // رندرکننده صریح حسابش می‌کند.
+              /*
+                ناحیه‌ی چیدمان کل فضای بین دو پدینگ است و بلوک — با
+                کیکرش — یا وسطش می‌نشیند یا ته آن. همان محاسبه‌ای که
+                رندرکننده صریح انجام می‌دهد.
+              */
               display: "flex",
               flexDirection: "column",
+              justifyContent: blockAlignFor(role) === "bottom" ? "flex-end" : "center",
             }}
           >
-            <span
-              dir="auto"
-              style={{
-                fontSize: s(TYPE.kicker.size),
-                fontWeight: TYPE.kicker.weight,
-                lineHeight: TYPE.kicker.lineHeight,
-                color: accent,
-              }}
-            >
-              {slide.kicker}
-            </span>
+            {/* کیکر عضو بلوک است، نه لنگرشده به بالای قاب */}
+            <div>
+              <span
+                dir="auto"
+                style={{
+                  display: "block",
+                  fontSize: s(TYPE.kicker.size),
+                  fontWeight: TYPE.kicker.weight,
+                  lineHeight: TYPE.kicker.lineHeight,
+                  color: accent,
+                  marginBottom: s(GAP.kickerToHeading),
+                }}
+              >
+                {slide.kicker}
+              </span>
 
-            {/*
-              ناحیه‌ی چیدمان: از زیر کیکر تا پدینگ پایین. بلوک یا وسطش
-              می‌نشیند (کاور و میانی) یا ته آن (اقدام) — همان محاسبه‌ای
-              که رندرکننده صریح انجام می‌دهد.
-            */}
-            <div
-              style={{
-                flex: 1,
-                display: "flex",
-                flexDirection: "column",
-                justifyContent: blockAlignFor(role) === "bottom" ? "flex-end" : "center",
-              }}
-            >
               <h4
                 dir="auto"
                 style={{

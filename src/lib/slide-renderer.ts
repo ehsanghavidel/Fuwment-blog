@@ -12,6 +12,7 @@ import {
   TYPE,
   accentFor,
   blockAlignFor,
+  blockHeightPx,
   isInsideSafeArea,
   lineHeightPx,
   roleFor,
@@ -139,62 +140,65 @@ export function renderSlide(
   ctx.textAlign = rtl ? "right" : "left";
   const startX = rtl ? CANVAS.width - PAD.x : PAD.x;
 
-  /**
-   * چیدمان عمودی — صریح، چون `justify-between` عدد نیست.
-   *
-   * در CSS فلکس‌باکس فضای باقی‌مانده را خودش پخش می‌کرد. اینجا باید
-   * گفته شود: کیکر از **بالا** لنگر می‌اندازد، بلوک محتوا از **پایین**،
-   * و هرچه ماند فاصله‌ی بینشان است.
-   */
-
-  // ── کیکر، از بالا ──
-  ctx.font = font("kicker");
-  ctx.fillStyle = accentFor(role);
-  ctx.fillText(slide.kicker, startX, PAD.top + TYPE.kicker.size);
-
-  // ── بلوک محتوا ──
+  // ── شکست خط، پیش از چیدمان ──
+  // ارتفاع بلوک به تعداد خط وابسته است، پس اول اندازه می‌گیریم.
   ctx.font = font("heading");
   const headingLines = wrapText(ctx, slide.heading, CONTENT_WIDTH);
   ctx.font = font("body");
   const bodyLines = wrapText(ctx, slide.text, CONTENT_WIDTH);
 
+  const kLH = lineHeightPx("kicker");
   const hLH = lineHeightPx("heading");
   const bLH = lineHeightPx("body");
-  const blockHeight =
-    headingLines.length * hLH + (bodyLines.length ? GAP.headingToBody + bodyLines.length * bLH : 0);
+  const blockHeight = blockHeightPx(headingLines.length, bodyLines.length);
 
   /**
-   * لنگر عمودی — صریح، چون `justify-between` عدد نیست.
+   * لنگر عمودی — صریح، چون فلکس‌باکسی در کار نیست.
    *
-   * ناحیه‌ی چیدمان از پایینِ خطِ کیکر تا بالای پدینگ پایین است. بلوک
-   * یا وسطش می‌نشیند (کاور و میانی) یا ته آن (اقدام). محاسبه‌اش دقیقاً
-   * همان چیزی است که پیش‌نمایش با flex انجام می‌دهد.
+   * ⚠️ کیکر **داخل** بلوک است، نه لنگرشده به بالای قاب. نسخه‌ی قبلی
+   * کیکر را بالا می‌چسباند و فقط تیتر و متن را وسط‌چین می‌کرد؛ نتیجه
+   * یک فاصله‌ی محاسبه‌شده‌ی ~۳۵۰ پیکسلی بینشان بود که طراحی نشده بود.
+   *
+   * حالا ناحیه‌ی چیدمان کل فضای بین دو پدینگ است و بلوک — با کیکرش —
+   * یا وسطش می‌نشیند یا ته آن.
    */
-  const regionTop = PAD.top + lineHeightPx("kicker");
+  const regionTop = PAD.top;
   const regionBottom = CANVAS.height - PAD.bottom;
   const blockTop =
     blockAlignFor(role) === "bottom"
       ? regionBottom - blockHeight
       : Math.max(regionTop, regionTop + (regionBottom - regionTop - blockHeight) / 2);
 
-  // خط پایه‌ی اولین خطِ تیتر. `hLH - size*0.25` تقریبِ فاصله‌ی بالای
-  // خط تا خط پایه است؛ دقیق‌تر از استفاده‌ی خام lineHeight.
-  let y = blockTop + (hLH - TYPE.heading.size * 0.25);
+  /**
+   * `top` بالای جعبه‌ی خط است، نه خط پایه. تبدیلش با `baseline()`
+   * انجام می‌شود تا هر سه سطح یک قاعده داشته باشند — نسخه‌ی قبلی این
+   * تقریب را فقط برای تیتر می‌نوشت.
+   */
+  const baseline = (top: number, level: "kicker" | "heading" | "body") =>
+    top + lineHeightPx(level) - TYPE[level].size * 0.25;
+
+  let top = blockTop;
+
+  // کیکر — عضو بلوک، با رنگ نقش
+  ctx.font = font("kicker");
+  ctx.fillStyle = accentFor(role);
+  ctx.fillText(slide.kicker, startX, baseline(top, "kicker"));
+  top += kLH + GAP.kickerToHeading;
 
   ctx.font = font("heading");
   ctx.fillStyle = COLOR.fg;
   for (const line of headingLines) {
-    ctx.fillText(line, startX, y);
-    y += hLH;
+    ctx.fillText(line, startX, baseline(top, "heading"));
+    top += hLH;
   }
 
   if (bodyLines.length) {
-    y += GAP.headingToBody;
+    top += GAP.headingToBody;
     ctx.font = font("body");
     ctx.fillStyle = withAlpha(COLOR.fg, OPACITY.body);
     for (const line of bodyLines) {
-      ctx.fillText(line, startX, y);
-      y += bLH;
+      ctx.fillText(line, startX, baseline(top, "body"));
+      top += bLH;
     }
   }
 
