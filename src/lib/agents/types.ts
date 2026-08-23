@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { BrandRoute } from "@/lib/company";
+import { SLIDE_LIMITS as LIMITS } from "@/lib/slide-spec";
 
 /**
  * قرارداد خروجی هر ایجنت — با Zod تعریف می‌شود.
@@ -314,17 +315,13 @@ export const SocialBriefSchema = z.object({
 export type SocialBrief = z.infer<typeof SocialBriefSchema>;
 
 /**
- * سقف طول هر بخش اسلاید — یک عدد، یک منبع.
+ * سقف طول هر بخش اسلاید.
  *
- * سه مصرف‌کننده دارد و هر سه باید از همین بخوانند: پرامپت کپی‌رایتر
- * (تا مدل عدد را بداند)، چک قطعی در social-checks (تا اندازه بگیرد)،
- * و تور نجات در ناشر. اگر جدا نوشته می‌شدند، اولین تغییر یکی را جا
- * می‌گذاشت.
- *
- * ⚠️ فاز ۳ (رندرکننده) این‌ها را هم لازم دارد. وقتی `slide-spec.ts`
- * ساخته شد، جای درستشان آنجاست و این ثابت باید منتقل شود.
+ * ⚠️ تعریفش به `@/lib/slide-spec` منتقل شد، چون رندرکننده هم لازمش
+ * دارد و آن فایل سمت ایجنت‌ها نیست. اینجا فقط re-export می‌شود تا
+ * importهای موجود (پرامپت کپی‌رایتر، چک قطعی، ناشر) نشکنند.
  */
-export const SLIDE_LIMITS = { kicker: 24, heading: 40, text: 140 } as const;
+export { SLIDE_LIMITS } from "@/lib/slide-spec";
 
 /**
  * یک اسلاید کاروسل.
@@ -366,9 +363,9 @@ export function clampSlides<T extends { kicker: string; heading: string; text: s
 ): T[] {
   return slides.map((s) => ({
     ...s,
-    kicker: clampText(s.kicker, SLIDE_LIMITS.kicker),
-    heading: clampText(s.heading, SLIDE_LIMITS.heading),
-    text: clampText(s.text, SLIDE_LIMITS.text),
+    kicker: clampText(s.kicker, LIMITS.kicker),
+    heading: clampText(s.heading, LIMITS.heading),
+    text: clampText(s.text, LIMITS.text),
   }));
 }
 
