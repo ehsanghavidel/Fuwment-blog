@@ -3,10 +3,12 @@
 import { useState } from "react";
 import { studioFetch } from "./api";
 import { CarouselPreview } from "./CarouselPreview";
+import { SlideImages } from "./SlideImages";
 import type { SocialPost } from "@/lib/store/types";
 import {
   IconCheck,
   IconCopy,
+  IconEye,
   IconInstagram,
   IconLinkedin,
   IconMessage,
@@ -30,17 +32,53 @@ export function SocialPostCard({
   onSetStatus,
   onNotice,
   onUnauthorized,
+  onRefresh,
 }: {
   post: SocialPost;
   onCopy: (text: string, label: string) => void;
   onSetStatus: (post: SocialPost, status: "draft" | "approved") => void;
   onNotice: (msg: string) => void;
   onUnauthorized: () => void;
+  /** والد داده را دوباره بخواند — بعد از رندر لازم است، برای «?v=» تازه */
+  onRefresh?: () => void;
 }) {
   const [showFeedback, setShowFeedback] = useState(false);
   const [rating, setRating] = useState<"up" | "down">("up");
   const [comment, setComment] = useState("");
   const [sending, setSending] = useState(false);
+  const [rendering, setRendering] = useState(false);
+
+  /**
+   * رندر دوباره.
+   *
+   * ⚠️ صفحه را reload نمی‌کنیم و onNotice کافی نیست: مسیر فایل‌ها ثابت
+   * است و فقط `renderedAt` عوض می‌شود، پس URL نمایش هم باید عوض شود.
+   * تا وقتی والد داده را دوباره نخواند، `?v=` قدیمی می‌ماند و مرورگر
+   * تصویر کش‌شده را نشان می‌دهد — دقیقاً همان چیزی که این ستون برای
+   * جلوگیری از آن ساخته شد.
+   */
+  async function rerender() {
+    setRendering(true);
+    try {
+      const res = await studioFetch(`/api/social/posts/${post.id}/render`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "خطای ناشناخته");
+      const r = data.render;
+      onNotice(
+        r.status === "rendered"
+          ? `${r.count} تصویر ساخته شد.`
+          : r.status === "failed"
+            ? `رندر ناموفق بود: ${r.error}`
+            : `رندر انجام نشد (${r.reason}).`
+      );
+      onRefresh?.();
+    } catch (e) {
+      if (e instanceof Error && e.message === "PASSWORD_REQUIRED") onUnauthorized();
+      else onNotice(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRendering(false);
+    }
+  }
 
   async function sendFeedback() {
     setSending(true);
@@ -119,7 +157,33 @@ export function SocialPostCard({
         </div>
       </header>
 
-      {isCarousel && <CarouselPreview slides={post.slides} />}
+      {/*
+        PNG وقتی هست، CSS وقتی نیست — fallback، نه کلید تعویض.
+        ⚠️ حتی با slide-spec مشترک، پیش‌نمایش CSS تقریب است: شکست خط را
+        موتور متن مرورگر انجام می‌دهد و رندرکننده با measureText اسکیا.
+        دو موتور اندازه‌گیری، بدون تضمین توافق. PNG حقیقت است.
+      */}
+      {isCarousel &&
+        (post.imagePaths.length > 0 ? (
+          <SlideImages post={post} />
+        ) : (
+          <CarouselPreview slides={post.slides} />
+        ))}
+
+      {isCarousel && (
+        <button
+          onClick={rerender}
+          disabled={rendering}
+          className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-surface-line px-3.5 py-2 text-sm font-medium text-ink transition-colors hover:border-brand-300 hover:text-brand-700 disabled:opacity-50"
+        >
+          {rendering ? <IconSpinner className="h-4 w-4" /> : <IconEye className="h-4 w-4" />}
+          {rendering
+            ? "در حال رندر…"
+            : post.imagePaths.length > 0
+              ? "رندر دوباره"
+              : "ساخت تصویرها"}
+        </button>
+      )}
 
       {/* در ریلز، دلیل انتخاب CTA بیرون از اسکریپت نمایش داده می‌شود */}
       {isReels && post.extras.ctaReason && (
