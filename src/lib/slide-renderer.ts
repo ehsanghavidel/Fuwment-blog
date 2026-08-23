@@ -1,4 +1,4 @@
-import { createCanvas, GlobalFonts, type SKRSContext2D } from "@napi-rs/canvas";
+import { createCanvas, loadImage, GlobalFonts, type SKRSContext2D } from "@napi-rs/canvas";
 import path from "path";
 import {
   CANVAS,
@@ -6,6 +6,7 @@ import {
   CONTENT_WIDTH,
   COUNTER_BASELINE_FROM_BOTTOM,
   GAP,
+  IMAGE_SCRIM,
   OPACITY,
   PAD,
   SAFE_INSET,
@@ -48,6 +49,13 @@ export type SlideInput = { kicker: string; heading: string; text: string };
 export type RenderOptions = {
   /** جهت و تراز از زبان می‌آید، نه از محتوا */
   language: "fa" | "en";
+  /**
+   * تصویر پس‌زمینه — فقط برای کاور.
+   *
+   * ⚠️ نبودش حالت عادی است، نه خطا: کاور همان پس‌زمینه‌ی سرمه‌ای را
+   * می‌گیرد. کاور بدون تصویر از کاور با تصویرِ بی‌ربط بهتر است.
+   */
+  backgroundImage?: Buffer;
   /** راهنمای ناحیه‌ی امن را روی تصویر بکش — فقط برای بازبینی چشمی */
   debugSafeArea?: boolean;
 };
@@ -120,13 +128,13 @@ export function wrapText(ctx: SKRSContext2D, text: string, maxWidth: number): st
 
 /* ── رندر یک اسلاید ──────────────────────────────────────── */
 
-export function renderSlide(
+export async function renderSlide(
   slide: SlideInput,
   ctx0: { index: number; total: number } & RenderOptions
-): Buffer {
+): Promise<Buffer> {
   registerFonts();
 
-  const { index, total, language, debugSafeArea } = ctx0;
+  const { index, total, language, backgroundImage, debugSafeArea } = ctx0;
   const role: SlideRole = roleFor(index, total);
   const rtl = language === "fa";
 
@@ -135,6 +143,39 @@ export function renderSlide(
 
   ctx.fillStyle = COLOR.bg;
   ctx.fillRect(0, 0, CANVAS.width, CANVAS.height);
+
+  /**
+   * تصویر پس‌زمینه + لایه‌ی تیره.
+   *
+   * ⚠️ لایه گزینه نیست، قاعده است. آلفا و شفافیت بدنه از
+   * `IMAGE_SCRIM` می‌آیند و آنجا با عدد توضیح داده شده‌اند: ۰٫۷۰ کف
+   * AA را رد می‌کند و بدنه‌ی نیمه‌شفاف در هیچ آلفایی پاس نمی‌شود.
+   *
+   * تصویر «cover» جای می‌گیرد نه «contain»: بوم باید کامل پر شود،
+   * حتی اگر لبه‌ای بریده شود. مدل ۱K می‌دهد و بوم ۱۰۸۰×۱۳۵۰ است.
+   */
+  let hasImage = false;
+  if (backgroundImage) {
+    try {
+      const img = await loadImage(backgroundImage);
+      const scale = Math.max(CANVAS.width / img.width, CANVAS.height / img.height);
+      const w = img.width * scale;
+      const h = img.height * scale;
+      ctx.drawImage(img, (CANVAS.width - w) / 2, (CANVAS.height - h) / 2, w, h);
+
+      ctx.fillStyle = withAlpha(COLOR.bg, IMAGE_SCRIM.alpha);
+      ctx.fillRect(0, 0, CANVAS.width, CANVAS.height);
+      hasImage = true;
+    } catch (err) {
+      // تصویر خراب نباید اسلاید را بکشد — پس‌زمینه‌ی سرمه‌ای سر جایش است
+      console.error(
+        `[slide-renderer] تصویر پس‌زمینه بارگذاری نشد: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  }
+
+  /** روی تصویر، بدنه شفاف نمی‌شود — دلیل عددی‌اش در IMAGE_SCRIM */
+  const bodyOpacity = hasImage ? IMAGE_SCRIM.bodyOpacity : OPACITY.body;
 
   // جهت و تراز از زبان می‌آید. متن فارسی از راست شروع می‌شود، انگلیسی از چپ.
   ctx.direction = rtl ? "rtl" : "ltr";
@@ -187,7 +228,7 @@ export function renderSlide(
   if (bodyLines.length) {
     top += GAP.headingToBody;
     ctx.font = font("body");
-    ctx.fillStyle = withAlpha(COLOR.fg, OPACITY.body);
+    ctx.fillStyle = withAlpha(COLOR.fg, bodyOpacity);
     for (const line of bodyLines) {
       ctx.fillText(line, startX, baseline(top, "body"));
       top += bLH;
@@ -228,8 +269,29 @@ export function renderSlide(
   return canvas.toBuffer("image/png");
 }
 
-export function renderCarousel(slides: SlideInput[], opts: RenderOptions): Buffer[] {
-  return slides.map((s, i) => renderSlide(s, { ...opts, index: i, total: slides.length }));
+/**
+ * ⚠️ `backgroundImage` فقط به اسلاید **اول** داده می‌شود.
+ *
+ * کاور تنها چیزی است که در گرید پروفایل و در فید دیده می‌شود؛ بقیه
+ * فقط بعد از سوایپ. تصویر برای همه یعنی هفت برابر هزینه برای چیزی که
+ * اکثر بیننده‌ها هرگز نمی‌بینند.
+ */
+export async function renderCarousel(
+  slides: SlideInput[],
+  opts: RenderOptions
+): Promise<Buffer[]> {
+  const out: Buffer[] = [];
+  for (const [i, slide] of slides.entries()) {
+    out.push(
+      await renderSlide(slide, {
+        ...opts,
+        backgroundImage: i === 0 ? opts.backgroundImage : undefined,
+        index: i,
+        total: slides.length,
+      })
+    );
+  }
+  return out;
 }
 
 /* ── کمکی‌ها ─────────────────────────────────────────────── */

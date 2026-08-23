@@ -2,6 +2,7 @@ import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import { getStore } from "@/lib/store";
 import { renderCarousel } from "@/lib/slide-renderer";
+import { generateCoverImage } from "@/lib/image-gen";
 
 /**
  * تصویرهای اسلاید در Supabase Storage.
@@ -68,6 +69,17 @@ export function slidePath(socialPostId: string, index: number): string {
 }
 
 /**
+ * مسیر تصویر خامِ پس‌زمینه‌ی کاور.
+ *
+ * ⚠️ جدا از اسلایدهای رندرشده ذخیره می‌شود تا **رندر دوباره فراخوانی
+ * جدید نزند**. هر تولید ~$0.034 است؛ رندر دوباره باید رایگان بماند.
+ * پیشوند `bg-` تا با `0.png` تا `7.png` قاطی نشود.
+ */
+export function coverImagePath(socialPostId: string): string {
+  return `${socialPostId}/bg-cover.png`;
+}
+
+/**
  * URL عمومی یک تصویر.
  *
  * bucket عمداً عمومی است (دلیلش در CLAUDE.md بخش امنیت)، پس این فقط
@@ -110,7 +122,45 @@ export async function renderSlidesForPost(socialPostId: string): Promise<RenderR
     if (post.slides.length === 0) return { status: "skipped", reason: "no-slides" };
 
     const t0 = Date.now();
-    const buffers = renderCarousel(post.slides, { language: post.language ?? "fa" });
+
+    /**
+     * تصویر پس‌زمینه‌ی کاور — اول از Storage، بعد از سرویس.
+     *
+     * ⚠️ ترتیب مهم است: اگر تصویر از قبل ساخته شده، رندر دوباره نباید
+     * دوباره پول خرج کند. فقط وقتی تولید می‌شود که واقعاً نباشد.
+     *
+     * شکستِ هر مرحله بی‌ضرر است: کاور همان پس‌زمینه‌ی سرمه‌ای را
+     * می‌گیرد و بقیه‌ی کاروسل دست‌نخورده ساخته می‌شود.
+     */
+    const sbEarly = client();
+    const bgPath = coverImagePath(socialPostId);
+    let backgroundImage: Buffer | undefined;
+
+    const cached = await sbEarly.storage.from(BUCKET).download(bgPath);
+    if (cached.data) {
+      backgroundImage = Buffer.from(await cached.data.arrayBuffer());
+      console.log(`[storage] تصویر کاور از قبل موجود بود — بدون فراخوانی جدید`);
+    } else {
+      const gen = await generateCoverImage(post.slides[0]?.imageSubject);
+      if (gen.status === "generated") {
+        backgroundImage = gen.buffer;
+        const up = await sbEarly.storage.from(BUCKET).upload(bgPath, gen.buffer, {
+          contentType: "image/png",
+          cacheControl: String(CACHE_SECONDS),
+          upsert: true,
+        });
+        if (up.error) {
+          // تصویر ساخته شد ولی ذخیره نشد — این بار استفاده می‌شود،
+          // دفعه‌ی بعد دوباره تولید می‌شود. بی‌صدا نگذاریمش.
+          console.error(`[storage] ذخیره‌ی تصویر کاور شکست: ${up.error.message}`);
+        }
+      }
+    }
+
+    const buffers = await renderCarousel(post.slides, {
+      language: post.language ?? "fa",
+      backgroundImage,
+    });
 
     const sb = client();
     const paths: string[] = [];

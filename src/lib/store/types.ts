@@ -111,6 +111,8 @@ export type Slide = {
   heading: string;
   /** یکی دو جمله توضیح */
   text: string;
+  /** صحنه‌ی فیزیکی پس‌زمینه — فقط کاور؛ نبودش یعنی بدون تصویر */
+  imageSubject?: string;
 };
 
 export type SocialCheckRecord = { name: string; pass: boolean; note: string };
