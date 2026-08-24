@@ -8,7 +8,7 @@ import {
 } from "@/lib/store";
 import { weekStart as computeWeekStart } from "@/lib/week";
 import { runWeeklyPlanner, RECENT_TITLES_DAYS } from "./weekly-planner";
-import { WEEKLY_GRID } from "./weekly-grid";
+import { WEEKLY_GRID, sceneFamilyFor } from "./weekly-grid";
 import { runInstagramPipeline } from "./instagram-orchestrator";
 import { runSocialCritic, type SocialCriticPart } from "./critic";
 
@@ -273,6 +273,7 @@ export async function runWeek(opts: {
             hook: slot.hook,
             painPoint: slot.painPoint,
           },
+          sceneFamily: sceneFamilyFor(config, ws).hint,
           weekId: week.id,
           // منتقدِ داخل اجرا خاموش می‌شود؛ دلیلش پایین‌تر
           collectForCritic: (part) => parts.push({ ...part, day: slot.day }),

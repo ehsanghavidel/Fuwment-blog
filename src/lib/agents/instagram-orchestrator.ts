@@ -55,6 +55,14 @@ export async function runInstagramPipeline(opts: {
    * که ایده‌یاب می‌ساخت — پس ورودی استراتژیست تغییری نمی‌کند.
    */
   assignedSlot?: { topic: string; hook: string; painPoint: string };
+  /**
+   * خانواده‌ی صحنه‌ی کاور، از WEEKLY_GRID.
+   *
+   * ⚠️ مثل assignedSlot فقط مسیر هفتگی پرش می‌کند. تمایز بصری یک ویژگی
+   * در سطح **هفته** است و هفت اجرای موازی همدیگر را نمی‌بینند؛ پس
+   * نمی‌تواند تصمیمِ خودِ اجرا باشد. دلیل کاملش در weekly-grid.ts.
+   */
+  sceneFamily?: string | null;
   /** والدِ این اجرا، اگر از یک هفته آمده باشد */
   weekId?: string | null;
   /**
@@ -77,6 +85,7 @@ export async function runInstagramPipeline(opts: {
   const route = opts.route ?? "brand";
   const language = opts.language ?? "fa";
   const assignedSlot = opts.assignedSlot ?? null;
+  const sceneFamily = opts.sceneFamily ?? null;
   const weekId = opts.weekId ?? null;
 
   const run: PipelineRun = {
@@ -172,9 +181,9 @@ export async function runInstagramPipeline(opts: {
       writerAgent: "instagram-writer",
       label: "اینستاگرام",
       brief,
-      write: () => runInstagramWriter({ brief }),
+      write: () => runInstagramWriter({ brief, sceneFamily }),
       revise: (draft, review, failedChecks) =>
-        runInstagramRevision({ brief, draft, review, failedChecks }),
+        runInstagramRevision({ brief, draft, review, failedChecks, sceneFamily }),
       check: (d) =>
         runInstagramChecks({ caption: d.caption, slides: d.slides, hashtags: d.hashtags }),
       // کپشن + متن همه‌ی اسلایدها + دعوت به اقدام
