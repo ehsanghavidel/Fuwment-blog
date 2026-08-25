@@ -44,7 +44,7 @@ const TIMEOUT_MS = 60_000;
  * `ROUTE_BRIEFING`: اگر سبک را هم مدل انتخاب کند، بعد از دو هفته
  * گرید پیج به هم می‌ریزد و هر کاور دنیای بصری خودش را دارد.
  *
- * چهار تصمیم که تصادفی نیستند:
+ * شش تصمیم که تصادفی نیستند:
  *
  * ۱. «upper half» و «nothing in the lower half» — بلوک متن با نسبت
  *    مرکز نوری حدود وسط قاب می‌نشیند و پایین‌تر می‌رود. عنصر کانونی
@@ -58,10 +58,33 @@ const TIMEOUT_MS = 60_000;
  * ۳. ممنوعیت آیکونوگرافی مهاجرت — پرچم، پاسپورت، چمدان، هواپیما.
  *    برندگاید صریح گفته ادبیات فرار و نجات ممنوع است و مخاطب «از موضع
  *    جاه‌طلبی می‌آید، نه اضطرار». چمدان دقیقاً پیام مقابل را می‌دهد.
+ *    **این ممنوعیت با بند ۵ عوض نشد** — جدا و مستقل باقی می‌ماند.
  *
  * ۴. ممنوعیت چهره‌ی قابل‌تشخیص. قاعده‌ی ۶ ادعاها: هیچ عکس یا جزئیات
  *    پرونده‌ی واقعی بدون اجازه. چهره‌ی تولیدشده واقعی نیست، ولی روی
  *    محتوای یک مشاور مهاجرتی به‌عنوان «مشتری» خوانده می‌شود.
+ *
+ * ۵. بند «BRITISH CONTEXT» (۱۴۰۵-۰۶-۰۳ اضافه شد) — قبل از این، صحنه‌ها
+ *    مکانی خنثی بودند: کابل، صندلی، بوم نقاشی، همه جای دنیا همین‌شکل‌اند.
+ *    راه‌حل **نمادهای توریستی نیست** (باکس تلفن قرمز، تاکسی سیاه، دوطبقه،
+ *    بیگ‌بن) — آن‌ها همان‌قدر کلیشه‌اند که پرچم/پاسپورت، فقط از نوع دیگر.
+ *
+ * ۶. به‌همین‌خاطر بند DEPTH نرم شد: «fully dissolved» یعنی هیچ بافت
+ *    معماری‌ای زنده نمی‌ماند تا بند ۵ اصلاً چیزی برای نشان‌دادن نداشته
+ *    باشد. عمق میدان کم می‌ماند (فضای منفی و تمرکز روی عنصر کانونی هنوز
+ *    لازم است) ولی پس‌زمینه دیگر به گرادیان صاف تقلیل نمی‌رود.
+ *
+ * ۷. **اصلاح (۱۴۰۵-۰۶-۰۴):** نسخه‌ی اول بند ۵ («aged red brick»، «worn
+ *    wooden floorboards»، «a stone corridor») به همراه DEPTH نرم‌شده،
+ *    مدل را به‌جای «بریتانیای امروزی» به سمت «دانشگاه ویکتوریایی/گوتیک،
+ *    ساختمان کهنه، فضای عتیقه» برد — دقیقاً با داده‌ی واقعی دیده شد (پله‌ی
+ *    سنگیِ راهروی گوتیک). صفت‌های سن‌دار (`aged`/`worn`/`stone corridor`)
+ *    حذف و با معادل معاصر جایگزین شدند (`red-brick detailing`، `natural
+ *    wood flooring`، `clean institutional corridor`)، و یک بند ممنوعیت
+ *    صریح («No castles, no Gothic or Victorian-heavy architecture, …»)
+ *    به EXCLUDE اضافه شد. **ممنوعیت آیکونوگرافی مهاجرتِ بند ۳ در این
+ *    اصلاح دست‌نخورده ماند** — آن قاعده مستقل است و ربطی به مسئله‌ی
+ *    heritage-bias ندارد.
  *
  * انگلیسی است چون مدل‌های تصویرساز با انگلیسی قابل‌اعتمادترند. این یک
  * پارامتر فنی است، نه متن برند — قاعده‌ی «پاسخ‌ها فارسی» شاملش نمی‌شود.
@@ -74,11 +97,35 @@ occupying no more than one third of the image. Everything else is empty.
 Generous negative space. Nothing in the lower half but atmosphere.
 
 LIGHT
-Soft directional daylight, late afternoon. Gentle falloff. No harsh shadows,
-no flash, no rim lighting, no lens flare.
+Soft, directional daylight — bright overcast or gentle indirect daylight,
+cool-neutral with a restrained grey-blue tint. Gentle falloff, low contrast,
+no harsh shadows, no flash, no rim lighting, no lens flare. The exposure
+stays bright, clean, and contemporary-editorial — never dim, muddy,
+sepia-toned, or nostalgic.
+
+BRITISH CONTEXT
+The setting is subtly, contemporarily British — background atmosphere only,
+never the subject. Draw from modern, lived-in environments: a contemporary
+university space, a modern study room, a university library, a research
+lab, a professional workspace, a clean institutional corridor, a
+contemporary residential interior. Keep material cues light and current:
+white or lightly textured plaster, restrained red-brick detailing (not
+weathered or aged), sash-window proportions where they fit naturally,
+natural wood flooring, a paved campus or urban path. Where it suits the
+composition, one secondary cue may suggest quiet progress — a modern
+half-open door, a clean staircase, a corridor line, a window onto another
+space — kept strictly secondary, never symbolic. When a choice exists,
+prefer a bright contemporary interior or professional/academic environment
+over an exterior architectural scene. The result should feel current and
+lived-in, not preserved, grand, or historic.
 
 DEPTH
-Shallow depth of field. Background fully dissolved into smooth tone.
+Shallow depth of field around the focal subject, with strong separation and
+generous negative space. The background is softly legible, not fully
+erased — enough shape and material should survive (a wall, a window's
+proportions, a corridor line) for the British setting to register, but it
+stays secondary and never becomes sharp enough to compete with the focal
+subject.
 
 PALETTE
 Deep desaturated blue-teal throughout, close to monochrome. Muted, cool,
@@ -95,6 +142,14 @@ No charts, graphs, diagrams, tables, UI, or screens.
 No identifiable faces.
 No flags, passports, boarding passes, aeroplanes, suitcases, landmarks,
 or any migration iconography.
+No red telephone boxes, black cabs, double-decker buses, Big Ben, or any
+other postcard/tourist iconography of Britain.
+No castles, no Gothic or Victorian-heavy architecture, no grand historic
+university façade as the hero image, no visibly old or decaying buildings,
+no antique furniture, no dark-wood heritage interiors, no rustic interiors,
+no weathered or crumbling masonry as the dominant element.
+No sepia or nostalgic colour grading, no period-drama atmosphere, no
+historic-postcard aesthetic.
 No collage, split frames, borders, or vignettes.
 No 3D render, no illustration, no digital art — photographic only.
 
