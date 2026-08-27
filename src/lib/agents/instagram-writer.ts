@@ -161,8 +161,32 @@ function sceneBlock(sceneFamily?: string | null): string {
 این خانواده برای تمایز کاورهای یک هفته از هم انتخاب شده، پس از فضایش خارج نشو — ولی موضوع را با آن عوض نکن.`;
 }
 
+/**
+ * بندِ حالتِ دایرکت — فقط وقتی اپراتور `dmOffer` پر کرده باشد پر می‌شود (فاز ۵).
+ *
+ * ⚠️ کلیدواژه به مدل داده نمی‌شود — رجیستری بعد از رندر و به‌صورت قطعی
+ * رزروش می‌کند (`dm-registry.ts`). این بند فقط CTAی اسلاید آخر را
+ * نسبت به کانال خنثی نگه می‌دارد تا خطِ سیستمِ دایرکت بعداً بدون تناقض
+ * به کپشن اضافه شود.
+ */
+const DM_MODE_BLOCK = `
+
+**این کاروسل حالتِ دایرکت دارد.** بعد از تأیید داخلی، یک خطِ سیستمی که کاربر را به فرستادنِ یک کلیدواژه در دایرکت دعوت می‌کند، **خودکار و جداگانه** به انتهای کپشن اضافه می‌شود — تو خودت آن خط را نمی‌نویسی.
+- کلیدواژه را حدس نزن، اختراع نکن، و در هیچ‌جای کپشن یا اسلایدها ننویس.
+- ننویس «دایرکت بده»، «به ما دایرکت بزن»، «DM us»، «Send us a DM» یا هر معادلِ دیگرِ همین دستور.
+- ننویس «لینک در بایو» یا هر دستورِ کانالیِ دیگر.
+- دعوتِ اسلاید آخر باید فقط **ارزش/اقدام** را بگوید، نه مسیرِ رسیدن به آن — نسبت به کانال خنثی بماند.
+  · ✅ «چک‌لیست شواهد را بگیرید.»
+  · ❌ «برای چک‌لیست دایرکت بده.»
+  · ❌ «لینک چک‌لیست در بایو.»`;
+
 /** قواعد مشترک بین پیش‌نویس اول و بازنویسی */
-function systemPrompt(lessons: string, language: "fa" | "en", sceneFamily?: string | null): string {
+function systemPrompt(
+  lessons: string,
+  language: "fa" | "en",
+  sceneFamily?: string | null,
+  dmMode?: boolean
+): string {
   return `تو «کپی‌رایتر اینستاگرام» ${COMPANY_NAME} هستی. کاروسل‌های آموزشی می‌نویسی که مخاطبِ توصیف‌شده در پروفایل شرکت اسکرول را برایشان متوقف کند.
 
 ${COMPANY_PROFILE}
@@ -215,7 +239,7 @@ ${BRAND_VOICE}
   · هیچ آدمی با چهره‌ی مشخص، هیچ پرچم و پاسپورت و چمدان و هواپیما، و هیچ متنی داخل صحنه نباشد.
   · **هیچ نمایشگر روشنی هم نباشد** — مانیتور، صفحه‌ی موبایل، نمودار و رابط کاربری. سبک تصویر این‌ها را ممنوع کرده و صحنه‌ای که رویشان بنا شده باشد خالی درمی‌آید.
   · اگر برای این اسلاید صحنه‌ی خوبی به ذهنت نمی‌رسد، **این فیلد را خالی بگذار**. کاور بدون تصویر بهتر از تصویر بی‌ربط است.
-${language === "fa" ? FA_BLOCK : EN_BLOCK}${sceneBlock(sceneFamily)}${lessons}`;
+${language === "fa" ? FA_BLOCK : EN_BLOCK}${sceneBlock(sceneFamily)}${dmMode ? DM_MODE_BLOCK : ""}${lessons}`;
 }
 
 function briefBlock(brief: SocialBrief): string {
@@ -273,6 +297,8 @@ export async function runInstagramWriter(input: {
   brief: SocialBrief;
   /** خانواده‌ی صحنه‌ی کاور — فقط مسیر هفتگی پرش می‌کند */
   sceneFamily?: string | null;
+  /** حالتِ دایرکتِ فاز ۵ — فقط وقتی اپراتور dmOffer داده باشد true است */
+  dmMode?: boolean;
 }): Promise<InstagramCarousel> {
   const lessons = await lessonsBlockFor("instagram-writer");
 
@@ -284,7 +310,7 @@ export async function runInstagramWriter(input: {
   // را رد می‌کند — رفتارِ runtime دست‌نخورده می‌ماند، فقط cast لازم است.
   return runAgentJSON<InstagramCarousel>({
     agent: "instagram-writer",
-    system: systemPrompt(lessons, input.brief.language, input.sceneFamily),
+    system: systemPrompt(lessons, input.brief.language, input.sceneFamily, input.dmMode),
     prompt: `${briefBlock(input.brief)}
 
 ${input.brief.language === "en" ? "Write a complete Instagram carousel in English." : "یک کاروسل اینستاگرام کامل بنویس."}`,
@@ -310,6 +336,12 @@ export async function runInstagramRevision(input: {
    * تنوع را بی‌صدا می‌انداخت و کاور دوباره به صحنه‌ی عمومی برمی‌گشت.
    */
   sceneFamily?: string | null;
+  /**
+   * ⚠️ بازنویسی هم باید حالتِ دایرکت را بگیرد — دقیقاً همان درسِ sceneFamily.
+   * بدون این، دورِ بازنویسی قیدِ CTAی خنثی را بی‌صدا می‌انداخت و مدل دوباره
+   * «دایرکت بده»/«لینک در بایو» می‌نوشت.
+   */
+  dmMode?: boolean;
 }): Promise<InstagramCarousel> {
   const lessons = await lessonsBlockFor("instagram-writer");
 
@@ -328,7 +360,7 @@ ${input.failedChecks.map((c) => `- ${c.name}: ${c.note}`).join("\n") || "- (هم
 
   return runAgentJSON<InstagramCarousel>({
     agent: "instagram-writer",
-    system: systemPrompt(lessons, input.brief.language, input.sceneFamily),
+    system: systemPrompt(lessons, input.brief.language, input.sceneFamily, input.dmMode),
     prompt,
     temperature: 0.6,
     schema: InstagramCarouselSchema as ZodType<InstagramCarousel>,

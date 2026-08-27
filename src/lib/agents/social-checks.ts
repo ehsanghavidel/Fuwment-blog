@@ -1,6 +1,7 @@
 import type { Slide, StorySticker } from "@/lib/store";
 import { slideText } from "@/lib/slide-spec";
 import { LIMITS_BY_LAYOUT } from "./types";
+import { countDmCtaLine } from "@/lib/dm-keyword";
 
 /**
  * چک‌های قطعی محتوای اجتماعی — بدون LLM.
@@ -302,6 +303,36 @@ export function runInstagramChecks(input: {
   });
 
   return checks;
+}
+
+/* ── دایرکت (فاز ۵) ─────────────────────────────────────── */
+
+/**
+ * نامِ پایدار — Stage ۳ هنگامِ ویرایش/آزادسازیِ دستیِ کلیدواژه با همین
+ * رشته این چک را پیدا و جایگزین/حذف می‌کند. اگر این نام را عوض کردی،
+ * آن مسیر هم باید عوض شود.
+ */
+export const DM_CTA_CHECK_NAME = "خط دایرکت";
+
+/**
+ * فقط وقتی `dmKeyword` غیرخالی است به فهرستِ چک‌ها اضافه می‌شود.
+ *
+ * واحدِ سنجش خطِ کاملِ سیستم است (`countDmCtaLine` در `dm-keyword.ts`)، نه
+ * توکنِ تنهای کلیدواژه — کپشنی که «TALENT» را جای دیگری هم به‌عنوانِ واژه‌ی
+ * عادی دارد نباید رد شود.
+ */
+export function checkDmCtaLine(body: string, keyword: string, language: "fa" | "en"): SocialCheck {
+  const count = countDmCtaLine(body, keyword, language);
+  return {
+    name: DM_CTA_CHECK_NAME,
+    pass: count === 1,
+    note:
+      count === 1
+        ? `خطِ سیستمِ کلیدواژه‌ی «${keyword}» دقیقاً یک‌بار در متن هست`
+        : count === 0
+          ? "خطِ دایرکت در متن نیست"
+          : `خطِ دایرکت ${count} بار تکرار شده`,
+  };
 }
 
 /* ── ریلز ───────────────────────────────────────────────── */

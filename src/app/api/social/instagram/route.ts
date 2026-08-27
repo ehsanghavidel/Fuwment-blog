@@ -19,6 +19,12 @@ const BodySchema = z.object({
   topicHint: z.string().max(300).optional(),
   route: z.enum(["brand", "global-talent", "innovator-founder"]).optional(),
   language: z.enum(["fa", "en"]).optional(),
+  /**
+   * آفرِ اپراتور برای فعال‌سازیِ حالتِ دایرکت — فاز ۵.
+   * فقط متنِ آزادِ آفر را می‌گیرد؛ خودِ کلیدواژه اینجا قابلِ‌ورود نیست —
+   * رزروِ کلیدواژه قطعی و سمتِ سرور است (`dm-registry.ts`).
+   */
+  dmOffer: z.string().max(200).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -41,6 +47,7 @@ export async function POST(req: NextRequest) {
     topicHint: parsed.data.topicHint ?? null,
     route: parsed.data.route,
     language: parsed.data.language,
+    dmOffer: parsed.data.dmOffer,
   });
 
   return Response.json({ run });

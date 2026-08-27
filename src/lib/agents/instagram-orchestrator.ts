@@ -12,6 +12,7 @@ import { runSocialCritic, type SocialCriticPart } from "./critic";
 import { renderSlidesForPost } from "@/lib/storage";
 import { clampSlides, guardPositionLayout } from "./types";
 import { slideText } from "@/lib/slide-spec";
+import { reserveDmKeywordForPost } from "./dm-registry";
 import type { InstagramCarousel, SocialIdea } from "./types";
 import type { BrandRoute } from "./brand-cta";
 
@@ -67,6 +68,15 @@ export async function runInstagramPipeline(opts: {
   /** والدِ این اجرا، اگر از یک هفته آمده باشد */
   weekId?: string | null;
   /**
+   * آفرِ اپراتور برای فعال‌سازیِ حالتِ دایرکت — فاز ۵.
+   *
+   * نبودش یعنی مسیرِ عادی، بدونِ هیچ تغییری (رگرسیونِ صفر). فقط وقتی
+   * غیرخالی است `dmMode` روشن می‌شود: کپی‌رایتر CTAی خنثی نسبت به کانال
+   * می‌نویسد و بعد از رندر، `dm-registry.ts` یک کلیدواژه رزرو می‌کند.
+   * خودِ کلیدواژه اینجا **انتخاب نمی‌شود** — رزرو قطعی و سمت سرور است.
+   */
+  dmOffer?: string | null;
+  /**
    * وقتی پر باشد، گام منتقدِ **داخل این اجرا** اجرا نمی‌شود و نتیجه
    * به‌جایش اینجا تحویل داده می‌شود.
    *
@@ -88,6 +98,8 @@ export async function runInstagramPipeline(opts: {
   const assignedSlot = opts.assignedSlot ?? null;
   const sceneFamily = opts.sceneFamily ?? null;
   const weekId = opts.weekId ?? null;
+  const dmOffer = opts.dmOffer?.trim() || null;
+  const dmMode = dmOffer !== null;
 
   const run: PipelineRun = {
     id: runId,
@@ -182,9 +194,9 @@ export async function runInstagramPipeline(opts: {
       writerAgent: "instagram-writer",
       label: "اینستاگرام",
       brief,
-      write: () => runInstagramWriter({ brief, sceneFamily }),
+      write: () => runInstagramWriter({ brief, sceneFamily, dmMode }),
       revise: (draft, review, failedChecks) =>
-        runInstagramRevision({ brief, draft, review, failedChecks, sceneFamily }),
+        runInstagramRevision({ brief, draft, review, failedChecks, sceneFamily, dmMode }),
       check: (d) =>
         runInstagramChecks({ caption: d.caption, slides: d.slides, hashtags: d.hashtags }),
       // کپشن + متن همه‌ی اسلایدها + دعوت به اقدام
@@ -193,6 +205,10 @@ export async function runInstagramPipeline(opts: {
     });
 
     // ── ۵. ناشر — کد قطعی، بدون LLM ──
+    // بیرونِ closureِ گام، تا گامِ dm-keyword بعداً بدونِ خواندنِ دوباره از
+    // دیتابیس به همان بدنه/چک‌ها/extras دسترسی داشته باشد — دقیقاً همان
+    // چیزی که ناشر نوشت، چون slide-render این فیلدها را دست نمی‌زند.
+    let createdPost!: SocialPost;
     const published = await step("social-publisher", "ناشر محتوای اجتماعی", async () => {
       const now = new Date().toISOString();
       const igPost: SocialPost = {
@@ -215,7 +231,10 @@ export async function runInstagramPipeline(opts: {
         hashtags: ig.draft.hashtags,
         cta: ig.draft.cta,
         checks: ig.checks,
-        extras: {},
+        // فاز ۵: فقط وقتی اپراتور آفر داده extras چیزی می‌گیرد. کپشنِ اولیه
+        // هنوز خطِ CTAی دایرکت را ندارد — آن را فقط گامِ dm-keyword،
+        // بعد از رزروِ موفق، اضافه می‌کند.
+        extras: dmOffer ? { dmOffer } : {},
         language,
         weekId,
         imagePaths: [],
@@ -229,6 +248,7 @@ export async function runInstagramPipeline(opts: {
         dmKeyword: null,
       };
       await store.createSocialPost(igPost);
+      createdPost = igPost;
 
       return {
         output: { instagramId: igPost.id },
@@ -269,6 +289,36 @@ export async function runInstagramPipeline(opts: {
               : `رندر ناموفق بود: ${result.error} — با دکمه‌ی «رندر دوباره» تلاش کنید`,
       };
     });
+
+    /**
+     * ── ۵٫۷۵. رجیستری کلیدواژه‌ی دایرکت — فاز ۵ ──
+     *
+     * فقط وقتی `dmOffer` غیرخالی است اجرا می‌شود؛ نبودش یعنی این گام
+     * اصلاً ثبت نمی‌شود و رفتار دقیقاً همان چیزی می‌ماند که قبل از فاز ۵
+     * بود (رگرسیونِ صفر).
+     *
+     * ⚠️ **باید throw کند، نه یک شکستِ خاموش برگرداند.** چکِ ردشده هیچ‌وقت
+     * جلوی تأییدِ دستیِ استودیو را نمی‌گیرد (دکمه‌ی تأیید `disabled`
+     * ندارد)، پس اگر همه‌ی کاندیدها بگیرند و این گام فقط چکِ ردشده ثبت
+     * کند، اپراتور می‌تواند بدونِ متوجه‌شدن پستی را تأیید کند که کلیدواژه‌
+     * اش اصلاً رزرو نشده. throw باعث می‌شود کلِ اجرا `error` شود — ولی
+     * ردیفِ `SocialPost` و تصویرهای رندرشده باقی می‌مانند (ناشر و
+     * slide-render قبلاً کارشان را کرده‌اند)، پس اپراتور دستی می‌تواند
+     * پیش‌نویس را پیدا و بازیابی کند.
+     */
+    if (dmMode) {
+      await step<{ keyword: string; attempts: number }>(
+        "dm-keyword",
+        "رجیستری کلیدواژه‌ی دایرکت",
+        async () => {
+          const result = await reserveDmKeywordForPost({ post: createdPost, route });
+          return {
+            output: result,
+            summary: `کلیدواژه‌ی «${result.keyword}» رزرو شد (${result.attempts.toLocaleString("fa-IR")} تلاش)`,
+          };
+        }
+      );
+    }
 
     // ── ۶. منتقد (خودبهبودی) ──
     // در مسیر هفتگی خاموش است و نتیجه به ارکستریتور هفته تحویل می‌شود؛
