@@ -1,16 +1,100 @@
 import "server-only";
 import { randomUUID } from "crypto";
-import { getStore, type PipelineRun, type SocialPost, type StorySticker } from "@/lib/store";
+import { getStore, type PipelineRun, type SocialPost, type StorySticker, type Slide } from "@/lib/store";
 import { makeStepRunner } from "./run-steps";
 import { runStoryAngleFinder } from "./story-angle-finder";
 import { runStoryWriter, runStoryRevision } from "./story-writer";
 import { SOCIAL_APPROVE_THRESHOLD } from "./social-editor";
-import { runStoryChecks } from "./social-checks";
+import { runStoryChecks, type SocialCheck } from "./social-checks";
 import { writeAndReview } from "./social-loop";
 import { runSocialCritic } from "./critic";
 import { clampSlides } from "./types";
 import { slideText } from "@/lib/slide-spec";
 import type { InstagramStory } from "./types";
+
+/**
+ * نگهبانِ کپیِ عینیِ منبع — Stage ۳ (اصلاحِ هدفمند).
+ *
+ * ⚠️ این چک **جدا** از حلقه‌ی نویسنده⇄ویراستار (`writeAndReview`) است و
+ * *بعد* از تمام‌شدنِ آن حلقه اجرا می‌شود — مستقل از اینکه داخلِ آن حلقه
+ * چند دور بازنویسیِ ویراستاری رخ داده باشد. سقفِ این نگهبان **یک** دورِ
+ * بازنویسیِ هدفمند است، کاملاً جدا از `MAX_SOCIAL_REVISION_ROUNDS`.
+ *
+ * قاعده‌ی ۱ و ۲ در CLAUDE.md: فقط تطبیقِ عینیِ کل‌فیلد، بدون فازی/embedding/
+ * n-gram/LLM-judge. یک واژه‌ی مشترکِ کوتاه (کیکر، اصطلاحِ رسمی) نباید رد شود؛
+ * فقط وقتی کل مقدارِ heading/text/بندِ list بایت‌به‌بایت (بعد از نرمال‌سازیِ
+ * فاصله) با منبع یکی شد.
+ */
+
+/** trim + یکی‌کردنِ فاصله‌های تکراری — نرمال‌سازیِ معنا-خنثی، نه بیشتر */
+function normalizeForCollision(s: string): string {
+  return s.trim().replace(/\s+/g, " ");
+}
+
+export type CollisionField = "heading" | "text" | "items";
+
+export type SourceCopyCollision = {
+  frameIndex: number;
+  field: CollisionField;
+  itemIndex?: number;
+  value: string;
+};
+
+/**
+ * مقادیرِ قابلِ‌مقایسه‌ی یک اسلاید — فقط heading + standard.text + list.items[].
+ * ⚠️ عمداً kicker و imageSubject را برنمی‌گرداند — قرارداد قفل‌شده‌ی
+ * اصلاحِ تأییدشده: برچسب‌های کوتاه و متادیتای تصویر انتظار می‌رود تکرار شوند.
+ */
+function collisionFieldsOf(
+  s: Slide
+): { field: CollisionField; itemIndex?: number; value: string }[] {
+  const out: { field: CollisionField; itemIndex?: number; value: string }[] = [
+    { field: "heading", value: s.heading },
+  ];
+  if (s.layout === "standard") out.push({ field: "text", value: s.text });
+  if (s.layout === "list") {
+    s.items.forEach((item, itemIndex) => out.push({ field: "items", itemIndex, value: item }));
+  }
+  return out;
+}
+
+/** برچسبِ فارسیِ فیلد، برای لاگ و پیامِ بازنویسی */
+export function collisionFieldLabel(c: SourceCopyCollision): string {
+  if (c.field === "items") return `بندِ فهرست شماره‌ی ${(c.itemIndex ?? 0) + 1}`;
+  if (c.field === "heading") return "تیتر";
+  return "متن";
+}
+
+/**
+ * تشخیصِ تطبیقِ عینیِ کل‌فیلد بینِ فریم‌های استوری و اسلایدهای کاروسلِ مبدأ.
+ * بدونِ فازی‌متچینگ، بدونِ overlapِ جزئی — فقط برابریِ کاملِ مقدارِ نرمال‌شده.
+ *
+ * export شده تا `detectSourceCopyCollisions` مستقیماً و بدونِ بازنویسیِ
+ * موازی، در تست‌های منطقِ خالص (الگوی tsc جدا در CLAUDE.md) صدا زده شود.
+ */
+export function detectSourceCopyCollisions(
+  frames: Slide[],
+  sourceSlides: Slide[]
+): SourceCopyCollision[] {
+  const sourceValues = new Set<string>();
+  for (const slide of sourceSlides) {
+    for (const f of collisionFieldsOf(slide)) {
+      const norm = normalizeForCollision(f.value);
+      if (norm) sourceValues.add(norm);
+    }
+  }
+
+  const collisions: SourceCopyCollision[] = [];
+  frames.forEach((frame, frameIndex) => {
+    for (const f of collisionFieldsOf(frame)) {
+      const norm = normalizeForCollision(f.value);
+      if (norm && sourceValues.has(norm)) {
+        collisions.push({ frameIndex, field: f.field, itemIndex: f.itemIndex, value: f.value });
+      }
+    }
+  });
+  return collisions;
+}
 
 /**
  * ارکستریتور استوری — Stage ۱ فاز ۴.
@@ -98,6 +182,65 @@ export async function runStoryPipeline(opts: {
         `${d.frames.length} فریم${d.stickers?.length ? `، ${d.stickers.length} استیکر` : ""}`,
     });
 
+    // ── ۴٫۵. نگهبانِ کپیِ عینیِ منبع — کدِ قطعی، حداکثر یک بازنویسیِ هدفمند ──
+    // مستقل از حلقه‌ی نویسنده⇄ویراستارِ بالا: همیشه دقیقاً یک‌بار، بعد از
+    // تمام‌شدنِ آن حلقه اجرا می‌شود؛ بودجه‌اش با MAX_SOCIAL_REVISION_ROUNDS
+    // جمع نمی‌شود.
+    let finalDraft: InstagramStory = story.draft;
+    let finalChecks: SocialCheck[] = story.checks;
+
+    await step("story-source-copy-guard", "نگهبانِ کپیِ منبع", async () => {
+      const collisions = detectSourceCopyCollisions(finalDraft.frames, source.slides);
+      if (collisions.length === 0) {
+        return {
+          output: { initialCollisions: 0, resolvedAfterRevision: false },
+          summary: "بدون کپیِ عینیِ فیلد از منبع",
+        };
+      }
+
+      for (const c of collisions) {
+        console.log(
+          `[story-source-copy] فریمِ ${c.frameIndex} — ${collisionFieldLabel(c)}: «${c.value}» عیناً با کاروسلِ مبدأ یکسان است`
+        );
+      }
+
+      const failedChecks: SocialCheck[] = collisions.map((c) => ({
+        name: "بدون کپی مستقیم از منبع",
+        pass: false,
+        severity: "blocking",
+        note: `فریمِ ${c.frameIndex + 1} — ${collisionFieldLabel(c)}: «${c.value}» عیناً با متنِ کاروسلِ مبدأ یکسان است. معنا و اصطلاحاتِ لازم را حفظ کن، ولی با کلماتِ کاملاً تازه بنویس.`,
+      }));
+
+      const revised = await runStoryRevision({
+        brief,
+        draft: finalDraft,
+        review: { ...story.review, verdict: "revise", issues: [] },
+        failedChecks,
+      });
+
+      const recheck = runStoryChecks({ frames: revised.frames, stickers: revised.stickers ?? [] });
+      const stillColliding = detectSourceCopyCollisions(revised.frames, source.slides);
+
+      if (stillColliding.length > 0) {
+        for (const c of stillColliding) {
+          console.log(
+            `[story-source-copy] بعد از یک بازنویسیِ هدفمند هم برطرف نشد — فریمِ ${c.frameIndex} — ${collisionFieldLabel(c)}: «${c.value}»`
+          );
+        }
+        throw new Error(
+          `کپیِ عینیِ متنِ منبع بعد از یک بازنویسیِ هدفمند برطرف نشد (${stillColliding.length} تداخل). چیزی ذخیره نشد.`
+        );
+      }
+
+      finalDraft = revised;
+      finalChecks = recheck;
+
+      return {
+        output: { initialCollisions: collisions.length, resolvedAfterRevision: true },
+        summary: `${collisions.length} کپیِ عینی شناسایی و با یک بازنویسیِ هدفمند برطرف شد`,
+      };
+    });
+
     // ── ۵. ناشر — کد قطعی، بدون LLM ──
     const published = await step("social-publisher", "ناشر محتوای اجتماعی", async () => {
       const now = new Date().toISOString();
@@ -108,7 +251,7 @@ export async function runStoryPipeline(opts: {
        * همین‌جا حذفش می‌کنیم — نرمال‌سازیِ بی‌ضرر، نه چکِ مسدودکننده، چون
        * هیچ مصرف‌کننده‌ای امروز از آن فیلد روی فریم‌های بعدی نمی‌خواند.
        */
-      const clamped = clampSlides(story.draft.frames);
+      const clamped = clampSlides(finalDraft.frames);
       const cleanFrames = clamped.map((f, i) => {
         if (i > 0 && f.imageSubject) {
           console.log(
@@ -129,7 +272,7 @@ export async function runStoryPipeline(opts: {
        * human-in-the-loop) — ولی داده‌ی ذخیره‌شده هرگز نباید مرجعِ فریمِ
        * نامعتبر یا استیکرِ دوم روی یک فریم داشته باشد.
        */
-      const rawStickers = story.draft.stickers ?? [];
+      const rawStickers = finalDraft.stickers ?? [];
       const seenFrames = new Set<number>();
       const cleanStickers: StorySticker[] = [];
       for (const s of rawStickers) {
@@ -151,15 +294,15 @@ export async function runStoryPipeline(opts: {
         sourcePostId: null,
         platform: "instagram",
         format: "story",
-        title: story.draft.title,
+        title: finalDraft.title,
         // ⚠️ body اینجا setSummary است — خلاصه‌ی داخلیِ اپراتور، نه کپشن.
         // استوری اصلاً کپشن ندارد؛ متن روی خودِ فریم‌هاست.
-        body: story.draft.setSummary,
+        body: finalDraft.setSummary,
         slides: cleanFrames,
         // استوری هشتگ ندارد — مفهومِ هشتگ فقط برای فید/کپشن معنی دارد.
         hashtags: [],
-        cta: story.draft.cta,
-        checks: story.checks,
+        cta: finalDraft.cta,
+        checks: finalChecks,
         extras: {
           sourceSocialPostId: source.id,
           ...(cleanStickers.length > 0 ? { stickers: cleanStickers } : {}),
@@ -193,7 +336,10 @@ export async function runStoryPipeline(opts: {
       try {
         const out = await runSocialCritic({
           context: `نوع اجرا: ستِ استوری، مشتق از کاروسلِ «${source.title}»`,
-          parts: [{ label: "ستِ استوری اینستاگرام", ...story }],
+          // finalDraft/finalChecks ممکن است بعد از نگهبانِ کپیِ منبع
+          // به‌روزتر از story.draft/story.checks باشند — منتقد باید
+          // همان محتوایی را ببیند که واقعاً ذخیره شد.
+          parts: [{ label: "ستِ استوری اینستاگرام", ...story, draft: finalDraft, checks: finalChecks }],
           revisionRounds: story.revisionRounds,
         });
         return {

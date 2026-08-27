@@ -227,7 +227,7 @@ const BRAND_SUBJECT_STARTERS = ["ما", ...BRAND_NAMES];
 ### ۶. شکست باید صدا داشته باشد
 `if (!res.ok) return []` بدون لاگ، یک روز وقت گرفت: کلید Tavily یک حرف اضافه داشت (`ttvly-`)، API با ۴۰۱ جواب می‌داد و پایپ‌لاین بی‌هیچ نشانه‌ای می‌گفت «جستجو بدون نتیجه».
 
-هر تماس بیرونی باید پیام واقعی سرویس را لاگ کند. پیشوندها: `[tavily]`، `[wordpress]`، `[llm-timeout]`، `[researcher]`، `[brand-fix]`، `[timing]`، `[deadline]`.
+هر تماس بیرونی باید پیام واقعی سرویس را لاگ کند. پیشوندها: `[tavily]`، `[wordpress]`، `[llm-timeout]`، `[researcher]`، `[brand-fix]`، `[timing]`، `[deadline]`، `[story-image]`، `[story-sticker]`، `[story-source-copy]`.
 
 ### ۷. سقف زمان روی فراخوانی مدل
 یک تماس **۱۲۶٫۹ ثانیه** هنگ کرد و پاسخ خالی داد؛ تلاش بعدی در ۸٫۶ ثانیه جواب داد. آن یک هنگ کل اجرا را به ۲۹۳ ثانیه رساند.
