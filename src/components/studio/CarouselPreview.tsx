@@ -5,7 +5,7 @@ import {
   CANVAS,
   COLOR,
   COUNTER_BASELINE_FROM_BOTTOM,
-  GAP,
+  LIST_MARKER,
   OPACITY,
   PAD,
   SAFE_INSET,
@@ -13,7 +13,11 @@ import {
   OPTICAL_TOP_SHARE,
   accentFor,
   blockAlignFor,
+  blocksFor,
+  gapAfter,
   roleFor,
+  type Block,
+  type BlockLevel,
 } from "@/lib/slide-spec";
 
 /**
@@ -26,6 +30,11 @@ import {
  *
  * حالا واگرایی **ساختاراً ممکن نیست**: اگر کسی پدینگ را در spec عوض
  * کند، هر دو با هم عوض می‌شوند.
+ *
+ * ⚠️ ساختارِ بلوک‌ها هم از همان‌جا می‌آید — `blocksFor()` و `gapAfter()`
+ * دقیقاً همان دو تابعی هستند که رندرکننده صدا می‌زند. اینجا هیچ منطقِ
+ * «کدام چیدمان یعنی چه بلوک‌هایی» یا «چه فاصله‌ای بعد از کدام بلوک»
+ * تکرار نشده — فقط عددهای پیکسلیِ CSS به‌جای پیکسلِ canvas.
  *
  * تنها چیزی که هنوز از تیلویند می‌آید ظرفِ بیرونی است (اسکرول افقی،
  * گوشه‌ی گرد، سایه) — که بخشی از رابط استودیوست، نه از خودِ اسلاید.
@@ -43,8 +52,23 @@ function rgba(hex: string, alpha: number): string {
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
 }
 
-export function CarouselPreview({ slides }: { slides: Slide[] }) {
+/** رنگِ متنِ هر بلوک — نسخه‌ی CSS از همان قاعده‌ی رندرکننده (`colorFor`) */
+function colorForBlock(level: BlockLevel, accent: string): string {
+  if (level === "kicker") return accent;
+  if (level === "body") return rgba(COLOR.fg, OPACITY.body);
+  return COLOR.fg; // heading, display
+}
+
+export function CarouselPreview({
+  slides,
+  language = "fa",
+}: {
+  slides: Slide[];
+  /** جهت و تراز از زبانِ پست می‌آید، نه از حدسِ محتوا — دقیقاً مثلِ رندرکننده */
+  language?: "fa" | "en";
+}) {
   if (slides.length === 0) return null;
+  const rtl = language === "fa";
 
   return (
     <div
@@ -55,12 +79,13 @@ export function CarouselPreview({ slides }: { slides: Slide[] }) {
       {slides.map((slide, i) => {
         const role = roleFor(i, slides.length);
         const accent = accentFor(role);
+        const blocks: Block[] = blocksFor(slide);
 
         return (
           <figure
             key={i}
             role="listitem"
-            dir="rtl"
+            dir={rtl ? "rtl" : "ltr"}
             className="relative shrink-0 snap-center overflow-hidden rounded-xl2 shadow-raised"
             style={{
               width: s(CANVAS.width),
@@ -71,9 +96,9 @@ export function CarouselPreview({ slides }: { slides: Slide[] }) {
               paddingTop: s(PAD.top),
               paddingBottom: s(PAD.bottom),
               /*
-                ناحیه‌ی چیدمان کل فضای بین دو پدینگ است و بلوک — با
-                کیکرش — یا وسطش می‌نشیند یا ته آن. همان محاسبه‌ای که
-                رندرکننده صریح انجام می‌دهد.
+                ناحیه‌ی چیدمان کل فضای بین دو پدینگ است و بلوک‌ها یا
+                وسطش می‌نشینند یا ته آن. همان محاسبه‌ای که رندرکننده
+                صریح انجام می‌دهد.
               */
               display: "flex",
               flexDirection: "column",
@@ -91,44 +116,50 @@ export function CarouselPreview({ slides }: { slides: Slide[] }) {
               }}
             />
 
-            {/* کیکر عضو بلوک است، نه لنگرشده به بالای قاب */}
             <div>
-              <span
-                dir="auto"
-                style={{
-                  display: "block",
-                  fontSize: s(TYPE.kicker.size),
-                  fontWeight: TYPE.kicker.weight,
-                  lineHeight: TYPE.kicker.lineHeight,
-                  color: accent,
-                  marginBottom: s(GAP.kickerToHeading),
-                }}
-              >
-                {slide.kicker}
-              </span>
-
-              <h4
-                dir="auto"
-                style={{
-                  fontSize: s(TYPE.heading.size),
-                  fontWeight: TYPE.heading.weight,
-                  lineHeight: TYPE.heading.lineHeight,
-                }}
-              >
-                {slide.heading}
-              </h4>
-              <p
-                dir="auto"
-                style={{
-                  marginTop: s(GAP.headingToBody),
-                  fontSize: s(TYPE.body.size),
-                  fontWeight: TYPE.body.weight,
-                  lineHeight: TYPE.body.lineHeight,
-                  color: rgba(COLOR.fg, OPACITY.body),
-                }}
-              >
-                {slide.text}
-              </p>
+              {blocks.map((block, bi) => (
+                <div
+                  key={bi}
+                  dir={rtl ? "rtl" : "ltr"}
+                  style={{
+                    display: "flex",
+                    alignItems: "baseline",
+                    gap: block.marker ? s(LIST_MARKER.gap) : undefined,
+                    marginBottom: s(gapAfter(blocks, bi)),
+                  }}
+                >
+                  {/*
+                    نشانگرِ هندسیِ بندِ فهرست — یک دایره‌ی CSS، نه
+                    کاراکترِ یونیکد. جهتِ ردیفِ flex از `dir` می‌آید، پس
+                    در RTL خودبه‌خود سمتِ راست (شروع) می‌نشیند و در LTR
+                    سمتِ چپ — بدونِ دو سیستمِ جدا برای دو زبان.
+                  */}
+                  {block.marker && (
+                    <span
+                      aria-hidden
+                      style={{
+                        flexShrink: 0,
+                        width: s(LIST_MARKER.size),
+                        height: s(LIST_MARKER.size),
+                        borderRadius: "50%",
+                        background: accent,
+                      }}
+                    />
+                  )}
+                  <span
+                    dir="auto"
+                    style={{
+                      display: "block",
+                      fontSize: s(TYPE[block.level].size),
+                      fontWeight: TYPE[block.level].weight,
+                      lineHeight: TYPE[block.level].lineHeight,
+                      color: colorForBlock(block.level, accent),
+                    }}
+                  >
+                    {block.text}
+                  </span>
+                </div>
+              ))}
             </div>
 
             <div
@@ -148,7 +179,9 @@ export function CarouselPreview({ slides }: { slides: Slide[] }) {
                 color: rgba(COLOR.fg, OPACITY.counter),
               }}
             >
-              {(i + 1).toLocaleString("fa-IR")}/{slides.length.toLocaleString("fa-IR")}
+              {rtl
+                ? `${(i + 1).toLocaleString("fa-IR")}/${slides.length.toLocaleString("fa-IR")}`
+                : `${i + 1}/${slides.length}`}
             </span>
 
             {/*

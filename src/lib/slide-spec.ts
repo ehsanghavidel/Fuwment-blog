@@ -18,7 +18,13 @@
  * عددهای قبلی (پدینگ ۲۴، پدینگ پایین ۴۴) برای یک چیپ ۲۴۰ پیکسلی
  * انتخاب شده بودند. ۴۴ روی ۲۴۰ یعنی ۱۸٪ عرض؛ ضرب در ۴٫۵ می‌شد ۱۹۸ که
  * بی‌معنی است. اینجا از صفر برای بوم ۱۰۸۰×۱۳۵۰ چیده شده.
+ *
+ * ⚠️ این فایل به تایپِ `Slide` از `@/lib/store/types` نیاز دارد، ولی
+ * `store/types.ts` هیچ importای ندارد — پس این وابستگی یک‌طرفه است و
+ * هیچ حلقه‌ای نمی‌سازد.
  */
+
+import type { Slide } from "@/lib/store/types";
 
 /* ── بوم ─────────────────────────────────────────────────── */
 
@@ -74,8 +80,13 @@ export const PAD = {
 export const GAP = {
   /** کیکر تا تیتر — بزرگ‌تر، چون مرز دو نقش متفاوت است */
   kickerToHeading: 48,
-  /** تیتر تا متن — کوچک‌تر، چون هر دو بدنه‌ی یک حرف‌اند */
+  /** تیتر تا متن (یا اولین بندِ فهرست) — کوچک‌تر، چون هر دو بدنه‌ی یک حرف‌اند */
   headingToBody: 40,
+  /**
+   * بین دو بندِ چیدمانِ `list` — کوچک‌تر از `headingToBody`، چون بندها یک
+   * گروهِ واحدند و باید به‌هم چسبیده دیده شوند، نه مثلِ پاراگراف‌های جدا.
+   */
+  listItem: 24,
 } as const;
 
 /** خط پایه‌ی شماره‌ی اسلاید، از پایین بوم */
@@ -94,10 +105,15 @@ export const COUNTER_BASELINE_FROM_BOTTOM = 72;
  *
  * پس: بدنه ۱٫۸ (قاعده‌ی برند رعایت شد — پیش‌نمایش قبلی ۱٫۷۱ بود و
  * نقضش می‌کرد)، تیتر ۱٫۴، کیکر ۱٫۶ مثل caption.
+ *
+ * ⚠️ `display` برای چیدمانِ `statement` اضافه شد — همان نسبتِ خطِ تیتر
+ * (۱٫۴)، فقط بزرگ‌تر. یک جمله با فضای منفیِ زیاد باید از تیترِ معمولی
+ * جداتر دیده شود، نه فقط «تیترِ بزرگ‌تر».
  */
 export const TYPE = {
   kicker: { size: 40, weight: 500, lineHeight: 1.6 },
   heading: { size: 72, weight: 700, lineHeight: 1.4 },
+  display: { size: 96, weight: 700, lineHeight: 1.4 },
   body: { size: 48, weight: 400, lineHeight: 1.8 },
   counter: { size: 32, weight: 500, lineHeight: 1.4 },
 } as const;
@@ -193,6 +209,103 @@ export function accentFor(role: SlideRole): string {
   return role === "cta" ? COLOR.action : COLOR.accent;
 }
 
+/* ── چیدمان‌های محتوا (Layout Variety) ───────────────────── */
+
+/**
+ * سطح تایپوگرافیِ هر بلوکِ محتوا — از `TYPE` می‌آید، به‌جز `counter` که
+ * مالِ شماره‌ی اسلاید است و هرگز عضوِ بلوکِ محتوا نمی‌شود.
+ */
+export type BlockLevel = Exclude<keyof typeof TYPE, "counter">;
+
+/**
+ * یک واحدِ قابل‌رندرِ محتوا. رندرکننده و `CarouselPreview` هر دو فقط از
+ * همین آرایه می‌خوانند و هیچ‌کدام مستقیماً `slide.text`/`slide.items` را
+ * لمس نمی‌کنند — واگراییِ ساختاری ممکن نیست.
+ *
+ * ⚠️ `marker` یک **پرچم** است، نه کاراکتر. نشانگرِ بندِ فهرست با شکلِ
+ * هندسی رسم می‌شود (رندرکننده) یا با شبه‌عنصرِ CSS (پیش‌نمایش) — هیچ‌کدام
+ * کاراکترِ یونیکدِ گلوله را داخلِ متن نمی‌گذارند، چون آن کاراکتر وارد
+ * الگوریتمِ Bidi می‌شود و همان دسته‌مشکلی را می‌سازد که satori را رد کرد.
+ */
+export type Block = {
+  level: BlockLevel;
+  text: string;
+  /** فقط بندهای چیدمانِ `list` */
+  marker?: boolean;
+};
+
+/**
+ * نشانگرِ هندسیِ بندهای چیدمانِ `list` — رسم می‌شود، نه کاراکترِ یونیکد
+ * داخلِ متن (دلیلش در توضیحِ `Block.marker` بالاست).
+ *
+ * `indent` فاصله‌ای است که متنِ بند از سمتِ شروع (راست در RTL، چپ در
+ * LTR) عقب می‌نشیند تا جای نشانگر باز بماند. رندرکننده و پیش‌نمایش هر دو
+ * از همین دو عدد می‌خوانند — واگراییِ ساختاری ممکن نیست.
+ */
+export const LIST_MARKER = {
+  /** قطرِ نشانگرِ دایره‌ای */
+  size: 12,
+  /** فاصله‌ی نشانگر تا شروعِ متن */
+  gap: 20,
+} as const;
+
+export const LIST_MARKER_INDENT = LIST_MARKER.size + LIST_MARKER.gap;
+
+/**
+ * محتوای هر چیدمان را به بلوک‌های قابل‌رندر می‌شکند — تنها جایی که
+ * ساختارِ «این چیدمان یعنی این بلوک‌ها» تعریف می‌شود.
+ */
+export function blocksFor(slide: Slide): Block[] {
+  switch (slide.layout) {
+    case "standard":
+      return [
+        { level: "kicker", text: slide.kicker },
+        { level: "heading", text: slide.heading },
+        { level: "body", text: slide.text },
+      ];
+    case "statement":
+      return [
+        { level: "kicker", text: slide.kicker },
+        { level: "display", text: slide.heading },
+      ];
+    case "list":
+      return [
+        { level: "kicker", text: slide.kicker },
+        { level: "heading", text: slide.heading },
+        ...slide.items.map((text) => ({ level: "body" as const, text, marker: true })),
+      ];
+    default: {
+      // ⚠️ هم خطای کامپایل‌تایم (`never`) اگر یک layout جدید بدون شاخه
+      //    اضافه شد، هم throw زمانِ اجرا — قاعده‌ی ۶ در CLAUDE.md.
+      const neverSlide: never = slide;
+      throw new Error(`چیدمانِ ناشناخته: ${JSON.stringify(neverSlide)}`);
+    }
+  }
+}
+
+/**
+ * متنِ خالصِ اسلاید — برای چک‌های برند و بازخورد، هر مصرف‌کننده‌ای که
+ * فقط «این اسلاید چه می‌گوید» را می‌خواهد، نه ساختارش.
+ *
+ * ⚠️ عمداً `imageSubject` را برنمی‌گرداند. آن فیلد توصیفِ صحنه‌ی تصویر
+ * است، نه محتوایی که منتشر می‌شود — اگر وارد شود، چک‌های برند روی متنی
+ * اجرا می‌شوند که هرگز روی خروجی دیده نمی‌شود.
+ */
+export function slideText(s: Slide): string {
+  switch (s.layout) {
+    case "standard":
+      return `${s.kicker} ${s.heading} ${s.text}`;
+    case "statement":
+      return `${s.kicker} ${s.heading}`;
+    case "list":
+      return `${s.kicker} ${s.heading} ${s.items.join(" ")}`;
+    default: {
+      const neverSlide: never = s;
+      throw new Error(`چیدمانِ ناشناخته: ${JSON.stringify(neverSlide)}`);
+    }
+  }
+}
+
 /**
  * لنگر عمودی بلوک محتوا.
  *
@@ -247,17 +360,39 @@ export function blockTopPx(align: BlockAlign, blockHeight: number): number {
 }
 
 /**
- * ارتفاع بلوک محتوا — کیکر، تیتر و متن با فاصله‌هایشان.
+ * فاصله‌ای که باید بعد از یک بلوک بیاید — چه در رندرکننده (اضافه به
+ * `top`ِ کنترا)، چه در پیش‌نمایش (`marginBottom` روی همان بلوک). تنها
+ * جایی که «کدام فاصله بعد از کدام بلوک» تصمیم گرفته می‌شود؛ رندرکننده
+ * و `CarouselPreview` هر دو فقط همین را صدا می‌زنند.
+ *
+ * - بعد از کیکر: همیشه `kickerToHeading`
+ * - بین دو بندِ متوالیِ چیدمانِ `list` (هر دو `body`): `listItem`
+ * - هر انتقالِ دیگر (تیتر/دیسپلی → اولین بند): `headingToBody`
+ * - بلوکِ آخر: صفر
+ */
+export function gapAfter(blocks: { level: BlockLevel }[], index: number): number {
+  const block = blocks[index];
+  const next = blocks[index + 1];
+  if (!next) return 0;
+  if (block.level === "kicker") return GAP.kickerToHeading;
+  if (block.level === "body" && next.level === "body") return GAP.listItem;
+  return GAP.headingToBody;
+}
+
+/** یک بلوک بعد از شکستِ خط — فقط تعداد خط لازم است، نه خودِ متن */
+export type MeasuredBlock = { level: BlockLevel; lineCount: number };
+
+/**
+ * ارتفاع بلوک محتوا از روی بلوک‌های اندازه‌گیری‌شده (بعد از شکستِ خط).
  *
  * اینجاست نه در رندرکننده، چون پیش‌نمایش هم به همان قاعده نیاز دارد
- * (هرچند با flex اعمالش می‌کند). یک تعریف، دو مصرف‌کننده.
+ * (هرچند بدونِ فراخوانیِ این تابع — با flex اعمالش می‌کند). یک تعریف،
+ * یک منبعِ حقیقتِ نسبت‌ها.
  */
-export function blockHeightPx(headingLines: number, bodyLines: number): number {
-  return (
-    lineHeightPx("kicker") +
-    GAP.kickerToHeading +
-    headingLines * lineHeightPx("heading") +
-    (bodyLines > 0 ? GAP.headingToBody + bodyLines * lineHeightPx("body") : 0)
+export function blockHeightPx(blocks: MeasuredBlock[]): number {
+  return blocks.reduce(
+    (sum, block, i) => sum + block.lineCount * lineHeightPx(block.level) + gapAfter(blocks, i),
+    0
   );
 }
 
@@ -274,6 +409,58 @@ export function blockHeightPx(headingLines: number, bodyLines: number): number {
  * importهای موجود نشکنند.
  */
 export const SLIDE_LIMITS = { kicker: 24, heading: 40, text: 140 } as const;
+
+/** نام‌های مجاز چیدمان — از خودِ `Slide` مشتق می‌شود، هرگز جدا تعریف نشود */
+export type LayoutName = Slide["layout"];
+
+/**
+ * جداکننده‌ی بندهای فهرست وقتی به `standard` تنزل می‌کنند (کاور/آخر).
+ *
+ * عمداً خنثای اسکریپت: بین دو رانِ فارسی جهتِ RTL می‌گیرد و بین دو رانِ
+ * لاتین جهتِ LTR — پس تنزل به یک تابعِ بدونِ شاخه‌ی زبانی نیاز دارد.
+ */
+export const LIST_JOINER = " · ";
+
+/** حداکثر تعداد بندهای چیدمانِ `list` */
+export const MAX_LIST_ITEMS = 3;
+
+/**
+ * سقف طول هر بندِ فهرست — از `SLIDE_LIMITS.text` مشتق شده، نه سلیقه.
+ *
+ * هدف: تنزلِ `list → standard` (در `agents/types.ts`) هرگز مجبور به
+ * بریدنِ محتوا نشود. بدترین حالت — `MAX_LIST_ITEMS` بندِ کاملاً پُر —
+ * باید در سقفِ متنِ `standard` جا شود:
+ *
+ *   MAX_LIST_ITEMS × item + (MAX_LIST_ITEMS − 1) × len(LIST_JOINER) ≤ SLIDE_LIMITS.text
+ *
+ * با اعدادِ امروز: ۳ × ۴۴ + ۲ × ۳ = ۱۳۸ ≤ ۱۴۰. اگر `SLIDE_LIMITS.text` یا
+ * `MAX_LIST_ITEMS` روزی عوض شد، این عدد خودش دوباره محاسبه می‌شود.
+ */
+export const LIST_ITEM_LIMIT = Math.floor(
+  (SLIDE_LIMITS.text - (MAX_LIST_ITEMS - 1) * LIST_JOINER.length) / MAX_LIST_ITEMS
+);
+
+/**
+ * سقف‌ها به‌تفکیکِ چیدمان — پرامپتِ کپی‌رایتر و چکِ قطعیِ طول از همین
+ * می‌خوانند، به‌جای عددهای پراکنده‌ی تکراری.
+ */
+export const LIMITS_BY_LAYOUT = {
+  standard: {
+    kicker: SLIDE_LIMITS.kicker,
+    heading: SLIDE_LIMITS.heading,
+    text: SLIDE_LIMITS.text,
+  },
+  statement: {
+    kicker: SLIDE_LIMITS.kicker,
+    heading: SLIDE_LIMITS.heading,
+  },
+  list: {
+    kicker: SLIDE_LIMITS.kicker,
+    heading: SLIDE_LIMITS.heading,
+    item: LIST_ITEM_LIMIT,
+    maxItems: MAX_LIST_ITEMS,
+  },
+} as const satisfies Record<LayoutName, Record<string, number>>;
 
 /* ── کمکی‌ها ─────────────────────────────────────────────── */
 

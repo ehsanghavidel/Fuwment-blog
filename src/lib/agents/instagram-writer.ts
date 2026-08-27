@@ -1,9 +1,10 @@
 import "server-only";
+import type { ZodType } from "zod";
 import { runAgentJSON } from "@/lib/ai";
 import { COMPANY_NAME, COMPANY_PROFILE, BRAND_VOICE } from "@/lib/company";
 import { lessonsBlockFor } from "./lessons";
 import {
-  SLIDE_LIMITS,
+  LIMITS_BY_LAYOUT,
   InstagramCarouselSchema,
   type InstagramCarousel,
   type SocialBrief,
@@ -174,12 +175,23 @@ ${BRAND_VOICE}
   · اسلاید **اول** = قلاب. تصویریِ همان ایده، نه کپیِ لفظ‌به‌لفظِ کپشن.
   · اسلایدهای **میانی** = هر کدام دقیقاً یک ایده.
   · اسلاید **آخر** = دعوت به اقدام. این نقش قطعی است؛ رندرکننده این اسلاید را با رنگ «اقدام» می‌کشد چه محتوایش دعوت باشد چه نباشد.
+- **هر اسلاید یک «layout» دارد** — سه گزینه، انتخابش با تو است، بسته به **شکلِ محتوای همان اسلاید**، نه بسته به جایگاهش در آرایه:
+  · standard — کیکر + تیتر + یکی دو جمله‌ی بدنه (فیلد text). پیش‌فرضِ منطقی؛ وقتی شک داری همین را انتخاب کن. کاروسلی که همه‌ی اسلایدهای میانی‌اش standard باشند کاملاً معتبر است — اگر محتوا واقعاً همین را می‌طلبد، به‌زور چیزی را statement یا list نکن.
+  · statement — کیکر + تیترِ بزرگ، **بدون فیلد text**. فقط وقتی یک جمله‌ی واحد و قاطع تمامِ حرفِ همان اسلاید را می‌زند و به توضیح، مدرک یا زمینه‌ی بیشتر نیاز ندارد. اگر ایده برای فهمیده‌شدن به یک جمله‌ی دوم نیاز دارد، standard درست‌تر است.
+  · list — کیکر + تیتر + ۲ تا ۳ بندِ کوتاه (فیلد items، آرایه‌ی رشته). فقط وقتی محتوا واقعاً **شمردنی** است: معیار، قدم، شرط، مدرک. یک ایده‌ی پیوسته را به‌زور به بند تبدیل نکن.
+  · list را روی اسلاید **اول** یا **آخر** انتخاب نکن — نقش‌شان (قلاب/دعوت) با فهرست نمی‌خواند و در عمل تبدیل به standard می‌شود.
+  · ⚠️ **هیچ جایگاهِ ثابتی برای statement یا list وجود ندارد.** اسلاید دوم بودن هیچ امتیازی برای statement نیست؛ هرجای کاروسل که قوی‌ترین ایده‌ی تک‌جمله‌ای واقعاً همان‌جا رخ بدهد، همان‌جا statement بگذار — سوم، پنجم، یا هیچ‌جا.
+  · ⚠️ **statement و list را برای تنوعِ ظاهری اضافه نکن.** صفر statement در یک کاروسل کاملاً طبیعی است، همین‌طور صفر list — تعدادشان را به‌زور به «دقیقاً یکی از هرکدام» نرسان. الگوی ثابتی مثل «standard → statement → … → list → standard» را در ذهن نساز و تکرار نکن؛ ترتیب لایاوت‌ها باید از ساختار روایی همین کاروسلِ مشخص بیرون بیاید، نه از یک قالبِ آماده.
 - **kicker باید نقشِ همان اسلاید را منعکس کند.** kicker یک برچسب است، نه شماره.
   · روی اسلاید آخر kicker باید دعوت را اعلام کند: «قدم بعدی»، «از اینجا شروع کنید»، «حالا چه؟».
   · ⚠️ روی اسلاید آخر **هرگز** برچسب دنباله‌ای نگذار — «قدم اول»، «قدم دوم»، «۱ از ۵». در یک اجرای واقعی اسلاید ۶ از ۶ کیکر «قدم اول» گرفت در حالی که با رنگ اقدام رندر شده بود؛ خواننده هم‌زمان «شروع» و «پایان» را می‌دید.
   · اگر برچسب دنباله‌ای به کار می‌بری، ترتیبش باید با ترتیب واقعی اسلایدها بخواند و روی اسلاید آخر تمام شده باشد.
-- heading هر اسلاید باید در اندازه‌ی بندانگشتی خوانا باشد: کوتاه، بدون جمله‌ی وابسته. text حداکثر دو جمله‌ی کوتاه.
-- **سقف‌های سخت هر اسلاید — این‌ها شمرده می‌شوند، حدس نیستند:** kicker حداکثر ${SLIDE_LIMITS.kicker} کاراکتر، heading حداکثر ${SLIDE_LIMITS.heading}، text حداکثر ${SLIDE_LIMITS.text}. رد شدن از این‌ها محتوا را برای بازنویسی برمی‌گرداند. **کوتاه بنویس، نه اینکه بلند بنویسی.** این متن‌ها روی تصویر می‌نشینند و جای اضافه‌ای وجود ندارد.
+- heading هر اسلاید باید در اندازه‌ی بندانگشتی خوانا باشد: کوتاه، بدون جمله‌ی وابسته. متنِ standard حداکثر دو جمله‌ی کوتاه؛ هر بندِ list یک عبارتِ کوتاه، نه جمله.
+- **سقف‌های سخت — این‌ها شمرده می‌شوند، حدس نیستند:**
+  · kicker حداکثر ${LIMITS_BY_LAYOUT.standard.kicker} کاراکتر و heading حداکثر ${LIMITS_BY_LAYOUT.standard.heading} کاراکتر — روی هر سه چیدمان.
+  · متنِ standard حداکثر ${LIMITS_BY_LAYOUT.standard.text} کاراکتر.
+  · بندهای list حداکثر ${LIMITS_BY_LAYOUT.list.maxItems} تا، هر بند حداکثر ${LIMITS_BY_LAYOUT.list.item} کاراکتر.
+  رد شدن از این‌ها محتوا را برای بازنویسی برمی‌گرداند. **کوتاه بنویس، نه اینکه بلند بنویسی.** این متن‌ها روی تصویر می‌نشینند و جای اضافه‌ای وجود ندارد.
 - **هیچ لینکی در کپشن نگذار.** اینستاگرام لینک کپشن را کلیک‌پذیر نمی‌کند؛ به‌جایش بنویس «لینک در بایو».
 - ۳ تا ۵ هشتگ، هرکدام با # و بدون فاصله، بدون تکرار. هشتگ اسپم ممنوع (#فالو، #لایک، #فالوبک).
 - ایموجی کم و کاربردی. لحن برند اجازه‌ی لحن تبلیغاتی داغ نمی‌دهد.
@@ -217,25 +229,45 @@ ${brief.keyPoints.map((p) => `- ${p}`).join("\n")}
 دعوت به اقدام: ${brief.cta}`;
 }
 
-const SHAPE_HINT = `{
+const SHAPE_HINT = `ساختارِ کلیِ خروجی — «slides» آرایه‌ای از ۵ تا ۸ اسلاید است، هر عنصرش شکلِ یکی از سه layout پایین را می‌گیرد:
+{
   "title": "عنوان داخلی برای فهرست استودیو",
   "caption": "کپشن — ۱۲۵ کاراکتر اولش قلاب است",
   "slides": [
-    { "kicker": "قلاب", "heading": "تیتر کوتاه اسلاید", "text": "یکی دو جمله", "imageSubject": "صحنه‌ی فیزیکی — فقط اسلاید اول" }
+    { "layout": "standard", "kicker": "قلاب", "heading": "تیتر کوتاه اسلاید", "text": "یکی دو جمله", "imageSubject": "صحنه‌ی فیزیکی — فقط اسلاید اول" }
   ],
   "hashtags": ["#گلوبال_تلنت", "#GlobalTalent", "#مهاجرت_حرفه‌ای"],
   "cta": "دعوت به اقدام اسلاید آخر"
-}`;
+}
+⚠️ «slides» بالا فقط یک عنصر دارد تا ساختارِ کلی خوانا بماند — در خروجیِ واقعی ۵ تا ۸ عنصر دارد.
 
-const SHAPE_HINT_EN = `{
+دو شکلِ دیگرِ اسلاید، **مستقل از هم و مستقل از نمونه‌ی بالا** — نه بخشی از یک کاروسلِ نمونه، نه توالیِ پیشنهادی:
+
+statement: { "layout": "statement", "kicker": "برچسبِ اسلاید", "heading": "یک جمله‌ی واحد و قاطع" }
+
+list: { "layout": "list", "kicker": "برچسبِ اسلاید", "heading": "تیترِ فهرست", "items": ["بندِ اول", "بندِ دوم", "بندِ سوم"] }
+
+⚠️ این سه شکل فقط فیلدهای هر layout را نشان می‌دهند — نه ترتیب، نه تعداد. هیچ‌کدام فراوانیِ ثابتی ندارد: یک کاروسلِ واقعی می‌تواند صفر statement داشته باشد، صفر list داشته باشد، چند standard پشتِ‌سرهم داشته باشد، یا — اگر محتوا واقعاً ایجاب کند — بیش از یک statement یا بیش از یک list. هیچ layout فقط برای اینکه «هرسه نوع دیده شود» لازم نیست.`;
+
+const SHAPE_HINT_EN = `Overall output shape — "slides" is an array of 5 to 8 slides, each element taking the shape of one of the three layouts below:
+{
   "title": "short internal title",
   "caption": "first sentence is the hook, under 125 characters",
   "slides": [
-    { "kicker": "hook", "heading": "short slide heading", "text": "one or two short sentences", "imageSubject": "a physical, photographable scene — first slide only" }
+    { "layout": "standard", "kicker": "hook", "heading": "short slide heading", "text": "one or two short sentences", "imageSubject": "a physical, photographable scene — first slide only" }
   ],
   "hashtags": ["#GlobalTalent", "#UKVisa", "#TechTalent"],
   "cta": "call to action on the last slide"
-}`;
+}
+⚠️ "slides" above has one element only to keep the overall shape readable — the real output has 5 to 8.
+
+Two other slide shapes, **independent of each other and of the example above** — not part of one sample carousel, not a suggested sequence:
+
+statement: { "layout": "statement", "kicker": "slide label", "heading": "one single decisive sentence" }
+
+list: { "layout": "list", "kicker": "slide label", "heading": "list heading", "items": ["first point", "second point", "third point"] }
+
+⚠️ These three shapes only show each layout's fields — not order, not frequency. None of them has a fixed frequency: a real carousel may have zero statement slides, zero list slides, several standard slides in a row, or — when content genuinely calls for it — more than one statement or more than one list. No layout is required just so all three "get used."`;
 
 export async function runInstagramWriter(input: {
   brief: SocialBrief;
@@ -244,14 +276,20 @@ export async function runInstagramWriter(input: {
 }): Promise<InstagramCarousel> {
   const lessons = await lessonsBlockFor("instagram-writer");
 
-  return runAgentJSON({
+  // ⚠️ ژنریکِ صریح + cast لازم است: از وقتی SlideSchema یک preprocess
+  // جلوی discriminatedUnion گرفت، نوعِ ورودیِ داخلیِ Zod (`_input`، نه
+  // خروجی) برای slides عمداً `unknown[]` است — همان چیزی که preprocess
+  // برایش طراحی شده. AgentJSONOptions<T>.schema فقط خروجی را پارامتری
+  // می‌کند و Input را برابرِ Output فرض می‌گیرد، پس واگراییِ نوعِ درونی
+  // را رد می‌کند — رفتارِ runtime دست‌نخورده می‌ماند، فقط cast لازم است.
+  return runAgentJSON<InstagramCarousel>({
     agent: "instagram-writer",
     system: systemPrompt(lessons, input.brief.language, input.sceneFamily),
     prompt: `${briefBlock(input.brief)}
 
 ${input.brief.language === "en" ? "Write a complete Instagram carousel in English." : "یک کاروسل اینستاگرام کامل بنویس."}`,
     temperature: 0.8,
-    schema: InstagramCarouselSchema,
+    schema: InstagramCarouselSchema as ZodType<InstagramCarousel>,
     shapeHint: input.brief.language === "en" ? SHAPE_HINT_EN : SHAPE_HINT,
   });
 }
@@ -288,12 +326,12 @@ ${input.failedChecks.map((c) => `- ${c.name}: ${c.note}`).join("\n") || "- (هم
 
 کاروسل را اصلاح کن. فقط چیزهایی را عوض کن که ایراد دارند؛ بقیه را دست نزن.`;
 
-  return runAgentJSON({
+  return runAgentJSON<InstagramCarousel>({
     agent: "instagram-writer",
     system: systemPrompt(lessons, input.brief.language, input.sceneFamily),
     prompt,
     temperature: 0.6,
-    schema: InstagramCarouselSchema,
+    schema: InstagramCarouselSchema as ZodType<InstagramCarousel>,
     shapeHint: input.brief.language === "en" ? SHAPE_HINT_EN : SHAPE_HINT,
   });
 }

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { BrandRoute } from "@/lib/company";
-import { SLIDE_LIMITS as LIMITS } from "@/lib/slide-spec";
+import { LIMITS_BY_LAYOUT, LIST_JOINER, MAX_LIST_ITEMS } from "@/lib/slide-spec";
+import type { ListSlide, Slide, StandardSlide } from "@/lib/store/types";
 
 /**
  * قرارداد خروجی هر ایجنت — با Zod تعریف می‌شود.
@@ -315,16 +316,63 @@ export const SocialBriefSchema = z.object({
 export type SocialBrief = z.infer<typeof SocialBriefSchema>;
 
 /**
- * سقف طول هر بخش اسلاید.
+ * سقف طول هر بخش اسلاید، به‌تفکیکِ چیدمان.
  *
  * ⚠️ تعریفش به `@/lib/slide-spec` منتقل شد، چون رندرکننده هم لازمش
  * دارد و آن فایل سمت ایجنت‌ها نیست. اینجا فقط re-export می‌شود تا
  * importهای موجود (پرامپت کپی‌رایتر، چک قطعی، ناشر) نشکنند.
  */
-export { SLIDE_LIMITS } from "@/lib/slide-spec";
+export { SLIDE_LIMITS, LIMITS_BY_LAYOUT, LIST_JOINER, MAX_LIST_ITEMS } from "@/lib/slide-spec";
 
 /**
- * یک اسلاید کاروسل.
+ * فیلدهای مشترکِ هر سه چیدمان — با `SlideCommon` در `store/types.ts`
+ * هم‌شکل. با **spread** پخش می‌شود، نه `.extend()`، چون
+ * `z.discriminatedUnion` عضوهایش را باید `ZodObject` ببیند.
+ */
+const SLIDE_COMMON = {
+  kicker: z.string(),
+  heading: z.string().min(3),
+  /**
+   * صحنه‌ی فیزیکیِ پس‌زمینه — فقط برای اسلاید کاور استفاده می‌شود.
+   *
+   * ⚠️ روی **هر سه چیدمان** موجود است، نه فقط `standard`. کاور می‌تواند
+   * `standard` یا `statement` باشد و `storage.ts` (`post.slides[0]?.imageSubject`)
+   * از هر چیدمانی همین فیلد را می‌خواند — محدودکردنش به یک شاخه یعنی
+   * تولیدِ تصویرِ AI برای نیمی از کاورها بی‌صدا خاموش می‌شود.
+   *
+   * ⚠️ `.optional()` عمدی است. اگر مدل ندهد یا چیز بی‌ربطی بدهد،
+   * تصویری ساخته نمی‌شود و کاور همان پس‌زمینه‌ی سرمه‌ای را می‌گیرد.
+   * کاور بدون تصویر از کاور با تصویرِ بی‌ربط بهتر است.
+   *
+   * روی بوم نوشته نمی‌شود، پس در `SLIDE_LIMITS` نیست.
+   */
+  imageSubject: z.string().optional(),
+} as const;
+
+/**
+ * جاافتادنِ `layout` در خروجیِ مدل را می‌بخشد — فقط جاافتادن، نه مقدارِ
+ * نامعتبر.
+ *
+ * ⚠️ `z.discriminatedUnion` دیسکریمیناتورِ اختیاری نمی‌پذیرد؛ نبودِ
+ * `layout` یعنی ردِ کلِ اسکیما. `runAgentJSON` دو تلاش با بازخوردِ خطا
+ * دارد، ولی اگر بازهم نداد، کلِ اجرا `throw` می‌خورد — در مسیرِ هفتگی
+ * یعنی یکی از هفت اجرا می‌میرد برای یک فیلدِ ساختاری که مدل هنوز کامل
+ * یاد نگرفته. قاعده‌ی ۲ در CLAUDE.md: چکِ قطعیِ غلط بدتر از نبودِ چک.
+ *
+ * اگر `layout` هست ولی نامعتبر است (مثلاً `"quote"`)، اینجا دست نمی‌زند
+ * — به schema سپرده می‌شود تا رد شود. تبدیلِ خاموشِ مقدارِ نامعتبر یعنی
+ * گم‌شدنِ یک باگِ واقعیِ پرامپت پشتِ یک fallback.
+ */
+function withDefaultLayout(raw: unknown): unknown {
+  if (raw && typeof raw === "object" && !("layout" in raw)) {
+    console.log("[slide-layout] مدل فیلد layout را برنگرداند — پیش‌فرض: standard");
+    return { ...raw, layout: "standard" };
+  }
+  return raw;
+}
+
+/**
+ * یک اسلاید کاروسل — `discriminatedUnion` روی `layout`.
  *
  * ⚠️ اینجا عمداً `clampText` نیست — و این از یک باگ واقعی درآمد.
  *
@@ -343,44 +391,89 @@ export { SLIDE_LIMITS } from "@/lib/slide-spec";
  * می‌سازد، و `clampSlides` در ناشر فقط تور نجات است برای وقتی که مدل
  * بعد از بازنویسی هم کوتاه ننوشته.
  */
-export const SlideSchema = z.object({
-  kicker: z.string(),
-  heading: z.string().min(3),
-  text: z.string(),
-  /**
-   * صحنه‌ی فیزیکیِ پس‌زمینه — فقط برای اسلاید کاور استفاده می‌شود.
-   *
-   * ⚠️ `.optional()` عمدی است. اگر مدل ندهد یا چیز بی‌ربطی بدهد،
-   * تصویری ساخته نمی‌شود و کاور همان پس‌زمینه‌ی سرمه‌ای را می‌گیرد.
-   * کاور بدون تصویر از کاور با تصویرِ بی‌ربط بهتر است.
-   *
-   * برخلاف `journeyStage` که انتخاب بدش پنهان می‌ماند، انتخاب بد
-   * اینجا **بلافاصله در تصویر دیده می‌شود** — به همین دلیل سپردنش به
-   * مدل قابل قبول است.
-   *
-   * روی بوم نوشته نمی‌شود، پس در `SLIDE_LIMITS` نیست.
-   */
-  imageSubject: z.string().optional(),
-});
+export const SlideSchema = z.preprocess(
+  withDefaultLayout,
+  z.discriminatedUnion("layout", [
+    z.object({ ...SLIDE_COMMON, layout: z.literal("standard"), text: z.string() }),
+    z.object({ ...SLIDE_COMMON, layout: z.literal("statement") }),
+    z.object({
+      ...SLIDE_COMMON,
+      layout: z.literal("list"),
+      items: z.array(z.string()).min(2).max(MAX_LIST_ITEMS),
+    }),
+  ])
+);
 
 /**
- * تور نجاتِ ناشر — آخرین خط دفاع، نه مسیر عادی.
+ * تور نجاتِ ناشر — آخرین خط دفاع، نه مسیر عادی. چیدمان‌آگاه: هر واریانت
+ * فقط فیلدهای خودش را می‌بُرد.
  *
  * ⚠️ عمداً بعد از حلقه‌ی بازنویسی اجرا می‌شود، نه پیش از چک‌ها. اگر
  * جای چک بنشیند، دوباره همان چکِ مرده را می‌سازد.
  *
  * `kicker` چک قطعی ندارد (سنجشش خطای کاذب می‌داد و به پرامپت سپرده
  * شده)، پس تنها مهارش همین‌جاست.
+ *
+ * ⚠️ در ناشر باید **قبل از** `guardPositionLayout` اجرا شود؛ ترتیبِ
+ * برعکس یعنی بندهای هنوز نبریده به هم می‌چسبند و بعد از پیوستن بریده
+ * می‌شوند — دقیقاً همان ازدست‌رفتنِ محتوایی که `guardPositionLayout`
+ * برای جلوگیری از آن نوشته شده.
  */
-export function clampSlides<T extends { kicker: string; heading: string; text: string }>(
-  slides: T[]
-): T[] {
-  return slides.map((s) => ({
-    ...s,
-    kicker: clampText(s.kicker, LIMITS.kicker),
-    heading: clampText(s.heading, LIMITS.heading),
-    text: clampText(s.text, LIMITS.text),
-  }));
+export function clampSlides(slides: Slide[]): Slide[] {
+  return slides.map((s) => {
+    const kicker = clampText(s.kicker, LIMITS_BY_LAYOUT[s.layout].kicker);
+    const heading = clampText(s.heading, LIMITS_BY_LAYOUT[s.layout].heading);
+    switch (s.layout) {
+      case "standard":
+        return { ...s, kicker, heading, text: clampText(s.text, LIMITS_BY_LAYOUT.standard.text) };
+      case "statement":
+        return { ...s, kicker, heading };
+      case "list":
+        return {
+          ...s,
+          kicker,
+          heading,
+          items: s.items
+            .slice(0, LIMITS_BY_LAYOUT.list.maxItems)
+            .map((item) => clampText(item, LIMITS_BY_LAYOUT.list.item)),
+        };
+      default: {
+        const neverSlide: never = s;
+        throw new Error(`چیدمانِ ناشناخته: ${JSON.stringify(neverSlide)}`);
+      }
+    }
+  });
+}
+
+/**
+ * تبدیلِ فهرست به استاندارد — بدون فراخوانیِ مدل، بدون ازدست‌رفتنِ محتوا.
+ *
+ * جداکننده‌ی `LIST_JOINER` عمداً خنثای اسکریپت است: بین دو رانِ فارسی
+ * جهتِ RTL می‌گیرد و بین دو رانِ لاتین جهتِ LTR — پس یک تابع برای هر دو
+ * زبان کافی است و هیچ شاخه‌ی زبانی لازم نمی‌شود.
+ *
+ * بریدن لازم نیست: `LIST_ITEM_LIMIT` (در `slide-spec.ts`) طوری از
+ * `SLIDE_LIMITS.text` مشتق شده که بدترین حالت (۳ بندِ پُر) ۱۳۸ کاراکتر
+ * شود — زیرِ سقفِ ۱۴۰.
+ */
+function listToStandard(s: ListSlide): StandardSlide {
+  const { items, ...common } = s; // `common` هنوز layout:"list" دارد؛ زیر بازنویسی می‌شود
+  return { ...common, layout: "standard", text: items.join(LIST_JOINER) };
+}
+
+/**
+ * کاور و اسلاید آخر هرگز چیدمانِ `list` نمی‌مانند.
+ *
+ * کاور باید در گریدِ بندانگشتی خوانده شود و اسلاید آخر یک دعوت است، نه
+ * یک سیاهه — پس تنزل می‌گیرند، نه چکِ مسدودکننده (هیچ دورِ بازنویسی
+ * هزینه نمی‌کند). `statement` هیچ‌جا تنزل نمی‌گیرد؛ روی کاور و اسلاید
+ * آخر کاملاً معتبر است.
+ */
+export function guardPositionLayout(slides: Slide[]): Slide[] {
+  const last = slides.length - 1;
+  return slides.map((s, i) =>
+    s.layout === "list" && (i === 0 || i === last) ? listToStandard(s) : s
+  );
 }
 
 export const InstagramCarouselSchema = z.object({

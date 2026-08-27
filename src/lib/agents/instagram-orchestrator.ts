@@ -10,7 +10,8 @@ import { runInstagramChecks } from "./social-checks";
 import { writeAndReview } from "./social-loop";
 import { runSocialCritic, type SocialCriticPart } from "./critic";
 import { renderSlidesForPost } from "@/lib/storage";
-import { clampSlides } from "./types";
+import { clampSlides, guardPositionLayout } from "./types";
+import { slideText } from "@/lib/slide-spec";
 import type { InstagramCarousel, SocialIdea } from "./types";
 import type { BrandRoute } from "./brand-cta";
 
@@ -187,8 +188,7 @@ export async function runInstagramPipeline(opts: {
       check: (d) =>
         runInstagramChecks({ caption: d.caption, slides: d.slides, hashtags: d.hashtags }),
       // کپشن + متن همه‌ی اسلایدها + دعوت به اقدام
-      brandText: (d) =>
-        [d.caption, ...d.slides.map((s) => `${s.kicker} ${s.heading} ${s.text}`), d.cta].join("\n"),
+      brandText: (d) => [d.caption, ...d.slides.map(slideText), d.cta].join("\n"),
       describe: (d) => `${d.slides.length} اسلاید، ${d.hashtags.length} هشتگ`,
     });
 
@@ -206,7 +206,12 @@ export async function runInstagramPipeline(opts: {
         // تور نجات: اگر مدل بعد از بازنویسی هم بلند نوشته، اینجا مهار
         // می‌شود. مسیر عادی نیست — چکِ «طول متن اسلایدها» باید قبلش
         // گرفته باشدش.
-        slides: clampSlides(ig.draft.slides),
+        //
+        // ⚠️ ترتیب مهم است: guardPositionLayout باید بعد از clampSlides
+        // بیاید، وگرنه بندهای هنوز نبریده‌ی list به هم می‌چسبند و بعد از
+        // پیوستن بریده می‌شوند — دقیقاً همان ازدست‌رفتنِ محتوایی که
+        // guardPositionLayout برای جلوگیری از آن نوشته شده.
+        slides: guardPositionLayout(clampSlides(ig.draft.slides)),
         hashtags: ig.draft.hashtags,
         cta: ig.draft.cta,
         checks: ig.checks,

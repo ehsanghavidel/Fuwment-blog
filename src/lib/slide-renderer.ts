@@ -1,12 +1,14 @@
 import { createCanvas, loadImage, GlobalFonts, type SKRSContext2D } from "@napi-rs/canvas";
 import path from "path";
+import type { Slide } from "./store/types";
 import {
   CANVAS,
   COLOR,
   CONTENT_WIDTH,
   COUNTER_BASELINE_FROM_BOTTOM,
-  GAP,
   IMAGE_SCRIM,
+  LIST_MARKER,
+  LIST_MARKER_INDENT,
   OPACITY,
   PAD,
   SAFE_INSET,
@@ -15,9 +17,14 @@ import {
   blockAlignFor,
   blockHeightPx,
   blockTopPx,
+  blocksFor,
+  gapAfter,
   isInsideSafeArea,
   lineHeightPx,
   roleFor,
+  type Block,
+  type BlockLevel,
+  type MeasuredBlock,
   type SlideRole,
 } from "./slide-spec";
 
@@ -43,8 +50,6 @@ import {
  * جا نمی‌شود. `@napi-rs/canvas` (~۲۶MB) هم Bidi درست دارد، هم
  * `measureText` برای شکست خط، و هم `woff2` را مستقیم می‌خواند.
  */
-
-export type SlideInput = { kicker: string; heading: string; text: string };
 
 export type RenderOptions = {
   /** جهت و تراز از زبان می‌آید، نه از محتوا */
@@ -96,6 +101,13 @@ function font(level: keyof typeof TYPE): string {
   return `${TYPE[level].weight} ${TYPE[level].size}px ${FAMILY}`;
 }
 
+/** رنگِ متنِ هر بلوک — کیکر رنگِ نقش می‌گیرد، بدنه شفافیتِ روی‌تصویر، بقیه توپر */
+function colorFor(level: BlockLevel, role: SlideRole, bodyOpacity: number): string {
+  if (level === "kicker") return accentFor(role);
+  if (level === "body") return withAlpha(COLOR.fg, bodyOpacity);
+  return COLOR.fg; // heading, display
+}
+
 /* ── شکست خط ─────────────────────────────────────────────── */
 
 /**
@@ -129,7 +141,7 @@ export function wrapText(ctx: SKRSContext2D, text: string, maxWidth: number): st
 /* ── رندر یک اسلاید ──────────────────────────────────────── */
 
 export async function renderSlide(
-  slide: SlideInput,
+  slide: Slide,
   ctx0: { index: number; total: number } & RenderOptions
 ): Promise<Buffer> {
   registerFonts();
@@ -181,18 +193,39 @@ export async function renderSlide(
   ctx.direction = rtl ? "rtl" : "ltr";
   ctx.textAlign = rtl ? "right" : "left";
   const startX = rtl ? CANVAS.width - PAD.x : PAD.x;
+  // بندهای فهرست از نشانگر عقب‌تر می‌نشینند — همان اندازه در هر دو جهت
+  const listStartX = rtl ? startX - LIST_MARKER_INDENT : startX + LIST_MARKER_INDENT;
+  const listWidth = CONTENT_WIDTH - LIST_MARKER_INDENT;
 
-  // ── شکست خط، پیش از چیدمان ──
-  // ارتفاع بلوک به تعداد خط وابسته است، پس اول اندازه می‌گیریم.
-  ctx.font = font("heading");
-  const headingLines = wrapText(ctx, slide.heading, CONTENT_WIDTH);
-  ctx.font = font("body");
-  const bodyLines = wrapText(ctx, slide.text, CONTENT_WIDTH);
+  /**
+   * `top` بالای جعبه‌ی خط است، نه خط پایه. تبدیلش با `baseline()`
+   * انجام می‌شود تا همه‌ی سطح‌ها یک قاعده داشته باشند.
+   */
+  const baseline = (top: number, level: BlockLevel) =>
+    top + lineHeightPx(level) - TYPE[level].size * 0.25;
 
-  const kLH = lineHeightPx("kicker");
-  const hLH = lineHeightPx("heading");
-  const bLH = lineHeightPx("body");
-  const blockHeight = blockHeightPx(headingLines.length, bodyLines.length);
+  /**
+   * شکستِ خط، پیش از چیدمان — ارتفاعِ بلوک به تعدادِ خط وابسته است.
+   *
+   * ⚠️ بلوکِ بدونِ خط (متنِ خالی) کاملاً کنار گذاشته می‌شود — نه فقط از
+   * ارتفاع، بلکه از محاسبه‌ی «فاصله‌ی قبل از بلوکِ بعدی» هم. این همان
+   * رفتارِ رندرکننده‌ی قبلی برای `text` خالی بود (نه فاصله، نه ارتفاع)؛
+   * اینجا کلی‌اش کردیم تا برای هر چیدمانی درست بماند.
+   */
+  const blocks: Block[] = blocksFor(slide);
+  const wrapped = blocks
+    .map((block) => {
+      ctx.font = font(block.level);
+      const lines = wrapText(ctx, block.text, block.marker ? listWidth : CONTENT_WIDTH);
+      return { block, lines };
+    })
+    .filter(({ lines }) => lines.length > 0);
+
+  const measured: MeasuredBlock[] = wrapped.map(({ block, lines }) => ({
+    level: block.level,
+    lineCount: lines.length,
+  }));
+  const blockHeight = blockHeightPx(measured);
 
   /**
    * لنگر عمودی — محاسبه‌اش در `slide-spec` است، نه اینجا.
@@ -200,39 +233,25 @@ export async function renderSlide(
    * ⚠️ کیکر **داخل** بلوک است، نه لنگرشده به بالای قاب. و «وسط» یعنی
    * مرکز نوری (۴۵/۵۵)، نه مرکز هندسی — دلیل هر دو در `slide-spec`.
    */
-  const blockTop = blockTopPx(blockAlignFor(role), blockHeight);
+  let top = blockTopPx(blockAlignFor(role), blockHeight);
+  const blockLevels = wrapped.map(({ block }) => block);
 
-  /**
-   * `top` بالای جعبه‌ی خط است، نه خط پایه. تبدیلش با `baseline()`
-   * انجام می‌شود تا هر سه سطح یک قاعده داشته باشند — نسخه‌ی قبلی این
-   * تقریب را فقط برای تیتر می‌نوشت.
-   */
-  const baseline = (top: number, level: "kicker" | "heading" | "body") =>
-    top + lineHeightPx(level) - TYPE[level].size * 0.25;
+  for (let i = 0; i < wrapped.length; i++) {
+    const { block, lines } = wrapped[i];
+    const x = block.marker ? listStartX : startX;
 
-  let top = blockTop;
+    ctx.font = font(block.level);
+    ctx.fillStyle = colorFor(block.level, role, bodyOpacity);
 
-  // کیکر — عضو بلوک، با رنگ نقش
-  ctx.font = font("kicker");
-  ctx.fillStyle = accentFor(role);
-  ctx.fillText(slide.kicker, startX, baseline(top, "kicker"));
-  top += kLH + GAP.kickerToHeading;
-
-  ctx.font = font("heading");
-  ctx.fillStyle = COLOR.fg;
-  for (const line of headingLines) {
-    ctx.fillText(line, startX, baseline(top, "heading"));
-    top += hLH;
-  }
-
-  if (bodyLines.length) {
-    top += GAP.headingToBody;
-    ctx.font = font("body");
-    ctx.fillStyle = withAlpha(COLOR.fg, bodyOpacity);
-    for (const line of bodyLines) {
-      ctx.fillText(line, startX, baseline(top, "body"));
-      top += bLH;
+    for (const [lineIndex, line] of lines.entries()) {
+      if (block.marker && lineIndex === 0) {
+        drawListMarker(ctx, { rtl, top, level: block.level, role });
+      }
+      ctx.fillText(line, x, baseline(top, block.level));
+      top += lineHeightPx(block.level);
     }
+
+    top += gapAfter(blockLevels, i);
   }
 
   // ── شماره‌ی اسلاید، گوشه‌ی مقابلِ شروع متن ──
@@ -277,7 +296,7 @@ export async function renderSlide(
  * اکثر بیننده‌ها هرگز نمی‌بینند.
  */
 export async function renderCarousel(
-  slides: SlideInput[],
+  slides: Slide[],
   opts: RenderOptions
 ): Promise<Buffer[]> {
   const out: Buffer[] = [];
@@ -299,6 +318,32 @@ export async function renderCarousel(
 function withAlpha(hex: string, alpha: number): string {
   const n = parseInt(hex.slice(1), 16);
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
+/**
+ * نشانگرِ هندسیِ یک بندِ فهرست — یک دایره‌ی توپر، نه کاراکترِ یونیکد.
+ *
+ * ⚠️ سمتِ نشانگر «سمتِ شروع» است، نه همیشه یک طرفِ ثابت: در RTL کنارِ
+ * لبه‌ی راست (کنارِ `startX`، جایی که متن هم از همان‌جا شروع می‌شد)،
+ * در LTR کنارِ لبه‌ی چپ. `x` قبلاً با همین قاعده در تماس‌گیرنده محاسبه
+ * شده؛ اینجا فقط رسم می‌کند.
+ */
+function drawListMarker(
+  ctx: SKRSContext2D,
+  opts: { rtl: boolean; top: number; level: BlockLevel; role: SlideRole }
+): void {
+  const { rtl, top, level, role } = opts;
+  const x = rtl
+    ? CANVAS.width - PAD.x - LIST_MARKER.size / 2
+    : PAD.x + LIST_MARKER.size / 2;
+  const y = top + lineHeightPx(level) / 2;
+
+  ctx.save();
+  ctx.fillStyle = accentFor(role);
+  ctx.beginPath();
+  ctx.arc(x, y, LIST_MARKER.size / 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 }
 
 /** راهنمای ناحیه‌ی امن — فقط برای بازبینی چشمی، هرگز در خروجی نهایی */

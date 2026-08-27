@@ -10,7 +10,8 @@ import { runInstagramChecks, runLinkedinChecks } from "./social-checks";
 import { writeAndReview } from "./social-loop";
 import { runSocialCritic } from "./critic";
 import { renderSlidesForPost } from "@/lib/storage";
-import { clampSlides } from "./types";
+import { clampSlides, guardPositionLayout } from "./types";
+import { slideText } from "@/lib/slide-spec";
 import type { InstagramCarousel, LinkedInPost } from "./types";
 
 /**
@@ -90,8 +91,7 @@ export async function runRepurpose(opts: {
       check: (d) =>
         runInstagramChecks({ caption: d.caption, slides: d.slides, hashtags: d.hashtags }),
       // کپشن + متن همه‌ی اسلایدها + دعوت به اقدام
-      brandText: (d) =>
-        [d.caption, ...d.slides.map((s) => `${s.kicker} ${s.heading} ${s.text}`), d.cta].join("\n"),
+      brandText: (d) => [d.caption, ...d.slides.map(slideText), d.cta].join("\n"),
       describe: (d) => `${d.slides.length} اسلاید، ${d.hashtags.length} هشتگ`,
     });
 
@@ -122,8 +122,9 @@ export async function runRepurpose(opts: {
         format: "carousel",
         title: ig.draft.title,
         body: ig.draft.caption,
-        // همان تور نجات ناشر اینستاگرام — این مسیر هم کاروسل می‌سازد
-        slides: clampSlides(ig.draft.slides),
+        // همان تور نجات ناشر اینستاگرام — این مسیر هم کاروسل می‌سازد.
+        // ترتیب مهم است: guardPositionLayout بعد از clampSlides.
+        slides: guardPositionLayout(clampSlides(ig.draft.slides)),
         hashtags: ig.draft.hashtags,
         cta: ig.draft.cta,
         checks: ig.checks,

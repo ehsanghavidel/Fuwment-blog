@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getStore } from "@/lib/store";
 import { distillFeedback } from "@/lib/agents/critic";
 import { isStudioAuthorized, unauthorized } from "@/lib/auth";
+import { slideText } from "@/lib/slide-spec";
 
 /**
  * POST /api/feedback — ثبت بازخورد انسانی روی یک پست بلاگ یا محتوای اجتماعی.
@@ -62,7 +63,7 @@ export async function POST(req: NextRequest) {
     // اسلایدها هم بخشی از محتوا هستند و باید در قضاوت دیده شوند
     content =
       sp.slides.length > 0
-        ? `${sp.body}\n\nاسلایدها:\n${sp.slides.map((s, i) => `${i + 1}. ${s.heading} — ${s.text}`).join("\n")}`
+        ? `${sp.body}\n\nاسلایدها:\n${sp.slides.map((s, i) => `${i + 1}. ${slideText(s)}`).join("\n")}`
         : sp.body;
   }
 

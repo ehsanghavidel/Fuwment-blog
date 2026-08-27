@@ -167,7 +167,7 @@ export function SocialPostCard({
         (post.imagePaths.length > 0 ? (
           <SlideImages post={post} />
         ) : (
-          <CarouselPreview slides={post.slides} />
+          <CarouselPreview slides={post.slides} language={post.language} />
         ))}
 
       {isCarousel && (

@@ -11,6 +11,7 @@ import type {
   SocialPlatform,
   SocialPost,
   ContentWeek,
+  Slide,
 } from "./types";
 
 /**
@@ -145,6 +146,18 @@ function socialPostToRow(p: SocialPost) {
   };
 }
 
+/**
+ * ردیف‌های پیش از فازِ تنوعِ چیدمان — همه‌ی اسلایدهای موجود بدونِ `layout`اند
+ * (اندازه‌گیریِ مستقیم روی دیتابیس: ۲۷۳ اسلاید، صفرشان `layout` دارد).
+ *
+ * ⚠️ سازگاریِ داده‌ی قدیمی **فقط اینجاست**، نه در zod — طبقِ تصمیمِ قفل‌شده‌ی
+ * پروژه (بند ۸ در `MASTER_PLAN.md`). `preprocess` در `SlideSchema` فقط
+ * خروجیِ **مدل** را می‌بخشد و کاملاً جداست از این مسیر.
+ */
+function normalizeSlide(s: any): Slide {
+  return s?.layout ? s : { ...s, layout: "standard" };
+}
+
 function socialPostFromRow(r: any): SocialPost {
   return {
     id: r.id,
@@ -154,7 +167,7 @@ function socialPostFromRow(r: any): SocialPost {
     format: r.format,
     title: r.title,
     body: r.body,
-    slides: r.slides ?? [],
+    slides: (r.slides ?? []).map(normalizeSlide),
     hashtags: r.hashtags ?? [],
     cta: r.cta ?? "",
     checks: r.checks ?? [],

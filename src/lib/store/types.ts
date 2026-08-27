@@ -103,17 +103,34 @@ export type SocialExtras = {
   ctaReason?: string;
 };
 
-/** یک اسلاید کاروسل — فقط برای اینستاگرام */
-export type Slide = {
+/**
+ * فیلدهای مشترکِ هر سه چیدمانِ اسلاید.
+ *
+ * ⚠️ `imageSubject` عمداً اینجاست، نه در `StandardSlide`. کاور می‌تواند
+ * هر چیدمانی باشد (`standard` یا `statement`) و تولید تصویر AI
+ * (`storage.ts` → `post.slides[0]?.imageSubject`) نباید به یک شاخه‌ی
+ * خاص از union وابسته شود — وگرنه نیمی از کاورها بی‌صدا بی‌تصویر می‌مانند.
+ */
+type SlideCommon = {
   /** خط کوچک بالای اسلاید، مثل «قدم دوم» */
   kicker: string;
   /** تیتر درشت — کوتاه، چون باید در اندازه‌ی بندانگشتی خوانده شود */
   heading: string;
-  /** یکی دو جمله توضیح */
-  text: string;
   /** صحنه‌ی فیزیکی پس‌زمینه — فقط کاور؛ نبودش یعنی بدون تصویر */
   imageSubject?: string;
 };
+
+/** چیدمانِ پیش‌فرض — کیکر، تیتر، یک تا دو جمله بدنه */
+export type StandardSlide = SlideCommon & { layout: "standard"; text: string };
+
+/** یک جمله‌ی بزرگ با تایپوگرافیِ display — بدون بدنه */
+export type StatementSlide = SlideCommon & { layout: "statement" };
+
+/** ۲ تا ۳ بند کوتاه، برای محتوای شمارشی */
+export type ListSlide = SlideCommon & { layout: "list"; items: string[] };
+
+/** یک اسلاید کاروسل — فقط برای اینستاگرام */
+export type Slide = StandardSlide | StatementSlide | ListSlide;
 
 export type SocialCheckRecord = { name: string; pass: boolean; note: string };
 

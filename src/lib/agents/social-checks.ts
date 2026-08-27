@@ -1,5 +1,5 @@
 import type { Slide } from "@/lib/store";
-import { SLIDE_LIMITS } from "./types";
+import { LIMITS_BY_LAYOUT } from "./types";
 
 /**
  * چک‌های قطعی محتوای اجتماعی — بدون LLM.
@@ -149,6 +149,45 @@ function firstSentence(s: string): string {
   return (m ? m[0] : firstLine).trim();
 }
 
+/**
+ * آیا اسلاید از سقفِ چیدمانِ خودش رد شده؟ چیدمان‌آگاه: هر واریانت فقط
+ * فیلدهای خودش را می‌سنجد.
+ */
+function slideOverLimit(s: Slide): boolean {
+  if (charCount(s.heading) > LIMITS_BY_LAYOUT[s.layout].heading) return true;
+  switch (s.layout) {
+    case "standard":
+      return charCount(s.text) > LIMITS_BY_LAYOUT.standard.text;
+    case "statement":
+      return false;
+    case "list":
+      return s.items.some((item) => charCount(item) > LIMITS_BY_LAYOUT.list.item);
+    default: {
+      const neverSlide: never = s;
+      throw new Error(`چیدمانِ ناشناخته: ${JSON.stringify(neverSlide)}`);
+    }
+  }
+}
+
+/** توضیحِ چیدمان‌آگاهِ ایرادِ طول، برای پیامِ چک */
+function slideLimitNote(s: Slide): string {
+  const headingNote = `تیتر ${charCount(s.heading)} (سقف ${LIMITS_BY_LAYOUT[s.layout].heading})`;
+  switch (s.layout) {
+    case "standard":
+      return `${headingNote} و متن ${charCount(s.text)} (سقف ${LIMITS_BY_LAYOUT.standard.text}) کاراکتر`;
+    case "statement":
+      return `${headingNote} کاراکتر`;
+    case "list": {
+      const longest = Math.max(...s.items.map(charCount));
+      return `${headingNote} و بلندترین بند ${longest} (سقف ${LIMITS_BY_LAYOUT.list.item}) کاراکتر`;
+    }
+    default: {
+      const neverSlide: never = s;
+      throw new Error(`چیدمانِ ناشناخته: ${JSON.stringify(neverSlide)}`);
+    }
+  }
+}
+
 /* ── اینستاگرام ─────────────────────────────────────────── */
 
 export function runInstagramChecks(input: {
@@ -183,17 +222,31 @@ export function runInstagramChecks(input: {
   // ⚠️ این چک تا پیش از این **مرده** بود: SlideSchema سقف‌ها را با
   // clampText می‌بُرید، پس heading همیشه ≤۴۰ می‌رسید و شرط هرگز درست
   // نمی‌شد. حالا اسکیما نمی‌بُرد و این واقعاً اندازه می‌گیرد.
-  const longSlide = slides.findIndex(
-    (s) =>
-      charCount(s.heading) > SLIDE_LIMITS.heading || charCount(s.text) > SLIDE_LIMITS.text
-  );
+  const longSlide = slides.findIndex(slideOverLimit);
   checks.push({
     name: "طول متن اسلایدها",
     pass: longSlide === -1,
     note:
       longSlide === -1
         ? "همه‌ی اسلایدها در حد خوانایی روی تصویرند"
-        : `اسلاید ${longSlide + 1} بلند است — تیتر ${charCount(slides[longSlide].heading)} (سقف ${SLIDE_LIMITS.heading}) و متن ${charCount(slides[longSlide].text)} (سقف ${SLIDE_LIMITS.text}) کاراکتر`,
+        : `اسلاید ${longSlide + 1} بلند است — ${slideLimitNote(slides[longSlide])}`,
+  });
+
+  // تنوعِ چیدمانِ اسلایدهای میانی — advisory: یکنواختی زشت است، نه غلط.
+  // کاور و اسلاید آخر عمداً بیرون‌اند: نقشِ ساختاریِ ثابتی دارند و
+  // چیدمانشان معیارِ تنوع نیست.
+  const middleSlides = slides.slice(1, -1);
+  const distinctLayouts = new Set(middleSlides.map((s) => s.layout));
+  checks.push({
+    name: "تنوع چیدمانِ اسلایدهای میانی",
+    pass: middleSlides.length === 0 || distinctLayouts.size > 1,
+    severity: "advisory",
+    note:
+      middleSlides.length === 0
+        ? "اسلاید میانی‌ای وجود ندارد"
+        : distinctLayouts.size > 1
+          ? `${distinctLayouts.size} چیدمانِ متفاوت در اسلایدهای میانی`
+          : `همه‌ی ${middleSlides.length} اسلایدِ میانی چیدمانِ «${[...distinctLayouts][0]}» دارند`,
   });
 
   // ⚠️ اینجا عمداً چکی برای «آیا اسلاید آخر دعوت به اقدام دارد؟» نداریم.
