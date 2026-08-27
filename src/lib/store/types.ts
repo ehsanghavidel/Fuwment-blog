@@ -127,6 +127,14 @@ export type SocialExtras = {
   stickers?: StorySticker[];
   /** فقط استوری — کاروسلِ همان‌روزی که این ست از آن مشتق شده */
   sourceSocialPostId?: string;
+  /**
+   * متنِ آزادِ اپراتور برای پاسخِ دایرکت — فاز ۵.
+   *
+   * وجودش الزامی نیست حتی وقتی `dmKeyword` غیرخالی است در سطحِ تایپ؛
+   * قراردادِ نامتقارنِ فاز ۵ («dmKeyword غیرخالی ⇐ dmOffer ناخالی» ولی نه
+   * برعکس) در لایه‌ی API/ارکستریشن اجرا می‌شود، نه اینجا.
+   */
+  dmOffer?: string;
 };
 
 /**
@@ -224,6 +232,15 @@ export type SocialPost = {
   status: SocialStatus;
   createdAt: string;
   approvedAt: string | null;
+  /**
+   * کلیدواژه‌ی دایرکت — یکتا در کلِ جدول، فاز ۵.
+   *
+   * ستون و ایندکسِ یکتای شرطی از فاز ۰ در دیتابیس هستند. `null` یعنی «این
+   * پست حالتِ دایرکت ندارد» — پیش‌فرض و حالتِ اکثریتِ ردیف‌ها. رزرو/تغییر/
+   * آزادسازی همیشه باید همراهِ `body` (خطِ CTA) و `checks` در یک نوشتنِ
+   * اتمی برود؛ `updateSocialPostWithDmKeyword` همین را تضمین می‌کند.
+   */
+  dmKeyword: string | null;
 };
 
 /* ── کمپین چندکاناله ────────────────────────────────────── */
@@ -370,6 +387,20 @@ export interface BlogStore {
     sourcePostId?: string;
     platform?: SocialPlatform;
   }): Promise<SocialPost[]>;
+  /**
+   * رزرو/تغییرِ اتمیِ کلیدواژه‌ی دایرکت — فاز ۵.
+   *
+   * `patch` باید `dmKeyword` + `body` + `checks` + `extras` را با هم حمل
+   * کند و در **یک** نوشتنِ دیتابیسی بنشیند — نه چند فراخوانیِ جدا.
+   *
+   * true  = نشست.
+   * false = فقط برخوردِ ایندکسِ یکتا (کلیدواژه مالِ ردیفِ دیگری است).
+   * هر خطای دیگرِ دیتابیس throw می‌شود؛ اینجا بی‌صدا قورت داده نمی‌شود.
+   */
+  updateSocialPostWithDmKeyword(
+    id: string,
+    patch: Partial<SocialPost> & { dmKeyword: string }
+  ): Promise<boolean>;
 
   // کمپین‌های چندکاناله
   createCampaign(c: Campaign): Promise<void>;

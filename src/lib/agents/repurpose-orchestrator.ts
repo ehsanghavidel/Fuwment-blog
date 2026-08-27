@@ -141,6 +141,8 @@ export async function runRepurpose(opts: {
         status: "draft",
         createdAt: now,
         approvedAt: null,
+        // فاز ۵ اینجا رزرو نمی‌کند
+        dmKeyword: null,
       };
 
       const liPost: SocialPost = {
@@ -167,6 +169,8 @@ export async function runRepurpose(opts: {
         status: "draft",
         createdAt: now,
         approvedAt: null,
+        // فاز ۵ فقط کاروسلِ اینستاگرام را پوشش می‌دهد
+        dmKeyword: null,
       };
 
       await store.createSocialPost(igPost);

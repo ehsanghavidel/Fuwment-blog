@@ -116,6 +116,26 @@ export class MemoryStore implements BlogStore {
     return all.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
+  async updateSocialPostWithDmKeyword(
+    id: string,
+    patch: Partial<SocialPost> & { dmKeyword: string }
+  ) {
+    // پستِ نبود یعنی خطای واقعی، نه «کاندید گرفته شده» — Stage 2 نبودِ false
+    // را «کاندیدِ بعدی را امتحان کن» می‌خواند؛ نبودِ خودِ پست باید بلند شکست
+    // بخورد، نه اینکه رزرو را همچنان روی کاندیدِ بعدی ادامه دهد.
+    const cur = state().socialPosts.get(id);
+    if (!cur) {
+      throw new Error(`[dm-keyword] پستِ اجتماعی با id=${id} برای رزرو پیدا نشد`);
+    }
+    // بینِ این پیمایش و set زیر هیچ await نیست — در مدلِ تک‌رشته‌ایِ جاوااسکریپت
+    // اتمی است، همان معادلِ صادقانه‌ی ایندکسِ یکتای دیتابیس.
+    for (const other of state().socialPosts.values()) {
+      if (other.id !== id && other.dmKeyword === patch.dmKeyword) return false;
+    }
+    state().socialPosts.set(id, { ...cur, ...patch });
+    return true;
+  }
+
   async createWeek(week: ContentWeek) {
     state().weeks.set(week.id, week);
   }

@@ -130,6 +130,8 @@ export async function runLinkedinPipeline(opts: {
         status: "draft",
         createdAt: now,
         approvedAt: null,
+        // فاز ۵ فقط کاروسلِ اینستاگرام را پوشش می‌دهد
+        dmKeyword: null,
       };
       await store.createSocialPost(post);
 

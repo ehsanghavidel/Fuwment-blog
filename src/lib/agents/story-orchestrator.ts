@@ -316,6 +316,9 @@ export async function runStoryPipeline(opts: {
         status: "draft",
         createdAt: now,
         approvedAt: null,
+        // استوری کلیدواژه‌ی دایرکت نمی‌گیرد — ایندکسِ یکتا هم‌ارثی را
+        // فنی غیرممکن می‌کند (بند ۱ پلانِ فاز ۵)
+        dmKeyword: null,
       };
       await store.createSocialPost(storyPost);
 

@@ -225,6 +225,8 @@ export async function runInstagramPipeline(opts: {
         status: "draft",
         createdAt: now,
         approvedAt: null,
+        // فاز ۵ اینجا رزرو نمی‌کند — فقط بعد از slide-render (Stage 2)
+        dmKeyword: null,
       };
       await store.createSocialPost(igPost);
 

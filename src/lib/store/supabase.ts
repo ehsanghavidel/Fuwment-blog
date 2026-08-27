@@ -143,6 +143,8 @@ function socialPostToRow(p: SocialPost) {
     status: p.status,
     created_at: p.createdAt,
     approved_at: p.approvedAt,
+    // camelCase ساده — رفت‌وبرگشت partialToRow سالم است (dmKeyword ↔ dm_keyword)
+    dm_keyword: p.dmKeyword,
   };
 }
 
@@ -182,6 +184,8 @@ function socialPostFromRow(r: any): SocialPost {
     status: r.status,
     createdAt: r.created_at,
     approvedAt: r.approved_at,
+    // ردیف‌های پیش از فاز ۵
+    dmKeyword: r.dm_keyword ?? null,
   };
 }
 
@@ -341,6 +345,33 @@ export class SupabaseStore implements BlogStore {
     const { data, error } = await q;
     if (error) throw new Error(`خواندن محتوای اجتماعی ناموفق بود: ${error.message}`);
     return (data ?? []).map(socialPostFromRow);
+  }
+
+  async updateSocialPostWithDmKeyword(
+    id: string,
+    patch: Partial<SocialPost> & { dmKeyword: string }
+  ) {
+    const row = partialToRow(patch, socialPostToRow as any);
+    // ⚠️ بدونِ .select() این متد پیش‌فرضِ postgrest-js (Prefer: return=minimal)
+    // را می‌گیرد: چه صفر ردیف مچ شود چه یک ردیف، error همیشه null است — هیچ
+    // راهی برای تشخیصِ «پستی با این id نبود» از «موفق شد» وجود ندارد. با
+    // .select("id") خودِ UPDATE ردیفِ برگشتی را هم می‌دهد، بدونِ کوئریِ دومی و
+    // بدونِ شکستنِ «یک UPDATE اتمی».
+    const { data, error } = await client()
+      .from("social_posts")
+      .update(row)
+      .eq("id", id)
+      .select("id");
+    if (error) {
+      // 23505 = برخوردِ ایندکسِ یکتای dm_keyword — تصادمِ کاندید، نه خطا.
+      // هر کدِ دیگر باید صدا داشته باشد (قاعده‌ی ۶ CLAUDE.md)، نه بی‌صدا false.
+      if (error.code === "23505") return false;
+      throw new Error(`[dm-keyword] رزرو کلیدواژه ناموفق بود: ${error.message}`);
+    }
+    if (!data || data.length === 0) {
+      throw new Error(`[dm-keyword] پستِ اجتماعی با id=${id} برای رزرو پیدا نشد`);
+    }
+    return true;
   }
 
   async createCampaign(c: Campaign) {
