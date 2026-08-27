@@ -314,3 +314,25 @@ update storage.buckets set public = true where id = 'social-assets';
 -- ⚠️ rendered_at ↔ renderedAt رفت‌وبرگشت partialToRow را سالم رد
 --    می‌کند (بدون رقم، بدون دو حرف بزرگ پیاپی).
 alter table social_posts add column if not exists rendered_at timestamptz;
+
+-- ───────────────────────────────────────────────
+-- فاز ۵ — رجیستری کلیدواژه‌ی دایرکت
+-- ───────────────────────────────────────────────
+--
+-- ستون و ایندکسِ یکتای شرطیِ dm_keyword از فاز ۰ موجودند (بالاتر در همین
+-- فایل). آن ایندکس روی متنِ خام است — TALENT و talent دو مقدارِ جدا حساب
+-- می‌شدند. این CHECK بدونِ درگیرشدن با خودِ ایندکس، عملاً یکتاییِ
+-- حساس‌به‌حروف‌نبودن را تحمیل می‌کند: چون فقط حروفِ بزرگِ ASCII معتبرند،
+-- «talent» اصلاً نمی‌تواند در ستون بنشیند.
+--
+-- کلاسِ کاراکتر عمداً کامل نوشته شده، نه [A-Z]/[0-9] — بازه‌های regex در
+-- پستگرس به collation وابسته‌اند و در بعضی collationها حروفِ کوچک را هم
+-- می‌گیرند. فهرستِ صریح این وابستگی را حذف می‌کند.
+--
+-- صفر ردیفِ موجود تحتِ تأثیر است (تأییدِ زنده: ۰ از ۷۵ ردیف مقدار دارند)،
+-- پس این constraint بدونِ خطا اضافه می‌شود.
+alter table social_posts drop constraint if exists social_posts_dm_keyword_format;
+alter table social_posts add constraint social_posts_dm_keyword_format check (
+  dm_keyword is null
+  or dm_keyword ~ '^[ABCDEFGHIJKLMNOPQRSTUVWXYZ][ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789]{3,11}$'
+);
