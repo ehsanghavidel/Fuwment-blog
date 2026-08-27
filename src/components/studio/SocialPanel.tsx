@@ -92,6 +92,8 @@ export function SocialPanel({ onUnauthorized }: { onUnauthorized: () => void }) 
   // کاروسل مستقل: مسیر و زبان — فقط همین حالت این دو را می‌فرستد
   const [route, setRoute] = useState<RouteValue>("brand");
   const [language, setLanguage] = useState<LanguageValue>("fa");
+  // آفرِ دایرکت — فاز ۵. فقط برای کاروسل مستقل؛ خالی = بدونِ حالتِ دایرکت.
+  const [dmOffer, setDmOffer] = useState("");
   // ریلز: یا لینک یا متن — نه هر دو
   const [reelsInput, setReelsInput] = useState("");
   // استوری: کاروسلِ مبدأ
@@ -162,7 +164,13 @@ export function SocialPanel({ onUnauthorized }: { onUnauthorized: () => void }) 
       mode === "repurpose"
         ? { runId, sourcePostId: selected }
         : mode === "instagram"
-          ? { runId, topicHint: topicHint || undefined, route, language }
+          ? {
+              runId,
+              topicHint: topicHint || undefined,
+              route,
+              language,
+              dmOffer: dmOffer.trim() || undefined,
+            }
           : mode === "linkedin"
             ? { runId, observation: observation.trim() || undefined }
             : mode === "story"
@@ -541,6 +549,26 @@ export function SocialPanel({ onUnauthorized }: { onUnauthorized: () => void }) 
                     })}
                   </div>
                 </fieldset>
+
+                <div>
+                  <label htmlFor="dm-offer" className="mb-1.5 block text-sm font-bold text-ink">
+                    آفرِ دایرکت <span className="font-normal text-ink-muted">(اختیاری)</span>
+                  </label>
+                  <input
+                    id="dm-offer"
+                    value={dmOffer}
+                    onChange={(e) => setDmOffer(e.target.value)}
+                    disabled={busy}
+                    maxLength={200}
+                    placeholder="مثلاً: چک‌لیست شواهد گلوبال تلنت"
+                    className="w-full rounded-xl border border-surface-line bg-surface-dim px-4 py-3 transition-colors placeholder:text-ink-muted/60 focus:border-brand-400 focus:bg-surface"
+                  />
+                  <p className="mt-1.5 text-xs leading-5 text-ink-muted">
+                    اگر پر کنید، پایپ‌لاین یک کلیدواژه‌ی یکتا برای دایرکت رزرو می‌کند — چیزی که
+                    مخاطب باید در دایرکت بفرستد تا این آفر را بگیرد. خودِ کلیدواژه را اینجا
+                    انتخاب نمی‌کنید.
+                  </p>
+                </div>
               </>
             )}
 

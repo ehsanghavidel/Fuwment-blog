@@ -9,6 +9,7 @@ import type { SocialFormat, SocialPost, StorySticker } from "@/lib/store/types";
 import { slideText } from "@/lib/slide-spec";
 import { FORMAT_META } from "@/lib/social-format";
 import {
+  IconAlert,
   IconCheck,
   IconCopy,
   IconEye,
@@ -62,6 +63,11 @@ export function SocialPostCard({
   const [comment, setComment] = useState("");
   const [sending, setSending] = useState(false);
   const [rendering, setRendering] = useState(false);
+  // ── دایرکت (فاز ۵) — فقط کاروسل ──
+  const [dmEditing, setDmEditing] = useState(false);
+  const [dmKeywordInput, setDmKeywordInput] = useState("");
+  const [dmOfferInput, setDmOfferInput] = useState("");
+  const [dmSaving, setDmSaving] = useState(false);
 
   /**
    * رندر دوباره.
@@ -122,6 +128,46 @@ export function SocialPostCard({
     } finally {
       setSending(false);
     }
+  }
+
+  /**
+   * PATCHِ جهشِ دایرکت — همیشه یک درخواست، هرچه بدنه‌اش باشد (خودِ API
+   * اتمی‌بودن را تضمین می‌کند). آزادسازی عمداً `dmOffer` نمی‌فرستد تا
+   * آفرِ موجود دست‌نخورده بماند.
+   */
+  async function patchDm(body: { dmKeyword?: string | null; dmOffer?: string | null }) {
+    setDmSaving(true);
+    try {
+      const res = await studioFetch(`/api/social/posts/${post.id}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "خطای ناشناخته");
+      onNotice("تغییراتِ دایرکت ذخیره شد.");
+      setDmEditing(false);
+      onRefresh?.();
+    } catch (e) {
+      if (e instanceof Error && e.message === "PASSWORD_REQUIRED") onUnauthorized();
+      else onNotice(e instanceof Error ? e.message : String(e));
+    } finally {
+      setDmSaving(false);
+    }
+  }
+
+  function openDmEdit() {
+    setDmKeywordInput(post.dmKeyword ?? "");
+    setDmOfferInput(post.extras.dmOffer ?? "");
+    setDmEditing(true);
+  }
+
+  function saveDm() {
+    const kw = dmKeywordInput.trim();
+    patchDm({ dmKeyword: kw === "" ? null : kw, dmOffer: dmOfferInput });
+  }
+
+  function releaseDm() {
+    patchDm({ dmKeyword: null });
   }
 
   const isReels = post.format === "reels";
@@ -298,6 +344,117 @@ export function SocialPostCard({
           </span>
         ))}
       </div>
+
+      {/* دایرکت (فاز ۵) — فقط کاروسل، و فقط وقتی کلیدواژه یا آفری در کار است */}
+      {post.format === "carousel" && (post.dmKeyword || post.extras.dmOffer) && (
+        <div className="mt-4 rounded-xl border border-surface-line bg-surface-dim p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              {post.dmKeyword ? (
+                <>
+                  <span
+                    dir="ltr"
+                    className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-bold text-brand-700"
+                  >
+                    دایرکت: {post.dmKeyword}
+                  </span>
+                  <button
+                    onClick={() => onCopy(post.dmKeyword!, "کلیدواژه")}
+                    className="inline-flex cursor-pointer items-center gap-1 text-xs font-medium text-ink-muted hover:text-ink"
+                  >
+                    <IconCopy className="h-3.5 w-3.5" />
+                    کپی
+                  </button>
+                </>
+              ) : (
+                <span className="text-xs text-ink-muted">کلیدواژه هنوز تخصیص داده نشده</span>
+              )}
+            </div>
+            <div className="flex items-center gap-3 text-xs font-bold">
+              <button
+                onClick={openDmEdit}
+                className="cursor-pointer text-brand-600 hover:text-brand-700"
+              >
+                {post.dmKeyword ? "ویرایش" : "تخصیصِ کلیدواژه"}
+              </button>
+              {post.dmKeyword && (
+                <button
+                  onClick={releaseDm}
+                  disabled={dmSaving}
+                  className="cursor-pointer text-danger hover:text-danger disabled:opacity-50"
+                >
+                  آزادسازی
+                </button>
+              )}
+            </div>
+          </div>
+
+          {post.extras.dmOffer && (
+            <p className="mt-2 text-xs leading-6 text-ink-muted" dir="auto">
+              <b className="font-bold text-ink">آفر:</b> {post.extras.dmOffer}
+            </p>
+          )}
+
+          {dmEditing && (
+            <div className="mt-3 space-y-2 border-t border-surface-line pt-3">
+              {post.status === "approved" && (
+                <p className="flex items-start gap-2 rounded-lg bg-warn-soft px-3 py-2 text-xs leading-5 text-warn">
+                  <IconAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  این پست تأیید شده است. اگر قبلاً دستی منتشرش کرده‌اید، عوض‌کردنِ کلیدواژه یعنی
+                  کسانی که کلمه‌ی قبلی را بفرستند دیگر تشخیص داده نمی‌شوند — سیستم از انتشارِ
+                  واقعی خبر ندارد.
+                </p>
+              )}
+              <div>
+                <label htmlFor={`dm-keyword-${post.id}`} className="mb-1 block text-xs font-bold text-ink">
+                  کلیدواژه <span className="font-normal text-ink-muted">(خالی = آزادسازی)</span>
+                </label>
+                <input
+                  id={`dm-keyword-${post.id}`}
+                  dir="ltr"
+                  value={dmKeywordInput}
+                  onChange={(e) => setDmKeywordInput(e.target.value)}
+                  disabled={dmSaving}
+                  placeholder="مثلاً TALENT"
+                  className="w-full rounded-lg border border-surface-line bg-surface px-3 py-2 text-sm transition-colors placeholder:text-ink-muted/60 focus:border-brand-400"
+                />
+              </div>
+              <div>
+                <label htmlFor={`dm-offer-${post.id}`} className="mb-1 block text-xs font-bold text-ink">
+                  آفرِ دایرکت
+                </label>
+                <input
+                  id={`dm-offer-${post.id}`}
+                  dir="auto"
+                  value={dmOfferInput}
+                  onChange={(e) => setDmOfferInput(e.target.value)}
+                  disabled={dmSaving}
+                  maxLength={200}
+                  placeholder="مثلاً: چک‌لیست شواهد گلوبال تلنت"
+                  className="w-full rounded-lg border border-surface-line bg-surface px-3 py-2 text-sm transition-colors placeholder:text-ink-muted/60 focus:border-brand-400"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={saveDm}
+                  disabled={dmSaving}
+                  className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-brand-700 disabled:opacity-50"
+                >
+                  {dmSaving ? <IconSpinner className="h-3.5 w-3.5" /> : null}
+                  ذخیره
+                </button>
+                <button
+                  onClick={() => setDmEditing(false)}
+                  disabled={dmSaving}
+                  className="cursor-pointer rounded-lg px-3 py-1.5 text-xs font-bold text-ink-muted hover:bg-surface disabled:opacity-50"
+                >
+                  انصراف
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <button
