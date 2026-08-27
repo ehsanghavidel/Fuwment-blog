@@ -32,7 +32,7 @@ import {
  * همه‌ی انواع اجرا در یک جدول زندگی می‌کنند.
  */
 
-type Mode = "repurpose" | "instagram" | "linkedin" | "reels";
+type Mode = "repurpose" | "instagram" | "linkedin" | "reels" | "story";
 
 /**
  * مسیرهای برند — همان فهرست و همان برچسب‌های پنل «خط تولید».
@@ -81,6 +81,7 @@ const RUN_KIND_LABEL: Record<string, string> = {
   instagram: "کاروسل مستقل",
   linkedin: "پست لینکدین",
   reels: "اسکریپت ریلز",
+  story: "استوری",
 };
 
 export function SocialPanel({ onUnauthorized }: { onUnauthorized: () => void }) {
@@ -93,6 +94,8 @@ export function SocialPanel({ onUnauthorized }: { onUnauthorized: () => void }) 
   const [language, setLanguage] = useState<LanguageValue>("fa");
   // ریلز: یا لینک یا متن — نه هر دو
   const [reelsInput, setReelsInput] = useState("");
+  // استوری: کاروسلِ مبدأ
+  const [storySource, setStorySource] = useState<string>("");
   const [leadMagnet, setLeadMagnet] = useState("");
   // لینکدین: «مشاهده‌ی این هفته» — ماده‌ی خام ترجیحی این کانال
   const [observation, setObservation] = useState("");
@@ -133,6 +136,7 @@ export function SocialPanel({ onUnauthorized }: { onUnauthorized: () => void }) 
   async function start() {
     if (mode === "repurpose" && !selected) return;
     if (mode === "reels" && !reelsInput.trim()) return;
+    if (mode === "story" && !storySource) return;
     setError("");
     setNotice("");
     setBusy(true);
@@ -145,6 +149,7 @@ export function SocialPanel({ onUnauthorized }: { onUnauthorized: () => void }) 
       instagram: "/api/social/instagram",
       linkedin: "/api/social/linkedin",
       reels: "/api/social/reels",
+      story: "/api/social/story",
     };
     const endpoint = ENDPOINTS[mode];
 
@@ -160,11 +165,13 @@ export function SocialPanel({ onUnauthorized }: { onUnauthorized: () => void }) 
           ? { runId, topicHint: topicHint || undefined, route, language }
           : mode === "linkedin"
             ? { runId, observation: observation.trim() || undefined }
-            : {
-              runId,
-              ...(isUrl ? { sourceUrl: trimmed } : { sourceText: trimmed }),
-              leadMagnet: leadMagnet.trim() || undefined,
-            };
+            : mode === "story"
+              ? { runId, sourceSocialPostId: storySource }
+              : {
+                runId,
+                ...(isUrl ? { sourceUrl: trimmed } : { sourceText: trimmed }),
+                leadMagnet: leadMagnet.trim() || undefined,
+              };
 
     // شروع polling قبل از POST — تا از اولین گام جا نمانیم
     pollRef.current = setInterval(async () => {
@@ -238,7 +245,9 @@ export function SocialPanel({ onUnauthorized }: { onUnauthorized: () => void }) 
               ? "بدون مقاله‌ی مبدأ، یک کاروسل اینستاگرام از صفر ساخته می‌شود. موضوع دادن اختیاری است — اگر خالی بگذارید، ایده‌یاب خودش انتخاب می‌کند."
               : mode === "linkedin"
                 ? "«مشاهده‌ی این هفته» را بنویسید — الگویی که در جلسه‌ها دیده‌اید یا اشتباهی که تکرار می‌شود. پست لینکدین از تجربه‌ی دست‌اول جان می‌گیرد، نه از موضوع کلی."
-                : "یک لینک خبر/مقاله یا متن اولیه‌ی خودتان را بدهید تا اسکریپت ریلز ساخته شود — آماده‌ی بلندخوانی و ضبط."}
+                : mode === "story"
+                  ? "یک کاروسلِ موجود را انتخاب کنید تا از آن یک ستِ ۲ تا ۳ فریمیِ استوری ساخته شود — یک زاویه‌ی واحد، نه خلاصه‌ی کاروسل."
+                  : "یک لینک خبر/مقاله یا متن اولیه‌ی خودتان را بدهید تا اسکریپت ریلز ساخته شود — آماده‌ی بلندخوانی و ضبط."}
         </p>
 
         {/* سوئیچ حالت */}
@@ -252,6 +261,7 @@ export function SocialPanel({ onUnauthorized }: { onUnauthorized: () => void }) 
               { id: "instagram", label: "کاروسل مستقل", icon: IconInstagram },
               { id: "linkedin", label: "پست لینکدین", icon: IconLinkedin },
               { id: "reels", label: "اسکریپت ریلز", icon: IconVideo },
+              { id: "story", label: "استوری", icon: IconInstagram },
             ] as const
           ).map((m) => (
             <button
@@ -385,6 +395,66 @@ export function SocialPanel({ onUnauthorized }: { onUnauthorized: () => void }) 
                 <>
                   <IconVideo className="h-4 w-4" />
                   ساخت اسکریپت
+                </>
+              )}
+            </button>
+          </form>
+        ) : mode === "story" ? (
+          /* ── استوری: انتخاب کاروسلِ مبدأ ── */
+          <form
+            className="space-y-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!busy) start();
+            }}
+          >
+            {socialPosts.filter((p) => p.format === "carousel").length === 0 ? (
+              <p className="rounded-xl bg-surface-dim px-4 py-3 text-sm leading-6 text-ink-muted">
+                هنوز کاروسل اینستاگرامی ندارید. اول از حالت «کاروسل مستقل» یا «بازآفرینی از
+                مقاله» یک کاروسل بسازید — استوری از روی همان مشتق می‌شود.
+              </p>
+            ) : (
+              <div>
+                <label htmlFor="story-source" className="mb-1.5 block text-sm font-bold text-ink">
+                  کاروسلِ مبدأ
+                </label>
+                <select
+                  id="story-source"
+                  value={storySource}
+                  onChange={(e) => setStorySource(e.target.value)}
+                  disabled={busy}
+                  className="w-full cursor-pointer rounded-xl border border-surface-line bg-surface-dim px-4 py-3 transition-colors focus:border-brand-400 focus:bg-surface"
+                >
+                  <option value="">— کاروسلِ مبدأ را انتخاب کنید —</option>
+                  {socialPosts
+                    .filter((p) => p.format === "carousel")
+                    .map((p) => (
+                      <option key={p.id} value={p.id} dir="auto">
+                        {p.title}
+                      </option>
+                    ))}
+                </select>
+                <p className="mt-1.5 text-xs leading-5 text-ink-muted">
+                  زاویه‌یاب استوری یک زاویه‌ی واحد از دلِ همین کاروسل انتخاب می‌کند — استوری
+                  خلاصه‌ی فشرده‌ی کاروسل نیست.
+                </p>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={busy || !storySource}
+              className="btn-action w-full sm:w-auto"
+            >
+              {busy ? (
+                <>
+                  <IconSpinner className="h-4 w-4" />
+                  در حال اجرا…
+                </>
+              ) : (
+                <>
+                  <IconInstagram className="h-4 w-4" />
+                  ساخت استوری
                 </>
               )}
             </button>

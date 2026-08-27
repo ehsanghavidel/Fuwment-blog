@@ -1,4 +1,5 @@
-import type { Slide } from "@/lib/store";
+import type { Slide, StorySticker } from "@/lib/store";
+import { slideText } from "@/lib/slide-spec";
 import { LIMITS_BY_LAYOUT } from "./types";
 
 /**
@@ -534,6 +535,105 @@ export function runLinkedinChecks(input: {
     note: endsWithQuestion
       ? "پست با یک پرسش تمام می‌شود"
       : "پست با پرسش تمام نمی‌شود — گفت‌وگو در کامنت‌ها راه نمی‌افتد",
+  });
+
+  return checks;
+}
+
+/* ── استوری ─────────────────────────────────────────────── */
+
+export function runStoryChecks(input: {
+  frames: Slide[];
+  stickers: StorySticker[];
+}): SocialCheck[] {
+  const { frames, stickers } = input;
+  const checks: SocialCheck[] = [];
+
+  checks.push({
+    name: "تعداد فریم‌های استوری",
+    pass: frames.length === 2 || frames.length === 3,
+    note: `${frames.length} فریم (مجاز: ۲ یا ۳)`,
+  });
+
+  // همان چکِ طول کاروسل، همان سقف‌ها — چیدمانِ چهارم و سقفِ دومی برای
+  // استوری ساخته نشده.
+  const longFrame = frames.findIndex(slideOverLimit);
+  checks.push({
+    name: "طول متن فریم‌ها",
+    pass: longFrame === -1,
+    note:
+      longFrame === -1
+        ? "همه‌ی فریم‌ها در حد خوانایی روی تمام‌صفحه‌اند"
+        : `فریم ${longFrame + 1} بلند است — ${slideLimitNote(frames[longFrame])}`,
+  });
+
+  // تصویرِ AI فقط برای فریمِ اول ساخته می‌شود (تصمیمِ محصولیِ قفل‌شده)،
+  // پس نبودنش روی فریمِ اول یک نقصِ کیفیِ واقعی است، نه انتخاب — برخلافِ
+  // کاور کاروسل که در گریدِ بندانگشتی دیده می‌شود، فریمِ استوری تمام‌صفحه
+  // است.
+  const hasFirstFrameImage = Boolean(frames[0]?.imageSubject?.trim());
+  checks.push({
+    name: "تصویر فریم اول",
+    pass: hasFirstFrameImage,
+    note: hasFirstFrameImage
+      ? "فریم اول صحنه‌ی تصویر دارد"
+      : "فریم اول imageSubject ندارد — تصویرِ AI فقط برای همین فریم ساخته می‌شود",
+  });
+
+  const badRange = stickers.filter(
+    (s) => !Number.isInteger(s.frame) || s.frame < 0 || s.frame >= frames.length
+  );
+  checks.push({
+    name: "بازه‌ی فریمِ استیکر",
+    pass: badRange.length === 0,
+    note:
+      badRange.length === 0
+        ? "همه‌ی استیکرها به فریمی معتبر اشاره می‌کنند"
+        : `استیکر با frame نامعتبر: ${badRange.map((s) => s.frame).join("، ")}`,
+  });
+
+  // حداکثر یک استیکرِ تعاملی روی هر فریم — قرارداد MVP.
+  const frameCounts = new Map<number, number>();
+  for (const s of stickers) frameCounts.set(s.frame, (frameCounts.get(s.frame) ?? 0) + 1);
+  const dupFrames = [...frameCounts.entries()].filter(([, n]) => n > 1).map(([f]) => f);
+  checks.push({
+    name: "یکتاییِ استیکرِ هر فریم",
+    pass: dupFrames.length === 0,
+    note:
+      dupFrames.length === 0
+        ? "حداکثر یک استیکر روی هر فریم"
+        : `بیش از یک استیکر روی فریمِ ${dupFrames.join("، ")}`,
+  });
+
+  const badPolls = stickers.filter((s) => s.type === "poll" && s.options.length !== 2);
+  checks.push({
+    name: "نظرسنجی دقیقاً دو گزینه",
+    pass: badPolls.length === 0,
+    note:
+      badPolls.length === 0
+        ? "همه‌ی نظرسنجی‌ها دقیقاً دو گزینه دارند"
+        : `${badPolls.length} نظرسنجیِ با تعدادِ گزینه‌ی نامعتبر`,
+  });
+
+  const badLinks = stickers.filter((s) => s.type === "link" && !s.destination.trim());
+  checks.push({
+    name: "مقصدِ استیکرِ لینک",
+    pass: badLinks.length === 0,
+    note:
+      badLinks.length === 0
+        ? "همه‌ی استیکرهای لینک مقصد دارند"
+        : `${badLinks.length} استیکرِ لینکِ بدونِ مقصد`,
+  });
+
+  // لینک باید متادیتای استیکر باشد، نه متنِ خامِ روی فریم — همان قاعده‌ی
+  // «بدون لینک در کپشن» کاروسل، اینجا روی متنِ خودِ فریم.
+  const urlInText = frames.some((f) => URL_RE.test(slideText(f)));
+  checks.push({
+    name: "بدون URL خام در متنِ فریم",
+    pass: !urlInText,
+    note: urlInText
+      ? "متنِ یک فریم آدرسِ خام دارد — لینک باید متادیتای استیکرِ link باشد"
+      : "متنِ فریم‌ها آدرسِ خام ندارد",
   });
 
   return checks;
