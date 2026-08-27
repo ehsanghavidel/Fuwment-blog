@@ -27,6 +27,16 @@ import {
   type MeasuredBlock,
   type SlideRole,
 } from "./slide-spec";
+import {
+  STORY_CANVAS,
+  STORY_SAFE,
+  STORY_PAD,
+  STORY_CONTENT_WIDTH,
+  STICKER_ZONE,
+  storyRoleFor,
+  storyBlockTopPx,
+  type StoryRole,
+} from "./story-spec";
 
 /**
  * رندرکننده‌ی اسلاید — JSON می‌گیرد، PNG می‌دهد. همین.
@@ -49,6 +59,16 @@ import {
  * Playwright درست کار می‌کند ولی Chromium (~۱۷۰MB) در سقف حجم توابع
  * جا نمی‌شود. `@napi-rs/canvas` (~۲۶MB) هم Bidi درست دارد، هم
  * `measureText` برای شکست خط، و هم `woff2` را مستقیم می‌خواند.
+ *
+ * ── Stage ۲: هسته‌ی مشترکِ کاروسل و استوری ──
+ *
+ * `drawFrame` (خصوصی، پایین‌تر) تنها جایی است که واقعاً پیکسل می‌کشد.
+ * `renderSlide`/`renderCarousel` (کاروسل، بومِ ۱۰۸۰×۱۳۵۰) و
+ * `renderStoryFrame`/`renderStory` (استوری، بومِ ۱۰۸۰×۱۹۲۰) هر دو فقط
+ * هندسه‌ی خودشان را می‌سازند (از `slide-spec` یا `story-spec`) و به
+ * `drawFrame` می‌دهند. امضا و رفتارِ `renderSlide`/`renderCarousel`
+ * **عیناً** همان قبل است — پارامترهایی که به `drawFrame` می‌فرستند با
+ * قبل بایت‌به‌بایت یکی است، پس خروجیِ کاروسل تغییر نمی‌کند.
  */
 
 export type RenderOptions = {
@@ -63,6 +83,20 @@ export type RenderOptions = {
   backgroundImage?: Buffer;
   /** راهنمای ناحیه‌ی امن را روی تصویر بکش — فقط برای بازبینی چشمی */
   debugSafeArea?: boolean;
+};
+
+/**
+ * گزینه‌های رندرِ استوری — جدا از `RenderOptions` کاروسل، چون
+ * `debugSafeArea` اینجا معنای دیگری دارد (خطِ افقیِ بالا/پایین، نه
+ * قابِ برشِ گرید) و یک گزینه‌ی دیگر هم دارد که کاروسل اصلاً ندارد.
+ */
+export type StoryRenderOptions = {
+  language: "fa" | "en";
+  backgroundImage?: Buffer;
+  /** خطِ راهنمای حاشیه‌ی امنِ بالا/پایینِ استوری — فقط برای بازبینی چشمی */
+  debugSafeArea?: boolean;
+  /** جعبه‌ی راهنمای ناحیه‌ی رزروشده‌ی استیکر — فقط برای بازبینی چشمی */
+  debugStickerZone?: boolean;
 };
 
 /* ── فونت ────────────────────────────────────────────────── */
@@ -101,9 +135,9 @@ function font(level: keyof typeof TYPE): string {
   return `${TYPE[level].weight} ${TYPE[level].size}px ${FAMILY}`;
 }
 
-/** رنگِ متنِ هر بلوک — کیکر رنگِ نقش می‌گیرد، بدنه شفافیتِ روی‌تصویر، بقیه توپر */
-function colorFor(level: BlockLevel, role: SlideRole, bodyOpacity: number): string {
-  if (level === "kicker") return accentFor(role);
+/** رنگِ متنِ هر بلوک — کیکر رنگِ تأکید می‌گیرد، بدنه شفافیتِ روی‌تصویر، بقیه توپر */
+function colorFor(level: BlockLevel, accentColor: string, bodyOpacity: number): string {
+  if (level === "kicker") return accentColor;
   if (level === "body") return withAlpha(COLOR.fg, bodyOpacity);
   return COLOR.fg; // heading, display
 }
@@ -138,23 +172,57 @@ export function wrapText(ctx: SKRSContext2D, text: string, maxWidth: number): st
   return lines;
 }
 
-/* ── رندر یک اسلاید ──────────────────────────────────────── */
+/* ── هسته‌ی مشترکِ رسم (خصوصی) ───────────────────────────── */
 
-export async function renderSlide(
-  slide: Slide,
-  ctx0: { index: number; total: number } & RenderOptions
-): Promise<Buffer> {
-  registerFonts();
+type DrawFrameOptions = {
+  canvasWidth: number;
+  canvasHeight: number;
+  padX: number;
+  contentWidth: number;
+  language: "fa" | "en";
+  backgroundImage?: Buffer;
+  /** بلوک‌های محتوا — از `blocksFor(slide)`، بدون تغییر بین کاروسل و استوری */
+  blocks: Block[];
+  /** رنگِ کیکر/نشانگرِ فهرست — از قبل با `accentFor`/معادلش تعیین شده */
+  accentColor: string;
+  /** لنگرِ عمودی — کاروسل از `blockTopPx`، استوری از `storyBlockTopPx` می‌آید */
+  computeBlockTop: (blockHeight: number) => number;
+  /** شماره‌ی صفحه — فقط کاروسل. نبودنش یعنی بدونِ شماره (استوری) */
+  counter?: { index: number; total: number };
+  /** چکِ ناحیه‌ی امنِ گرید پروفایل — فقط کاروسل معنی دارد */
+  checkSafeArea?: boolean;
+  /** لایه‌ی راهنمای بازبینیِ چشمی — قبل از `toBuffer`، فقط اگر داده شود */
+  debugOverlay?: (ctx: SKRSContext2D) => void;
+};
 
-  const { index, total, language, backgroundImage, debugSafeArea } = ctx0;
-  const role: SlideRole = roleFor(index, total);
+/**
+ * تنها جایی که واقعاً پیکسل می‌کشد — پس‌زمینه، تصویر+لایه‌ی تیره، متنِ
+ * بلوک‌ها، نشانگرِ فهرست، شماره‌ی صفحه‌ی اختیاری، و چکِ ناحیه‌ی امنِ
+ * اختیاری. کاروسل و استوری هر دو فقط هندسه‌ی خودشان را می‌سازند و اینجا
+ * را صدا می‌زنند؛ منطقِ کشیدن هرگز دوباره نوشته نمی‌شود.
+ */
+async function drawFrame(opts: DrawFrameOptions): Promise<Buffer> {
+  const {
+    canvasWidth,
+    canvasHeight,
+    padX,
+    contentWidth,
+    language,
+    backgroundImage,
+    blocks,
+    accentColor,
+    computeBlockTop,
+    counter,
+    checkSafeArea,
+    debugOverlay,
+  } = opts;
   const rtl = language === "fa";
 
-  const canvas = createCanvas(CANVAS.width, CANVAS.height);
+  const canvas = createCanvas(canvasWidth, canvasHeight);
   const ctx = canvas.getContext("2d");
 
   ctx.fillStyle = COLOR.bg;
-  ctx.fillRect(0, 0, CANVAS.width, CANVAS.height);
+  ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
   /**
    * تصویر پس‌زمینه + لایه‌ی تیره.
@@ -164,22 +232,22 @@ export async function renderSlide(
    * AA را رد می‌کند و بدنه‌ی نیمه‌شفاف در هیچ آلفایی پاس نمی‌شود.
    *
    * تصویر «cover» جای می‌گیرد نه «contain»: بوم باید کامل پر شود،
-   * حتی اگر لبه‌ای بریده شود. مدل ۱K می‌دهد و بوم ۱۰۸۰×۱۳۵۰ است.
+   * حتی اگر لبه‌ای بریده شود.
    */
   let hasImage = false;
   if (backgroundImage) {
     try {
       const img = await loadImage(backgroundImage);
-      const scale = Math.max(CANVAS.width / img.width, CANVAS.height / img.height);
+      const scale = Math.max(canvasWidth / img.width, canvasHeight / img.height);
       const w = img.width * scale;
       const h = img.height * scale;
-      ctx.drawImage(img, (CANVAS.width - w) / 2, (CANVAS.height - h) / 2, w, h);
+      ctx.drawImage(img, (canvasWidth - w) / 2, (canvasHeight - h) / 2, w, h);
 
       ctx.fillStyle = withAlpha(COLOR.bg, IMAGE_SCRIM.alpha);
-      ctx.fillRect(0, 0, CANVAS.width, CANVAS.height);
+      ctx.fillRect(0, 0, canvasWidth, canvasHeight);
       hasImage = true;
     } catch (err) {
-      // تصویر خراب نباید اسلاید را بکشد — پس‌زمینه‌ی سرمه‌ای سر جایش است
+      // تصویر خراب نباید فریم را بکشد — پس‌زمینه‌ی سرمه‌ای سر جایش است
       console.error(
         `[slide-renderer] تصویر پس‌زمینه بارگذاری نشد: ${err instanceof Error ? err.message : String(err)}`
       );
@@ -192,10 +260,10 @@ export async function renderSlide(
   // جهت و تراز از زبان می‌آید. متن فارسی از راست شروع می‌شود، انگلیسی از چپ.
   ctx.direction = rtl ? "rtl" : "ltr";
   ctx.textAlign = rtl ? "right" : "left";
-  const startX = rtl ? CANVAS.width - PAD.x : PAD.x;
+  const startX = rtl ? canvasWidth - padX : padX;
   // بندهای فهرست از نشانگر عقب‌تر می‌نشینند — همان اندازه در هر دو جهت
   const listStartX = rtl ? startX - LIST_MARKER_INDENT : startX + LIST_MARKER_INDENT;
-  const listWidth = CONTENT_WIDTH - LIST_MARKER_INDENT;
+  const listWidth = contentWidth - LIST_MARKER_INDENT;
 
   /**
    * `top` بالای جعبه‌ی خط است، نه خط پایه. تبدیلش با `baseline()`
@@ -208,15 +276,12 @@ export async function renderSlide(
    * شکستِ خط، پیش از چیدمان — ارتفاعِ بلوک به تعدادِ خط وابسته است.
    *
    * ⚠️ بلوکِ بدونِ خط (متنِ خالی) کاملاً کنار گذاشته می‌شود — نه فقط از
-   * ارتفاع، بلکه از محاسبه‌ی «فاصله‌ی قبل از بلوکِ بعدی» هم. این همان
-   * رفتارِ رندرکننده‌ی قبلی برای `text` خالی بود (نه فاصله، نه ارتفاع)؛
-   * اینجا کلی‌اش کردیم تا برای هر چیدمانی درست بماند.
+   * ارتفاع، بلکه از محاسبه‌ی «فاصله‌ی قبل از بلوکِ بعدی» هم.
    */
-  const blocks: Block[] = blocksFor(slide);
   const wrapped = blocks
     .map((block) => {
       ctx.font = font(block.level);
-      const lines = wrapText(ctx, block.text, block.marker ? listWidth : CONTENT_WIDTH);
+      const lines = wrapText(ctx, block.text, block.marker ? listWidth : contentWidth);
       return { block, lines };
     })
     .filter(({ lines }) => lines.length > 0);
@@ -227,13 +292,8 @@ export async function renderSlide(
   }));
   const blockHeight = blockHeightPx(measured);
 
-  /**
-   * لنگر عمودی — محاسبه‌اش در `slide-spec` است، نه اینجا.
-   *
-   * ⚠️ کیکر **داخل** بلوک است، نه لنگرشده به بالای قاب. و «وسط» یعنی
-   * مرکز نوری (۴۵/۵۵)، نه مرکز هندسی — دلیل هر دو در `slide-spec`.
-   */
-  let top = blockTopPx(blockAlignFor(role), blockHeight);
+  /** لنگر عمودی — کاروسل و استوری هر کدام قاعده‌ی خودشان را می‌فرستند */
+  let top = computeBlockTop(blockHeight);
   const blockLevels = wrapped.map(({ block }) => block);
 
   for (let i = 0; i < wrapped.length; i++) {
@@ -241,11 +301,11 @@ export async function renderSlide(
     const x = block.marker ? listStartX : startX;
 
     ctx.font = font(block.level);
-    ctx.fillStyle = colorFor(block.level, role, bodyOpacity);
+    ctx.fillStyle = colorFor(block.level, accentColor, bodyOpacity);
 
     for (const [lineIndex, line] of lines.entries()) {
       if (block.marker && lineIndex === 0) {
-        drawListMarker(ctx, { rtl, top, level: block.level, role });
+        drawListMarker(ctx, { rtl, top, level: block.level, accentColor, canvasWidth, padX });
       }
       ctx.fillText(line, x, baseline(top, block.level));
       top += lineHeightPx(block.level);
@@ -254,38 +314,61 @@ export async function renderSlide(
     top += gapAfter(blockLevels, i);
   }
 
-  // ── شماره‌ی اسلاید، گوشه‌ی مقابلِ شروع متن ──
-  ctx.font = font("counter");
-  ctx.fillStyle = withAlpha(COLOR.fg, OPACITY.counter);
-  ctx.direction = "ltr";
-  ctx.textAlign = rtl ? "left" : "right";
-  const counter = rtl
-    ? `${(index + 1).toLocaleString("fa-IR")}/${total.toLocaleString("fa-IR")}`
-    : `${index + 1}/${total}`;
-  ctx.fillText(
-    counter,
-    rtl ? PAD.x : CANVAS.width - PAD.x,
-    CANVAS.height - COUNTER_BASELINE_FROM_BOTTOM
-  );
-
-  // ── محافظ ناحیه‌ی امن ──
-  // ⚠️ نسخه‌ی اول یک «نوار تأکید» ۱۰×۴ بالای کیکر داشت که این محافظ را
-  //    توجیه می‌کرد. در تصویر واقعی مثل یک خشِ تصادفی دیده می‌شد — نه
-  //    عنصر طراحی — و در چیدمان انگلیسی بالای کیکر معلق می‌ماند. حذف شد.
-  //    محافظ ماند، ولی حالا روی چیزی که واقعاً مهم است اجرا می‌شود:
-  //    جعبه‌ی متن. امروز همیشه پاس می‌شود (پدینگ ۹۶ در برابر مرز ۳۴)،
-  //    ولی اولین کسی که پدینگ را کم کند تا متن بزرگ‌تر جا شود، اینجا
-  //    بلند می‌شکند به‌جای اینکه بعد از انتشار بفهمد.
-  if (!isInsideSafeArea(PAD.x, CONTENT_WIDTH)) {
-    throw new Error(
-      `جعبه‌ی متن بیرون از ناحیه‌ی امن گرید است — ` +
-        `متن ${PAD.x}..${PAD.x + CONTENT_WIDTH}، امن ${SAFE_INSET}..${CANVAS.width - SAFE_INSET}`
+  // ── شماره‌ی صفحه، فقط اگر داده شود (کاروسل دارد، استوری ندارد) ──
+  if (counter) {
+    ctx.font = font("counter");
+    ctx.fillStyle = withAlpha(COLOR.fg, OPACITY.counter);
+    ctx.direction = "ltr";
+    ctx.textAlign = rtl ? "left" : "right";
+    const counterText = rtl
+      ? `${(counter.index + 1).toLocaleString("fa-IR")}/${counter.total.toLocaleString("fa-IR")}`
+      : `${counter.index + 1}/${counter.total}`;
+    ctx.fillText(
+      counterText,
+      rtl ? padX : canvasWidth - padX,
+      canvasHeight - COUNTER_BASELINE_FROM_BOTTOM
     );
   }
 
-  if (debugSafeArea) drawSafeAreaGuide(ctx);
+  // ── محافظ ناحیه‌ی امن — فقط اگر خواسته شود (کاروسل) ──
+  if (checkSafeArea && !isInsideSafeArea(padX, contentWidth)) {
+    throw new Error(
+      `جعبه‌ی متن بیرون از ناحیه‌ی امن گرید است — ` +
+        `متن ${padX}..${padX + contentWidth}، امن ${SAFE_INSET}..${canvasWidth - SAFE_INSET}`
+    );
+  }
+
+  if (debugOverlay) debugOverlay(ctx);
 
   return canvas.toBuffer("image/png");
+}
+
+/* ── رندر یک اسلاید کاروسل ───────────────────────────────── */
+
+export async function renderSlide(
+  slide: Slide,
+  ctx0: { index: number; total: number } & RenderOptions
+): Promise<Buffer> {
+  registerFonts();
+
+  const { index, total, language, backgroundImage, debugSafeArea } = ctx0;
+  const role: SlideRole = roleFor(index, total);
+  const blocks: Block[] = blocksFor(slide);
+
+  return drawFrame({
+    canvasWidth: CANVAS.width,
+    canvasHeight: CANVAS.height,
+    padX: PAD.x,
+    contentWidth: CONTENT_WIDTH,
+    language,
+    backgroundImage,
+    blocks,
+    accentColor: accentFor(role),
+    computeBlockTop: (h) => blockTopPx(blockAlignFor(role), h),
+    counter: { index, total },
+    checkSafeArea: true,
+    debugOverlay: debugSafeArea ? drawSafeAreaGuide : undefined,
+  });
 }
 
 /**
@@ -313,6 +396,78 @@ export async function renderCarousel(
   return out;
 }
 
+/* ── رندر یک فریمِ استوری (Stage ۲) ──────────────────────── */
+
+/**
+ * همان اسلاید (`standard`/`statement`/`list`)، بومِ جدا (۱۰۸۰×۱۹۲۰) و
+ * لنگرِ عمودیِ جدا (`story-spec.storyBlockTopPx`، نه `blockTopPx`
+ * کاروسل). بدونِ شماره‌ی صفحه، بدونِ چکِ ناحیه‌ی امنِ گرید — آن قاعده
+ * مخصوصِ برشِ ۳:۴ گرید پروفایل است و به استوری ربطی ندارد.
+ */
+export async function renderStoryFrame(
+  slide: Slide,
+  ctx0: { index: number; total: number; hasSticker: boolean } & StoryRenderOptions
+): Promise<Buffer> {
+  registerFonts();
+
+  const { index, total, language, backgroundImage, hasSticker, debugSafeArea, debugStickerZone } =
+    ctx0;
+  const role: StoryRole = storyRoleFor(index, total);
+  const blocks: Block[] = blocksFor(slide);
+  // قاعده‌ی رنگ عیناً همان کاروسل است: فقط نقشِ cta نارنجی می‌گیرد.
+  const accentColor = role === "cta" ? COLOR.action : COLOR.accent;
+
+  const needsDebugOverlay = Boolean(debugSafeArea || debugStickerZone);
+
+  return drawFrame({
+    canvasWidth: STORY_CANVAS.width,
+    canvasHeight: STORY_CANVAS.height,
+    padX: STORY_PAD.x,
+    contentWidth: STORY_CONTENT_WIDTH,
+    language,
+    backgroundImage,
+    blocks,
+    accentColor,
+    computeBlockTop: (h) => storyBlockTopPx(role, h, hasSticker),
+    counter: undefined,
+    checkSafeArea: false,
+    debugOverlay: needsDebugOverlay
+      ? (ctx) => drawStoryDebugGuide(ctx, { hasSticker, debugSafeArea, debugStickerZone })
+      : undefined,
+  });
+}
+
+/**
+ * ⚠️ `backgroundImage` فقط به فریمِ **اول** داده می‌شود — همان تصمیمِ
+ * محصولیِ قفل‌شده‌ی Stage ۱ («تصویرِ AI فقط برای فریم ۰»)، همان الگوی
+ * `renderCarousel`.
+ *
+ * `stickerFrames` مجموعه‌ی اندیس‌های صفرمبناییِ فریم‌هایی است که
+ * استیکر دارند — فقط برای کوچک‌کردنِ ناحیه‌ی مجاز (`storyRegion`)،
+ * هرگز برای رسمِ محتوای استیکر. متنِ استیکر اصلاً به این تابع داده
+ * نمی‌شود؛ یعنی رسمِ UIِ بومیِ استیکر روی PNG **ساختاراً غیرممکن** است،
+ * نه فقط ممنوع در پرامپت.
+ */
+export async function renderStory(
+  frames: Slide[],
+  opts: { stickerFrames?: ReadonlySet<number> } & StoryRenderOptions
+): Promise<Buffer[]> {
+  const { stickerFrames, ...rest } = opts;
+  const out: Buffer[] = [];
+  for (const [i, slide] of frames.entries()) {
+    out.push(
+      await renderStoryFrame(slide, {
+        ...rest,
+        backgroundImage: i === 0 ? rest.backgroundImage : undefined,
+        index: i,
+        total: frames.length,
+        hasSticker: stickerFrames?.has(i) ?? false,
+      })
+    );
+  }
+  return out;
+}
+
 /* ── کمکی‌ها ─────────────────────────────────────────────── */
 
 function withAlpha(hex: string, alpha: number): string {
@@ -325,33 +480,74 @@ function withAlpha(hex: string, alpha: number): string {
  *
  * ⚠️ سمتِ نشانگر «سمتِ شروع» است، نه همیشه یک طرفِ ثابت: در RTL کنارِ
  * لبه‌ی راست (کنارِ `startX`، جایی که متن هم از همان‌جا شروع می‌شد)،
- * در LTR کنارِ لبه‌ی چپ. `x` قبلاً با همین قاعده در تماس‌گیرنده محاسبه
- * شده؛ اینجا فقط رسم می‌کند.
+ * در LTR کنارِ لبه‌ی چپ. `canvasWidth`/`padX` پارامتر شدند تا هم بومِ
+ * کاروسل و هم بومِ استوری از همین یک تابع استفاده کنند.
  */
 function drawListMarker(
   ctx: SKRSContext2D,
-  opts: { rtl: boolean; top: number; level: BlockLevel; role: SlideRole }
+  opts: {
+    rtl: boolean;
+    top: number;
+    level: BlockLevel;
+    accentColor: string;
+    canvasWidth: number;
+    padX: number;
+  }
 ): void {
-  const { rtl, top, level, role } = opts;
-  const x = rtl
-    ? CANVAS.width - PAD.x - LIST_MARKER.size / 2
-    : PAD.x + LIST_MARKER.size / 2;
+  const { rtl, top, level, accentColor, canvasWidth, padX } = opts;
+  const x = rtl ? canvasWidth - padX - LIST_MARKER.size / 2 : padX + LIST_MARKER.size / 2;
   const y = top + lineHeightPx(level) / 2;
 
   ctx.save();
-  ctx.fillStyle = accentFor(role);
+  ctx.fillStyle = accentColor;
   ctx.beginPath();
   ctx.arc(x, y, LIST_MARKER.size / 2, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }
 
-/** راهنمای ناحیه‌ی امن — فقط برای بازبینی چشمی، هرگز در خروجی نهایی */
+/** راهنمای ناحیه‌ی امنِ گرید پروفایل — فقط برای بازبینی چشمی، هرگز در خروجی نهایی */
 function drawSafeAreaGuide(ctx: SKRSContext2D): void {
   ctx.save();
   ctx.strokeStyle = "rgba(245,148,31,0.9)";
   ctx.setLineDash([16, 12]);
   ctx.lineWidth = 3;
   ctx.strokeRect(SAFE_INSET, 0, CANVAS.width - SAFE_INSET * 2, CANVAS.height);
+  ctx.restore();
+}
+
+/**
+ * راهنمای استوری — خطِ افقیِ بالا/پایینِ حاشیه‌ی امن و جعبه‌ی ناحیه‌ی
+ * رزروشده‌ی استیکر. فقط برای بازبینی چشمی؛ هرگز روی PNGِ واقعاً
+ * آپلودشده صدا زده نمی‌شود (`storage.ts` هیچ‌وقت این دو پرچم را
+ * `true` نمی‌فرستد).
+ */
+function drawStoryDebugGuide(
+  ctx: SKRSContext2D,
+  opts: { hasSticker: boolean; debugSafeArea?: boolean; debugStickerZone?: boolean }
+): void {
+  const { hasSticker, debugSafeArea, debugStickerZone } = opts;
+  ctx.save();
+  ctx.setLineDash([16, 12]);
+  ctx.lineWidth = 3;
+
+  if (debugSafeArea) {
+    ctx.strokeStyle = "rgba(245,148,31,0.9)";
+    ctx.beginPath();
+    ctx.moveTo(0, STORY_SAFE.top);
+    ctx.lineTo(STORY_CANVAS.width, STORY_SAFE.top);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, STORY_CANVAS.height - STORY_SAFE.bottom);
+    ctx.lineTo(STORY_CANVAS.width, STORY_CANVAS.height - STORY_SAFE.bottom);
+    ctx.stroke();
+  }
+
+  if (debugStickerZone && hasSticker) {
+    const zoneTop = STORY_CANVAS.height - STORY_SAFE.bottom - STICKER_ZONE;
+    ctx.strokeStyle = "rgba(31,167,149,0.9)";
+    ctx.strokeRect(0, zoneTop, STORY_CANVAS.width, STICKER_ZONE);
+  }
+
   ctx.restore();
 }

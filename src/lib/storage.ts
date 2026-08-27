@@ -1,7 +1,8 @@
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import { getStore } from "@/lib/store";
-import { renderCarousel } from "@/lib/slide-renderer";
+import type { SocialPost } from "@/lib/store";
+import { renderCarousel, renderStory } from "@/lib/slide-renderer";
 import { generateCoverImage } from "@/lib/image-gen";
 
 /**
@@ -118,6 +119,10 @@ export async function renderSlidesForPost(socialPostId: string): Promise<RenderR
     const store = getStore();
     const post = await store.getSocialPost(socialPostId);
     if (!post) return { status: "failed", error: `محتوای ${socialPostId} پیدا نشد` };
+    // ⚠️ استوری مسیر جداست (پایین‌تر) — کاروسل زیر همین تابع، دست‌نخورده.
+    // ⚠️ `await` عمداً است: بدونش throwِ داخلِ renderStoryPost از این
+    //    catch رد می‌شد و رندرِ استوری دیگر «هیچ‌وقت throw نمی‌کند» نبود.
+    if (post.format === "story") return await renderStoryPost(post);
     if (post.format !== "carousel") return { status: "skipped", reason: "not-a-carousel" };
     if (post.slides.length === 0) return { status: "skipped", reason: "no-slides" };
 
@@ -194,4 +199,105 @@ export async function renderSlidesForPost(socialPostId: string): Promise<RenderR
     console.error(`[storage] رندر ${socialPostId} شکست: ${message}`);
     return { status: "failed", error: message };
   }
+}
+
+/* ── سطح بالا: رندر یک ستِ استوری (Stage ۲) ─────────────────── */
+
+/**
+ * آیا فریمِ اول یک imageSubjectِ قابل‌استفاده دارد؟
+ *
+ * صادرشده تا بدونِ اتصالِ واقعی به Supabase قابلِ تست باشد — این چک باید
+ * **پیش از هر فراخوانیِ شبکه‌ای** اجرا شود (الزامِ صریحِ Stage ۲: نبودِ
+ * imageSubjectِ فریمِ صفر باید بلند شکست بخورد، نه یک تصویرِ عمومی بسازد).
+ */
+export function hasFrame0ImageSubject(post: Pick<SocialPost, "slides">): boolean {
+  return Boolean(post.slides[0]?.imageSubject?.trim());
+}
+
+/**
+ * رندر و آپلودِ فریم‌های یک ستِ استوری.
+ *
+ * ⚠️ فقط از `renderSlidesForPost` صدا زده می‌شود، بعد از تأییدِ
+ * `format === "story"` — کاروسل هیچ‌وقت به این تابع نمی‌رسد و مسیرِ
+ * بالا کاملاً دست‌نخورده می‌ماند.
+ *
+ * ⚠️ Stage ۱ با چکِ مسدودکننده‌ی `runStoryChecks` از قبل تضمین کرده که
+ * فریمِ صفر imageSubject دارد، ولی رندرکننده نباید کورکورانه به تضمینِ
+ * یک لایه‌ی بالادست تکیه کند — این محافظ اینجا هم هست، **قبل از** هر
+ * فراخوانیِ Storage یا تولیدِ تصویر.
+ */
+async function renderStoryPost(post: SocialPost): Promise<RenderResult> {
+  const frame0Subject = post.slides[0]?.imageSubject?.trim();
+  if (!frame0Subject) {
+    const message = "فریمِ اولِ استوری imageSubject ندارد — رندر متوقف شد";
+    console.error(`[story-render] ${message} (${post.id})`);
+    return { status: "failed", error: message };
+  }
+
+  const t0 = Date.now();
+  const store = getStore();
+
+  /**
+   * تصویرِ پس‌زمینه‌ی فریمِ اول — همان الگوی کاروسل: اول از Storage،
+   * بعد از سرویس. همان قراردادِ مسیرِ `{postId}/bg-cover.png` — postId
+   * اینجا شناسه‌ی SocialPostِ **استوری** است، پس با کاورِ کاروسلِ مبدأ
+   * (که شناسه‌ی جدایی دارد) هیچ‌وقت تصادف نمی‌کند.
+   */
+  const sbEarly = client();
+  const bgPath = coverImagePath(post.id);
+  let backgroundImage: Buffer | undefined;
+
+  const cached = await sbEarly.storage.from(BUCKET).download(bgPath);
+  if (cached.data) {
+    backgroundImage = Buffer.from(await cached.data.arrayBuffer());
+    console.log(`[storage] تصویرِ استوری از قبل موجود بود — بدون فراخوانی جدید`);
+  } else {
+    const gen = await generateCoverImage(frame0Subject, { frame: "story" });
+    if (gen.status === "generated") {
+      backgroundImage = gen.buffer;
+      const up = await sbEarly.storage.from(BUCKET).upload(bgPath, gen.buffer, {
+        contentType: "image/png",
+        cacheControl: String(CACHE_SECONDS),
+        upsert: true,
+      });
+      if (up.error) {
+        console.error(`[storage] ذخیره‌ی تصویرِ استوری شکست: ${up.error.message}`);
+      }
+    }
+    // شکستِ تولید (failed/skipped) کشنده نیست — همان قاعده‌ی کاروسل: فریمِ
+    // اول بدونِ تصویر هنوز کاملاً قابلِ استفاده است، فقط پس‌زمینه‌ی سرمه‌ای می‌گیرد.
+  }
+
+  const stickerFrames = new Set<number>((post.extras.stickers ?? []).map((s) => s.frame));
+
+  const buffers = await renderStory(post.slides, {
+    language: post.language ?? "fa",
+    backgroundImage,
+    stickerFrames,
+  });
+
+  const sb = client();
+  const paths: string[] = [];
+  for (const [i, buf] of buffers.entries()) {
+    const path = slidePath(post.id, i);
+    const { error } = await sb.storage.from(BUCKET).upload(path, buf, {
+      contentType: "image/png",
+      cacheControl: String(CACHE_SECONDS),
+      upsert: true,
+    });
+    if (error) {
+      console.error(`[storage] آپلود ${path} شکست: ${error.message}`);
+      return { status: "failed", error: `آپلودِ فریمِ ${i + 1}: ${error.message}` };
+    }
+    paths.push(path);
+  }
+
+  const renderedAt = new Date().toISOString();
+  await store.updateSocialPost(post.id, { imagePaths: paths, renderedAt });
+
+  const secs = ((Date.now() - t0) / 1000).toFixed(1);
+  const kb = Math.round(buffers.reduce((a, b) => a + b.length, 0) / 1024);
+  console.log(`[storage] ${paths.length} فریمِ استوری در ${secs}s — ${kb}KB — ${post.id}`);
+
+  return { status: "rendered", count: paths.length, renderedAt };
 }

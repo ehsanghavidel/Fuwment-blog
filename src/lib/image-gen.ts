@@ -88,13 +88,44 @@ const TIMEOUT_MS = 60_000;
  *
  * انگلیسی است چون مدل‌های تصویرساز با انگلیسی قابل‌اعتمادترند. این یک
  * پارامتر فنی است، نه متن برند — قاعده‌ی «پاسخ‌ها فارسی» شاملش نمی‌شود.
+ *
+ * ── Stage ۲: بندِ COMPOSITION/FORMAT برای استوری ──
+ *
+ * فقط این دو بند بین کاروسل و استوری فرق دارند؛ LIGHT، BRITISH CONTEXT،
+ * DEPTH، PALETTE، MOOD و ABSOLUTELY EXCLUDE کاراکتربه‌کاراکتر مشترک‌اند.
+ * دلیلِ کاروسل «بالای قاب» و استوری «۵۵ تا ۷۰٪ پایین‌تر»: بلوکِ متنِ
+ * کاروسل حدودِ وسط می‌نشیند و پایین‌تر می‌رود، ولی بلوکِ استوری برای
+ * نقشِ hook از **بالا** لنگر می‌شود (`storyBlockAlignFor`) — پس تصویر
+ * باید پایینِ قاب بنشیند تا با متن نجنگد. باندِ ۵۵–۷۰٪ روی بومِ
+ * ۱۹۲۰ یعنی y∈[۱۰۵۶,۱۳۴۴]، کاملاً بالاترِ مرزِ رزروِ استیکر (۱۴۱۰) —
+ * تصادفِ هندسی از طراحی حذف است، Stage ۳ فقط تأییدِ چشمی می‌کند.
  */
-const STYLE = `A single quiet photographic scene. {subject}
+const COMPOSITION_CAROUSEL = `One focal subject only, placed off-centre in the upper half of the frame,
+occupying no more than one third of the image. Everything else is empty.
+Generous negative space. Nothing in the lower half but atmosphere.`;
+
+const COMPOSITION_STORY = `One focal subject only, placed in the lower-middle band of the frame —
+roughly between 55% and 70% of the way down — occupying no more than one
+third of the image. The bottom quarter of the frame must stay visually
+quiet: atmosphere and falloff only, no focal object, no face, no key
+visual element there. The upper half stays open for text.`;
+
+const FORMAT_CAROUSEL = `Vertical 4:5.`;
+const FORMAT_STORY = `Vertical 9:16.`;
+
+/** ساخت پرامپتِ نهایی — فقط COMPOSITION و FORMAT با قالب عوض می‌شوند */
+function styleFor(subject: string, frame: "carousel" | "story"): string {
+  const composition = frame === "story" ? COMPOSITION_STORY : COMPOSITION_CAROUSEL;
+  const format = frame === "story" ? FORMAT_STORY : FORMAT_CAROUSEL;
+  return STYLE_TEMPLATE.replace("{subject}", subject)
+    .replace("{composition}", composition)
+    .replace("{format}", format);
+}
+
+const STYLE_TEMPLATE = `A single quiet photographic scene. {subject}
 
 COMPOSITION
-One focal subject only, placed off-centre in the upper half of the frame,
-occupying no more than one third of the image. Everything else is empty.
-Generous negative space. Nothing in the lower half but atmosphere.
+{composition}
 
 LIGHT
 Soft, directional daylight — bright overcast or gentle indirect daylight,
@@ -154,7 +185,7 @@ No collage, split frames, borders, or vignettes.
 No 3D render, no illustration, no digital art — photographic only.
 
 FORMAT
-Vertical 4:5.`;
+{format}`;
 
 export function isImageGenConfigured(): boolean {
   return Boolean(process.env.OPENROUTER_API_KEY);
@@ -171,8 +202,15 @@ export type ImageGenResult =
  * ⚠️ هیچ‌وقت throw نمی‌کند — union برمی‌گرداند، مثل `storage.ts`.
  * کاوری که تصویر ندارد هنوز کاملاً قابل استفاده است؛ همان پس‌زمینه‌ی
  * سرمه‌ای را می‌گیرد.
+ *
+ * ⚠️ `opts.frame` پیش‌فرضش `"carousel"` است — یعنی هر فراخوانیِ موجود
+ * (بدونِ آرگومانِ دوم) رفتارِ عیناً قبلی را می‌گیرد. فقط `story-orchestrator`
+ * (از طریقِ `storage.ts`) صریحاً `{ frame: "story" }` می‌فرستد.
  */
-export async function generateCoverImage(subject: string | undefined): Promise<ImageGenResult> {
+export async function generateCoverImage(
+  subject: string | undefined,
+  opts?: { frame?: "carousel" | "story" }
+): Promise<ImageGenResult> {
   if (!isImageGenConfigured()) {
     console.log("[image-gen] OPENROUTER_API_KEY نیست — تولید تصویر رد شد");
     return { status: "skipped", reason: "not-configured" };
@@ -180,7 +218,8 @@ export async function generateCoverImage(subject: string | undefined): Promise<I
   const clean = subject?.trim();
   if (!clean) return { status: "skipped", reason: "no-subject" };
 
-  const prompt = STYLE.replace("{subject}", clean);
+  const frame = opts?.frame ?? "carousel";
+  const prompt = styleFor(clean, frame);
   const t0 = Date.now();
 
   try {
@@ -195,7 +234,7 @@ export async function generateCoverImage(subject: string | undefined): Promise<I
       body: JSON.stringify({
         model: MODEL,
         prompt,
-        aspect_ratio: "4:5",
+        aspect_ratio: frame === "story" ? "9:16" : "4:5",
         n: 1,
       }),
       signal: AbortSignal.timeout(TIMEOUT_MS),

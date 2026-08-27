@@ -3,8 +3,10 @@
 import { useState } from "react";
 import { studioFetch } from "./api";
 import { CarouselPreview } from "./CarouselPreview";
+import { StoryPreview } from "./StoryPreview";
 import { SlideImages } from "./SlideImages";
-import type { SocialFormat, SocialPost } from "@/lib/store/types";
+import type { SocialFormat, SocialPost, StorySticker } from "@/lib/store/types";
+import { slideText } from "@/lib/slide-spec";
 import { FORMAT_META } from "@/lib/social-format";
 import {
   IconCheck,
@@ -127,12 +129,29 @@ export function SocialPostCard({
   const meta = FORMAT_META[post.format];
   const PlatformIcon = ICON_BY_FORMAT[post.format];
   const platformLabel = meta.label;
+  const stickers: StorySticker[] = post.extras.stickers ?? [];
 
-  // چیزی که واقعاً کپی می‌شود. در ریلز، اسکریپت و کپشن دو چیز جدا هستند:
-  // اسکریپت را می‌خوانید، کپشن را زیر ویدیو می‌گذارید.
-  const copyText = isReels
-    ? post.body
-    : `${post.body}\n\n${post.hashtags.join(" ")}`;
+  /** توصیفِ یک‌خطیِ استیکر — هم برای نمایش، هم برای متنِ کپی‌شونده */
+  function stickerLine(s: StorySticker): string {
+    const frameLabel = `فریم ${(s.frame + 1).toLocaleString("fa-IR")}`;
+    if (s.type === "poll") return `${frameLabel} — نظرسنجی: ${s.question} (${s.options.join(" / ")})`;
+    if (s.type === "question") return `${frameLabel} — سؤال: ${s.prompt}`;
+    return `${frameLabel} — لینک «${s.label}» → ${s.destination}`;
+  }
+
+  // چیزی که واقعاً کپی می‌شود.
+  // - ریلز: اسکریپت و کپشن دو چیز جدا هستند؛ اسکریپت را می‌خوانید، کپشن زیر ویدیو می‌رود.
+  // - استوری: کپشن ندارد — body همان setSummary (خلاصه‌ی داخلی) است، نه متنِ منتشرشدنی.
+  //   چیزی که کپی می‌شود متنِ خودِ فریم‌ها + CTA + استیکرهاست — همان چیزی که copyLabel وعده می‌دهد.
+  const storyCopyText = [
+    ...post.slides.map(
+      (f, i) => `فریم ${(i + 1).toLocaleString("fa-IR")}:\n${slideText(f)}`
+    ),
+    ...(post.cta ? [`دعوت به اقدام:\n${post.cta}`] : []),
+    ...(stickers.length > 0 ? [`استیکرها:\n${stickers.map(stickerLine).join("\n")}`] : []),
+  ].join("\n\n");
+
+  const copyText = isStory ? storyCopyText : isReels ? post.body : `${post.body}\n\n${post.hashtags.join(" ")}`;
   const copyLabel = meta.copyLabel;
   const passed = post.checks.filter((c) => c.pass).length;
 
@@ -172,6 +191,12 @@ export function SocialPostCard({
       {meta.canRender &&
         (post.imagePaths.length > 0 ? (
           <SlideImages post={post} />
+        ) : isStory ? (
+          <StoryPreview
+            frames={post.slides}
+            language={post.language}
+            stickerFrames={new Set(stickers.map((s) => s.frame))}
+          />
         ) : (
           <CarouselPreview slides={post.slides} language={post.language} />
         ))}
@@ -213,6 +238,26 @@ export function SocialPostCard({
           {post.body}
         </div>
       </div>
+
+      {/*
+        استیکرهای تعاملی — هرگز روی PNG کشیده نمی‌شوند (پروژه به Graph API
+        وصل نیست)؛ اپراتور موقعِ آپلودِ دستی در اپ اینستاگرام می‌چسباندشان.
+        فریم اینجا یک‌مبنا نمایش داده می‌شود؛ داده‌ی خام صفرمبناست.
+      */}
+      {isStory && stickers.length > 0 && (
+        <div className="mt-4">
+          <h4 className="mb-1.5 text-sm font-bold text-ink">
+            استیکرهای تعاملی — برای چسباندنِ دستی
+          </h4>
+          <ul className="space-y-1.5 rounded-xl bg-surface-dim p-4 text-sm leading-7 text-ink-soft">
+            {stickers.map((s, i) => (
+              <li key={i} dir="auto">
+                {stickerLine(s)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* اکسترا — فقط ریلز: متن روی تصویر و کپشن جدا */}
       {isReels && (

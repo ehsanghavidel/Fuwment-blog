@@ -22,11 +22,7 @@ export type FormatMeta = {
   copyLabel: string;
   /** آیا این قالب اسلاید دارد */
   hasSlides: boolean;
-  /**
-   * آیا دکمه‌ی رندر نمایش داده شود.
-   * ⚠️ استوری تا پایانِ Stage 1 همچنان `false` است — رندرکننده‌اش
-   * در Stage 2 ساخته می‌شود.
-   */
+  /** آیا دکمه‌ی رندر نمایش داده شود. */
   canRender: boolean;
 };
 
@@ -57,6 +53,7 @@ export const FORMAT_META: Record<SocialFormat, FormatMeta> = {
     bodyLabel: "خلاصه‌ی داخلیِ ست — منتشر نمی‌شود",
     copyLabel: "کپی متنِ فریم‌ها و استیکرها",
     hasSlides: true,
-    canRender: false,
+    // ⚠️ Stage ۲: رندرکننده و پیش‌نمایشِ استوری ساخته و اعتبارسنجی شدند.
+    canRender: true,
   },
 };
