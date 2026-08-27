@@ -63,7 +63,14 @@ export type RunStatus = "running" | "done" | "error";
  * عمداً در دیتابیس فقط text است و check constraint ندارد، چون با هر نوع
  * جدید باید constraint را drop/recreate می‌کردیم.
  */
-export type RunKind = "blog" | "repurpose" | "instagram" | "reels" | "linkedin" | "campaign";
+export type RunKind =
+  | "blog"
+  | "repurpose"
+  | "instagram"
+  | "reels"
+  | "linkedin"
+  | "campaign"
+  | "story";
 
 export type PipelineRun = {
   id: string;
@@ -87,12 +94,27 @@ export type PipelineRun = {
 
 export type SocialPlatform = "instagram" | "linkedin";
 /** ریلز هم پلتفرمش instagram است؛ همین فیلد فرقشان را می‌گوید */
-export type SocialFormat = "carousel" | "post" | "reels";
+export type SocialFormat = "carousel" | "post" | "reels" | "story";
 export type SocialStatus = "draft" | "approved";
+
+/**
+ * متادیتای استیکرِ تعاملیِ استوری (poll/question/link).
+ *
+ * ⚠️ `frame` صفرمبناست — فریمِ اول = ۰. استودیو برای انسان «فریم ۱/۲/۳»
+ * نشان می‌دهد؛ این تبدیل فقط در لایه‌ی نمایش است، هرگز در داده. این متادیتا
+ * هرگز روی PNG کشیده نمی‌شود — مصرف‌کننده‌اش اپراتور انسانی است که موقعِ
+ * آپلودِ دستی در اپ اینستاگرام آن را می‌چسباند (این پروژه به Graph API
+ * وصل نیست).
+ */
+export type StorySticker =
+  | { type: "poll"; frame: number; question: string; options: [string, string] }
+  | { type: "question"; frame: number; prompt: string }
+  | { type: "link"; frame: number; label: string; destination: string };
 
 /**
  * فیلدهای مخصوص هر قالب که ستون ثابت ندارند.
  * ریلز: متن روی تصویر، کپشن جدا از اسکریپت، و دلیل انتخاب CTA.
+ * استوری: استیکرهای تعاملی و کاروسلِ مبدأ.
  */
 export type SocialExtras = {
   /** متن کوتاهی که روی فریم قلاب نوشته می‌شود */
@@ -101,6 +123,10 @@ export type SocialExtras = {
   caption?: string;
   /** چرا این CTA انتخاب شد (یک جمله، بیرون از اسکریپت) */
   ctaReason?: string;
+  /** فقط استوری — استیکرهای تعاملی، اختیاری */
+  stickers?: StorySticker[];
+  /** فقط استوری — کاروسلِ همان‌روزی که این ست از آن مشتق شده */
+  sourceSocialPostId?: string;
 };
 
 /**

@@ -4,7 +4,8 @@ import { useState } from "react";
 import { studioFetch } from "./api";
 import { CarouselPreview } from "./CarouselPreview";
 import { SlideImages } from "./SlideImages";
-import type { SocialPost } from "@/lib/store/types";
+import type { SocialFormat, SocialPost } from "@/lib/store/types";
+import { FORMAT_META } from "@/lib/social-format";
 import {
   IconCheck,
   IconCopy,
@@ -20,7 +21,19 @@ import {
 } from "@/components/ui/icons";
 
 /**
- * کارت یک محتوای اجتماعی — کاروسل، پست لینکدین یا اسکریپت ریلز.
+ * آیکونِ هر قالب — نگاشتِ صریح، نه ترنری‌ای که برای قالبِ ناشناخته بی‌صدا
+ * روی لینکدین می‌افتد (باگی که ممیزیِ فاز ۴ در اینجا پیدا کرد).
+ * `satisfies` اضافه‌شدنِ قالبِ جدید بدونِ ورودیِ اینجا را خطای کامپایل می‌کند.
+ */
+const ICON_BY_FORMAT = {
+  carousel: IconInstagram,
+  post: IconLinkedin,
+  reels: IconVideo,
+  story: IconInstagram,
+} satisfies Record<SocialFormat, typeof IconInstagram>;
+
+/**
+ * کارت یک محتوای اجتماعی — کاروسل، پست لینکدین، اسکریپت ریلز یا ستِ استوری.
  *
  * ابتدا داخل SocialPanel بود؛ با آمدن دومین مصرف‌کننده (پنل کمپین، که
  * باید خروجی هر کانال را نشان دهد) بیرون کشیده شد. همان قاعده‌ی همیشگی:
@@ -110,24 +123,17 @@ export function SocialPostCard({
   }
 
   const isReels = post.format === "reels";
-  const isCarousel = post.format === "carousel";
-  const PlatformIcon = isReels
-    ? IconVideo
-    : post.platform === "instagram"
-      ? IconInstagram
-      : IconLinkedin;
-  const platformLabel = isReels
-    ? "اسکریپت ریلز"
-    : isCarousel
-      ? "کاروسل اینستاگرام"
-      : "پست لینکدین";
+  const isStory = post.format === "story";
+  const meta = FORMAT_META[post.format];
+  const PlatformIcon = ICON_BY_FORMAT[post.format];
+  const platformLabel = meta.label;
 
   // چیزی که واقعاً کپی می‌شود. در ریلز، اسکریپت و کپشن دو چیز جدا هستند:
   // اسکریپت را می‌خوانید، کپشن را زیر ویدیو می‌گذارید.
   const copyText = isReels
     ? post.body
     : `${post.body}\n\n${post.hashtags.join(" ")}`;
-  const copyLabel = isReels ? "اسکریپت" : platformLabel;
+  const copyLabel = meta.copyLabel;
   const passed = post.checks.filter((c) => c.pass).length;
 
   return (
@@ -163,14 +169,14 @@ export function SocialPostCard({
         موتور متن مرورگر انجام می‌دهد و رندرکننده با measureText اسکیا.
         دو موتور اندازه‌گیری، بدون تضمین توافق. PNG حقیقت است.
       */}
-      {isCarousel &&
+      {meta.canRender &&
         (post.imagePaths.length > 0 ? (
           <SlideImages post={post} />
         ) : (
           <CarouselPreview slides={post.slides} language={post.language} />
         ))}
 
-      {isCarousel && (
+      {meta.canRender && (
         <button
           onClick={rerender}
           disabled={rendering}
@@ -198,6 +204,8 @@ export function SocialPostCard({
         {isReels && (
           <h4 className="mb-1.5 text-sm font-bold text-ink">اسکریپت (برای بلندخوانی)</h4>
         )}
+        {/* ⚠️ استوری کپشن ندارد — این جعبه خلاصه‌ی داخلیِ ست است، نه متنِ قابلِ انتشار */}
+        {isStory && <h4 className="mb-1.5 text-sm font-bold text-ink">{meta.bodyLabel}</h4>}
         <div
           dir="auto"
           className="whitespace-pre-line rounded-xl bg-surface-dim p-4 text-sm leading-8 text-ink-soft"
@@ -252,7 +260,7 @@ export function SocialPostCard({
           className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-surface-line px-4 py-2 text-sm font-bold text-ink transition-colors hover:bg-surface-dim"
         >
           <IconCopy className="h-4 w-4" />
-          {isReels ? "کپی اسکریپت" : "کپی متن و هشتگ‌ها"}
+          {copyLabel}
         </button>
         {isReels && post.extras.caption && (
           <button

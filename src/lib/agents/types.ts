@@ -218,6 +218,9 @@ export const AGENT_IDS = [
   "linkedin-writer",
   "reels-writer",
   "social-editor",
+  // فاز ۴، استوری
+  "story-angle-finder",
+  "story-writer",
   // فاز ۵ — کمپین چندکاناله
   "campaign-strategist",
   // فاز ۷ — برنامه‌ریزی هفتگی
@@ -563,6 +566,62 @@ export const ReelsScriptSchema = z.object({
 });
 
 export type ReelsScript = z.infer<typeof ReelsScriptSchema>;
+
+/* ── استوری ─────────────────────────────────────────────── */
+
+/**
+ * استیکرِ تعاملیِ یک فریم — با `StorySticker` در `store/types.ts` هم‌شکل.
+ *
+ * ⚠️ `frame` صفرمبناست: `z.number().int().min(0)`. سقفِ بالا (کوچک‌تر از
+ * تعدادِ واقعیِ فریم‌ها) اینجا سنجیده نمی‌شود — به تعدادِ فریمِ ستِ خاص
+ * وابسته است، پس چکِ قطعیِ `< frames.length` در `runStoryChecks` (Stage ۱)
+ * می‌آید، نه در اسکیما.
+ */
+export const StoryStickerSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("poll"),
+    frame: z.number().int().min(0),
+    question: z.string().min(3),
+    options: z.tuple([z.string(), z.string()]),
+  }),
+  z.object({
+    type: z.literal("question"),
+    frame: z.number().int().min(0),
+    prompt: z.string().min(3),
+  }),
+  z.object({
+    type: z.literal("link"),
+    frame: z.number().int().min(0),
+    label: z.string().min(2),
+    destination: z.string().min(2),
+  }),
+]);
+
+/**
+ * یک ستِ استوری — ۲ تا ۳ فریمِ مرتب که یک مینی‌روایتِ واحد می‌سازند.
+ *
+ * ⚠️ `frames` از همان `SlideSchema` استفاده می‌کند — بدونِ چیدمانِ چهارم.
+ * افزودنِ واریانتِ `"story"` به `Slide` باعثِ شکستِ `blocksFor`/`slideText`/
+ * `clampSlides`/`LIMITS_BY_LAYOUT` می‌شد؛ فریمِ استوری همان `standard` یا
+ * `statement` یا `list` است.
+ *
+ * ⚠️ عمداً `caption` ندارد — استوری اصلاً کپشن ندارد. `setSummary` خلاصه‌ی
+ * داخلیِ ست برای اپراتور است، نه متنِ قابلِ انتشار (نگاه کن به فیلدِ
+ * `SocialPost.body` — همین‌جا می‌نشیند).
+ */
+export const InstagramStorySchema = z.object({
+  title: z.string().min(4),
+  /** خلاصه‌ی داخلیِ ست — کپشن نیست، هرگز paste نمی‌شود */
+  setSummary: z.string().min(20),
+  // ⚠️ بازه‌ی ۲–۳ زیرمجموعه‌ی بازه‌ی مجازِ دیتابیس (۱–۳) است —
+  //    social_posts_shape (تأییدشده روی دیتابیسِ زنده، مرداد ۱۴۰۵).
+  frames: z.array(SlideSchema).min(2).max(3),
+  stickers: z.array(StoryStickerSchema).optional(),
+  cta: z.string().min(5),
+});
+
+export type StorySticker = z.infer<typeof StoryStickerSchema>;
+export type InstagramStory = z.infer<typeof InstagramStorySchema>;
 
 /** روبریک ویراستار اجتماعی — معیارها عمداً با ویراستار بلاگ فرق دارند */
 export const SocialReviewSchema = z.object({
