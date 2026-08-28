@@ -598,6 +598,51 @@ export const StoryStickerSchema = z.discriminatedUnion("type", [
 ]);
 
 /**
+ * نرمال‌سازیِ مرزِ خروجیِ استوری — فقط `imageSubject: null` روی فریم‌های
+ * غیرکاور (اندیس ≥ ۱) را به «نبودِ فیلد» تبدیل می‌کند.
+ *
+ * چرا لازم است: مدل (Gemini) برای فیلدِ اختیاری به‌جای حذفِ کلید، مقدارِ
+ * JSON ِ `null` می‌دهد — یک قراردادِ رایجِ سریال‌سازی. `z.string().optional()`
+ * مقدارِ `null` را رد می‌کند، پس کپی‌رایترِ استوری هر دو تلاشش را می‌سوزاند و
+ * اجرا می‌میرد (اجرای واقعیِ Vercel Preview روی commit 0702662 — مسیرهای
+ * `["frames", 1, "imageSubject"]` و `["frames", 2, "imageSubject"]`).
+ *
+ * چرا فقط فریم‌های ≥ ۱: تصویرِ AI فقط برایِ فریمِ اول ساخته می‌شود و ناشر
+ * (`story-orchestrator.ts`) خودش `imageSubject` را از فریم‌های بعدی حذف
+ * می‌کند — پس `null → حذفِ کلید` روی آن‌ها بی‌کم‌وکاست است.
+ *
+ * چرا فریمِ ۰ دست‌نخورده می‌ماند: `imageSubject` ِ کاور برای استوری واقعاً
+ * لازم است — چکِ مسدودکننده‌ی «تصویر فریم اول» (`social-checks.ts`) و
+ * محافظِ رندر (`storage.ts` → «رندر متوقف شد») هر دو نبودش را می‌گیرند.
+ * `null` روی فریمِ ۰ باید همچنان سختگیرانه رد شود، نه بی‌صدا پذیرفته.
+ *
+ * چرا اینجا و نه در `ai.ts`: `runAgentJSON` مستقیم `schema.parse` می‌کند و
+ * هیچ درزِ نرمال‌سازیِ مشترکی ندارد. این `preprocess` فقط دورِ
+ * `InstagramStorySchema` است — `SlideSchema` و مسیرِ کاروسل دست نمی‌خورند.
+ * چون هم `runStoryWriter` و هم `runStoryRevision` همین اسکیما را می‌دهند،
+ * یک مسیرِ نرمال‌سازی است، نه دو کپی.
+ */
+function normalizeStoryFrames(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object" || !("frames" in raw)) return raw;
+  const obj = raw as { frames?: unknown };
+  if (!Array.isArray(obj.frames)) return raw;
+
+  return {
+    ...obj,
+    frames: obj.frames.map((frame, i) => {
+      if (i === 0 || !frame || typeof frame !== "object") return frame;
+      const f = frame as Record<string, unknown>;
+      if ("imageSubject" in f && f.imageSubject === null) {
+        console.log(`[story-normalize] imageSubject: null روی فریمِ ${i} حذف شد (قراردادِ JSON مدل)`);
+        const { imageSubject: _drop, ...rest } = f;
+        return rest;
+      }
+      return frame;
+    }),
+  };
+}
+
+/**
  * یک ستِ استوری — ۲ تا ۳ فریمِ مرتب که یک مینی‌روایتِ واحد می‌سازند.
  *
  * ⚠️ `frames` از همان `SlideSchema` استفاده می‌کند — بدونِ چیدمانِ چهارم.
@@ -608,17 +653,24 @@ export const StoryStickerSchema = z.discriminatedUnion("type", [
  * ⚠️ عمداً `caption` ندارد — استوری اصلاً کپشن ندارد. `setSummary` خلاصه‌ی
  * داخلیِ ست برای اپراتور است، نه متنِ قابلِ انتشار (نگاه کن به فیلدِ
  * `SocialPost.body` — همین‌جا می‌نشیند).
+ *
+ * ⚠️ `preprocess` فقط `imageSubject: null` را روی فریم‌های غیرکاور پاک
+ * می‌کند (توضیحِ کامل در `normalizeStoryFrames`). ساختارِ خروجی و
+ * `InstagramStory` عوض نمی‌شود.
  */
-export const InstagramStorySchema = z.object({
-  title: z.string().min(4),
-  /** خلاصه‌ی داخلیِ ست — کپشن نیست، هرگز paste نمی‌شود */
-  setSummary: z.string().min(20),
-  // ⚠️ بازه‌ی ۲–۳ زیرمجموعه‌ی بازه‌ی مجازِ دیتابیس (۱–۳) است —
-  //    social_posts_shape (تأییدشده روی دیتابیسِ زنده، مرداد ۱۴۰۵).
-  frames: z.array(SlideSchema).min(2).max(3),
-  stickers: z.array(StoryStickerSchema).optional(),
-  cta: z.string().min(5),
-});
+export const InstagramStorySchema = z.preprocess(
+  normalizeStoryFrames,
+  z.object({
+    title: z.string().min(4),
+    /** خلاصه‌ی داخلیِ ست — کپشن نیست، هرگز paste نمی‌شود */
+    setSummary: z.string().min(20),
+    // ⚠️ بازه‌ی ۲–۳ زیرمجموعه‌ی بازه‌ی مجازِ دیتابیس (۱–۳) است —
+    //    social_posts_shape (تأییدشده روی دیتابیسِ زنده، مرداد ۱۴۰۵).
+    frames: z.array(SlideSchema).min(2).max(3),
+    stickers: z.array(StoryStickerSchema).optional(),
+    cta: z.string().min(5),
+  })
+);
 
 export type StorySticker = z.infer<typeof StoryStickerSchema>;
 export type InstagramStory = z.infer<typeof InstagramStorySchema>;
