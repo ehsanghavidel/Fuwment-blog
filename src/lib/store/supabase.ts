@@ -37,6 +37,26 @@ function client(): SupabaseClient {
   );
 }
 
+/**
+ * سقفِ زمانِ نوشتنِ جدولِ `pipeline_runs` — و **فقط** این جدول.
+ *
+ * ⚠️ این یک سیاستِ سراسری نیست. طبقِ تصمیمِ بازبینی‌شده، `client()` عمومی
+ * دست‌نخورده می‌ماند؛ فقط `createRun`/`updateRun` که مسیرِ آینه‌کردنِ زنده‌ی
+ * استودیو هستند سقف می‌گیرند.
+ *
+ * چرا ۱۰ ثانیه: نوشتِ سالمِ این جدول زیرِ یک ثانیه است (اندازه‌گیریِ لپ‌تاپ
+ * ۷۷ms). در اجرای شکست‌خورده‌ی واقعیِ استوری روی Vercel Preview همین نوشت‌ها
+ * ۴۰ تا ۷۰ ثانیه هنگ کردند و ۳۰۰ ثانیه بودجه را خوردند. ۱۰ ثانیه سقفی است
+ * که نوشتِ کندِ ولی سالم را نمی‌کشد، و هنگِ واقعی را زودتر از آنکه محافظِ
+ * مهلتِ ۴۰ ثانیه‌ای بی‌اثر شود قطع می‌کند.
+ *
+ * postgrest-js روی این abort خطا **برمی‌گرداند** (throw نمی‌کند):
+ * `{ error: { message: "TimeoutError: ...", code: "" }, status: 0 }` — پس
+ * شرطِ `if (error) throw` پایین همان‌طور که هست کار می‌کند (تأییدشده با
+ * یک سرور TCP که پاسخ نمی‌دهد).
+ */
+const PIPELINE_RUN_PERSIST_TIMEOUT_MS = 10_000;
+
 /* ── تبدیل ردیف ↔ تایپ ─────────────────────────────────── */
 
 function postToRow(p: Post) {
@@ -298,14 +318,21 @@ export class SupabaseStore implements BlogStore {
   }
 
   async createRun(run: PipelineRun) {
-    const { error } = await client().from("pipeline_runs").insert(runToRow(run));
-    if (error) throw new Error(`ثبت اجرا ناموفق بود: ${error.message}`);
+    const { error } = await client()
+      .from("pipeline_runs")
+      .insert(runToRow(run))
+      .abortSignal(AbortSignal.timeout(PIPELINE_RUN_PERSIST_TIMEOUT_MS));
+    if (error) throw new Error(`[pipeline-run-persist] ثبت اجرا ناموفق بود: ${error.message}`);
   }
 
   async updateRun(id: string, patch: Partial<PipelineRun>) {
     const row = partialToRow(patch, runToRow as any);
-    const { error } = await client().from("pipeline_runs").update(row).eq("id", id);
-    if (error) throw new Error(`به‌روزرسانی اجرا ناموفق بود: ${error.message}`);
+    const { error } = await client()
+      .from("pipeline_runs")
+      .update(row)
+      .eq("id", id)
+      .abortSignal(AbortSignal.timeout(PIPELINE_RUN_PERSIST_TIMEOUT_MS));
+    if (error) throw new Error(`[pipeline-run-persist] به‌روزرسانی اجرا ناموفق بود: ${error.message}`);
   }
 
   async getRun(id: string) {

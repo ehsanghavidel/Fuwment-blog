@@ -134,7 +134,20 @@ export async function runStoryPipeline(opts: {
     createdAt: new Date().toISOString(),
     finishedAt: null,
   };
-  await store.createRun(run);
+  // ── ثبتِ اولیه‌ی اجرا — CRITICAL، سقف‌دار (supabase.ts) ──
+  // اگر خودِ رکوردِ اجرا در دیتابیس ننشیند، ادامه‌ی پایپ‌لاین بی‌معنی است:
+  // استودیو چیزی برای poll ندارد و هیچ گامی بازیابی‌پذیر نیست. زود و تمیز
+  // با یک خطای کنترل‌شده برمی‌گردیم، نه با throw ِ خام که به ۵۰۰ ِ HTML برسد.
+  try {
+    await store.createRun(run);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[pipeline-run-persist] ثبتِ اولیه‌ی اجرا (${runId}) ناموفق بود — پایپ‌لاین شروع نشد: ${message}`);
+    run.status = "error";
+    run.error = `ثبتِ اجرا در دیتابیس ناموفق بود — اجرا شروع نشد: ${message}`;
+    run.finishedAt = new Date().toISOString();
+    return run;
+  }
 
   const step = makeStepRunner(run);
 
@@ -332,7 +345,14 @@ export async function runStoryPipeline(opts: {
     });
 
     run.socialPostIds = [published.storyId];
-    await store.updateRun(runId, { socialPostIds: run.socialPostIds });
+    // پیوندِ راحتی‌بخش — پستِ استوری خودش `runId` دارد، پس پیوندِ معکوس
+    // مستقل از این نوشت هست. اگر سقفِ زمان خورد، لاگ کن و بگذر.
+    try {
+      await store.updateRun(runId, { socialPostIds: run.socialPostIds });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`[pipeline-run-persist] نوشتِ socialPostIds اجرا (${runId}) ناموفق بود — اجرا ادامه می‌یابد: ${message}`);
+    }
 
     // ── ۶. منتقد (خودبهبودی) ──
     await step<unknown>("critic", "منتقد — استخراج درس", async () => {
@@ -359,18 +379,43 @@ export async function runStoryPipeline(opts: {
 
     run.status = "done";
     run.finishedAt = new Date().toISOString();
-    await store.updateRun(runId, { status: "done", finishedAt: run.finishedAt });
+    // ── نوشتِ نهاییِ معتبر ──
+    // `steps` را هم می‌فرستیم: اگر آینه‌ی «پایان» آخرین گام (منتقد) سقفِ زمان
+    // خورده باشد، این تنها فرصتِ باقی‌مانده برای ماندگارکردنِ تایم‌لاینِ کامل
+    // است. روی مسیرِ موفق، `run.steps` از قبل کامل است، پس بی‌ضرر.
+    //
+    // ⚠️ در try/catch ِ جدا: اگر این نوشت خطا دهد، نباید به catch ِ بیرونی
+    // بیفتد و اجرای موفق را به‌دروغ «error» علامت بزند.
+    try {
+      await store.updateRun(runId, {
+        status: "done",
+        finishedAt: run.finishedAt,
+        steps: run.steps,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`[terminal-persist-error] نوشتِ وضعیتِ نهاییِ اجرا (${runId}) ناموفق بود: ${message}`);
+      run.error = `اجرا کامل شد ولی نوشتِ وضعیتِ نهایی در دیتابیس ناموفق بود — تایم‌لاین را دستی بازبینی کنید: ${message}`;
+    }
     return run;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     run.status = "error";
     run.error = message;
     run.finishedAt = new Date().toISOString();
-    await store.updateRun(runId, {
-      status: "error",
-      error: message,
-      finishedAt: run.finishedAt,
-    });
+    try {
+      await store.updateRun(runId, {
+        status: "error",
+        error: message,
+        finishedAt: run.finishedAt,
+        steps: run.steps,
+      });
+    } catch (persistErr) {
+      const pm = persistErr instanceof Error ? persistErr.message : String(persistErr);
+      console.error(`[terminal-persist-error] نوشتِ وضعیتِ خطای اجرا (${runId}) ناموفق بود: ${pm}`);
+      // پیامِ خطای اصلی حفظ می‌شود؛ فقط اشاره‌ای می‌افزاییم که ماندگار نشد.
+      run.error = `${message}\n\n(هشدار: نوشتِ این وضعیت در دیتابیس هم ناموفق بود: ${pm})`;
+    }
     return run;
   }
 }

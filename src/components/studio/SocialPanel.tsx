@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { studioFetch } from "./api";
+import { readRunError } from "./runResponse";
 import { RunTimeline } from "./RunTimeline";
 import { SocialPostCard } from "./SocialPostCard";
 import type { PipelineRun, Post, SocialPost } from "@/lib/store/types";
@@ -205,8 +206,18 @@ export function SocialPanel({ onUnauthorized }: { onUnauthorized: () => void }) 
         method: "POST",
         body: JSON.stringify(body),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "خطای ناشناخته");
+      // بدنه را یک‌بار به‌صورت متن می‌خوانیم — روی کشته‌شدنِ تابع در مهلتِ
+      // Vercel این متن JSON نیست و res.json() مستقیم SyntaxError می‌داد.
+      const raw = await res.text();
+      if (!res.ok) throw new Error(readRunError(res.status, raw));
+      let data: { run: PipelineRun };
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        throw new Error(
+          "پاسخِ سرور قابلِ‌خواندن نبود — تایم‌لاینِ همین اجرا را ببینید تا وضعیتش مشخص شود."
+        );
+      }
       setRun(data.run);
     } catch (e) {
       if (e instanceof Error && e.message === "PASSWORD_REQUIRED") {
