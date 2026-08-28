@@ -598,13 +598,13 @@ export const StoryStickerSchema = z.discriminatedUnion("type", [
 ]);
 
 /**
- * نرمال‌سازیِ مرزِ خروجیِ استوری — فقط `imageSubject: null` روی فریم‌های
- * غیرکاور (اندیس ≥ ۱) را به «نبودِ فیلد» تبدیل می‌کند.
+ * فریم‌ها: `imageSubject: null` روی فریم‌های غیرکاور (اندیس ≥ ۱) را به
+ * «نبودِ فیلد» تبدیل می‌کند.
  *
  * چرا لازم است: مدل (Gemini) برای فیلدِ اختیاری به‌جای حذفِ کلید، مقدارِ
  * JSON ِ `null` می‌دهد — یک قراردادِ رایجِ سریال‌سازی. `z.string().optional()`
  * مقدارِ `null` را رد می‌کند، پس کپی‌رایترِ استوری هر دو تلاشش را می‌سوزاند و
- * اجرا می‌میرد (اجرای واقعیِ Vercel Preview روی commit 0702662 — مسیرهای
+ * اجرا می‌میرد (اجرای واقعیِ Vercel Preview `7ee0425c` — مسیرهای
  * `["frames", 1, "imageSubject"]` و `["frames", 2, "imageSubject"]`).
  *
  * چرا فقط فریم‌های ≥ ۱: تصویرِ AI فقط برایِ فریمِ اول ساخته می‌شود و ناشر
@@ -615,31 +615,98 @@ export const StoryStickerSchema = z.discriminatedUnion("type", [
  * لازم است — چکِ مسدودکننده‌ی «تصویر فریم اول» (`social-checks.ts`) و
  * محافظِ رندر (`storage.ts` → «رندر متوقف شد») هر دو نبودش را می‌گیرند.
  * `null` روی فریمِ ۰ باید همچنان سختگیرانه رد شود، نه بی‌صدا پذیرفته.
+ */
+function normalizeFrames(frames: unknown[]): unknown[] {
+  return frames.map((frame, i) => {
+    if (i === 0 || !frame || typeof frame !== "object") return frame;
+    const f = frame as Record<string, unknown>;
+    if ("imageSubject" in f && f.imageSubject === null) {
+      console.log(`[story-normalize] imageSubject: null روی فریمِ ${i} حذف شد (قراردادِ JSON مدل)`);
+      const { imageSubject: _drop, ...rest } = f;
+      return rest;
+    }
+    return frame;
+  });
+}
+
+/**
+ * استیکرها: هر عنصر جداگانه با **همان `StoryStickerSchema` سختگیرانه**
+ * سنجیده می‌شود؛ معتبر عیناً می‌ماند، نامعتبر با صدا حذف می‌شود.
+ *
+ * چرا حذف و نه ترمیم: استیکر متادیتای اختیاریِ رو به مخاطب است. `label` و
+ * `destination` ِ یک لینک، سؤالِ یک نظرسنجی، متنِ یک question — هیچ‌کدام را
+ * نمی‌شود از جای دیگری استنتاج کرد. ساختنشان یعنی سرِ خود لینک یا سؤالِ
+ * جعلی تولید کردن. **هیچ مقداری اینجا اختراع نمی‌شود** — یا کامل بود و
+ * ماند، یا ناقص بود و رفت.
+ *
+ * چرا اصلاً می‌بخشیم: یک استیکرِ ناقصِ **اختیاری** یک ستِ استوریِ کاملاً
+ * سالم را می‌کُشت. اجرای واقعیِ Vercel Preview `aba454b2` — مدل
+ * `{ type: "link", frame: n }` بدونِ `label`/`destination` داد و همه‌ی
+ * محتوای دیگر معتبر بود، ولی هر دو تلاشِ `runAgentJSON` سوخت و اجرا مُرد.
+ * هزینه‌ی از دست دادنِ یک نظرسنجی، در برابرِ هزینه‌ی از دست دادنِ کلِ ست.
+ *
+ * ⚠️ این بخشش **فقط برای متادیتای اختیاری** است. `title`/`setSummary`/
+ * `frames`/`cta` و `imageSubject` ِ فریمِ ۰ همچنان سختگیرانه‌اند — نرمال‌ساز
+ * هیچ نقصِ ساختاریِ هسته را نمی‌پوشاند.
+ *
+ * ⚠️ عنصرِ اصلی نگه داشته می‌شود، نه `result.data` — پارسِ نهاییِ
+ * `z.array(StoryStickerSchema)` در اسکیمای بیرونی همان شیءِ کانونیک را
+ * می‌سازد. اینجا فقط تصمیمِ «بماند یا برود» گرفته می‌شود.
+ */
+function normalizeStickers(stickers: unknown[]): unknown[] {
+  return stickers.filter((sticker, i) => {
+    const result = StoryStickerSchema.safeParse(sticker);
+    if (result.success) return true;
+    // نوع را فقط وقتی چاپ می‌کنیم که رشته باشد — وگرنه «؟» تا لاگ خودش خطا نسازد
+    const raw = sticker as { type?: unknown } | null;
+    const type = raw && typeof raw === "object" && typeof raw.type === "string" ? raw.type : "؟";
+    const why = result.error.issues.map((iss) => `${iss.path.join(".") || "—"}: ${iss.message}`);
+    console.log(
+      `[story-normalize] استیکرِ نامعتبر حذف شد — اندیس ${i}، نوع «${type}» — ${why.join(" | ")}`
+    );
+    return false;
+  });
+}
+
+/**
+ * نرمال‌سازیِ مرزِ خروجیِ استوری — **تنها** درزِ نرمال‌سازیِ این مسیر.
+ *
+ * دو کارِ جدا را همین‌جا با هم انجام می‌دهد (فریم‌ها و استیکرها) تا
+ * پیش‌پردازنده‌های موازی و پراکنده ساخته نشوند؛ هر دو یک مسئله‌ی واحدند:
+ * قراردادِ سریال‌سازیِ JSON ِ مدل با قراردادِ سختگیرانه‌ی ذخیره‌سازی یکی نیست.
  *
  * چرا اینجا و نه در `ai.ts`: `runAgentJSON` مستقیم `schema.parse` می‌کند و
  * هیچ درزِ نرمال‌سازیِ مشترکی ندارد. این `preprocess` فقط دورِ
- * `InstagramStorySchema` است — `SlideSchema` و مسیرِ کاروسل دست نمی‌خورند.
- * چون هم `runStoryWriter` و هم `runStoryRevision` همین اسکیما را می‌دهند،
- * یک مسیرِ نرمال‌سازی است، نه دو کپی.
+ * `InstagramStorySchema` است — `SlideSchema`، `StoryStickerSchema` و مسیرِ
+ * کاروسل هیچ‌کدام دست نمی‌خورند. چون هم `runStoryWriter` و هم
+ * `runStoryRevision` همین اسکیما را می‌دهند، یک مسیرِ نرمال‌سازی است، نه دو
+ * کپی — و بازنویسی هم نمی‌تواند استیکرِ ناقص را برگرداند.
+ *
+ * ⚠️ بازگشتی نیست: `StoryStickerSchema` صدا زده می‌شود، نه
+ * `InstagramStorySchema`. هرگز اسکیمای بیرونی را از داخلِ `preprocess`
+ * خودش صدا نزن.
  */
-function normalizeStoryFrames(raw: unknown): unknown {
-  if (!raw || typeof raw !== "object" || !("frames" in raw)) return raw;
-  const obj = raw as { frames?: unknown };
-  if (!Array.isArray(obj.frames)) return raw;
+function normalizeStoryOutput(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object") return raw;
+  const obj = { ...(raw as Record<string, unknown>) };
 
-  return {
-    ...obj,
-    frames: obj.frames.map((frame, i) => {
-      if (i === 0 || !frame || typeof frame !== "object") return frame;
-      const f = frame as Record<string, unknown>;
-      if ("imageSubject" in f && f.imageSubject === null) {
-        console.log(`[story-normalize] imageSubject: null روی فریمِ ${i} حذف شد (قراردادِ JSON مدل)`);
-        const { imageSubject: _drop, ...rest } = f;
-        return rest;
-      }
-      return frame;
-    }),
-  };
+  if (Array.isArray(obj.frames)) obj.frames = normalizeFrames(obj.frames);
+
+  // `stickers: null` = همان قراردادِ سریال‌سازیِ فیلدِ اختیاری. حذفِ کلید،
+  // نه تبدیل به `[]`، تا با «اصلاً استیکر ندارد» یکسان شود.
+  if ("stickers" in obj && obj.stickers === null) {
+    console.log("[story-normalize] stickers: null حذف شد (قراردادِ JSON مدل)");
+    delete obj.stickers;
+  } else if (Array.isArray(obj.stickers)) {
+    const kept = normalizeStickers(obj.stickers);
+    // اگر همه حذف شدند، کلید هم می‌رود — ستی بدونِ استیکر، نه آرایه‌ی خالی
+    if (kept.length === 0) delete obj.stickers;
+    else obj.stickers = kept;
+  }
+  // `stickers` با هر شکلِ دیگری (شیء، رشته، عدد) دست‌نخورده رد می‌شود تا
+  // اسکیما ردش کند — بخششِ ساختارِ ناشناخته شاهدی پشتش نیست.
+
+  return obj;
 }
 
 /**
@@ -654,12 +721,13 @@ function normalizeStoryFrames(raw: unknown): unknown {
  * داخلیِ ست برای اپراتور است، نه متنِ قابلِ انتشار (نگاه کن به فیلدِ
  * `SocialPost.body` — همین‌جا می‌نشیند).
  *
- * ⚠️ `preprocess` فقط `imageSubject: null` را روی فریم‌های غیرکاور پاک
- * می‌کند (توضیحِ کامل در `normalizeStoryFrames`). ساختارِ خروجی و
- * `InstagramStory` عوض نمی‌شود.
+ * ⚠️ `preprocess` فقط دو چیز را پاک می‌کند: `imageSubject: null` روی
+ * فریم‌های غیرکاور، و استیکرهای اختیاریِ نامعتبر (توضیحِ کامل در
+ * `normalizeStoryOutput`). ساختارِ خروجی و `InstagramStory` عوض نمی‌شود و
+ * هر استیکری که می‌مانَد از همان `StoryStickerSchema` سختگیرانه رد شده.
  */
 export const InstagramStorySchema = z.preprocess(
-  normalizeStoryFrames,
+  normalizeStoryOutput,
   z.object({
     title: z.string().min(4),
     /** خلاصه‌ی داخلیِ ست — کپشن نیست، هرگز paste نمی‌شود */
