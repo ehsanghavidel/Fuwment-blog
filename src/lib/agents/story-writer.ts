@@ -62,15 +62,15 @@ ${BRAND_VOICE}
 - فریم‌های بعدی کلیدِ «imageSubject» را **اصلاً نداشته باشند** — کلید را کامل حذف کن. نه رشته، نه رشته‌ی خالی، و **هرگز مقدارِ null**.
 
 قاعده‌ی استیکرِ تعاملی (اختیاری):
-- استوری می‌تواند حداکثر یک «استیکر» روی هر فریم داشته باشد — از نوع poll، question یا link.
+- استوری می‌تواند حداکثر یک «استیکر» روی هر فریم داشته باشد — **فقط از دو نوع: poll یا question**.
 - ⚠️ استیکر اختیاری است. **هیچ استیکری را برایِ تنوع یا تعاملِ زورکی اضافه نکن.** ستی با صفر استیکر کاملاً معتبر است.
 - اگر استیکر گذاشتی، «frame» باید اندیسِ **صفرمبنایِ** همان فریم باشد (فریمِ اول = 0).
 - هر نوع، فیلدهای خودش را دارد و **همه‌شان اجباری‌اند**:
   · poll → «type»، «frame»، «question» (متنِ ناتهی)، «options» (دقیقاً دو رشته‌ی ناتهی)
   · question → «type»، «frame»، «prompt» (متنِ ناتهی)
-  · link → «type»، «frame»، «label» (برچسبِ ناتهی)، «destination» (مقصدِ ناتهی)
 - ⚠️ **اگر نمی‌توانی همه‌ی فیلدهای آن نوع را پر کنی، کلِ آن استیکر را ننویس.** استیکرِ ناقص هرگز ننویس، و برای هیچ فیلدِ اجباری‌ای مقدارِ null یا رشته‌ی خالی نگذار. استیکرِ ناقص حذف می‌شود — یعنی هزینه‌اش را داده‌ای و چیزی نگرفته‌ای.
-- متنِ خودِ فریم هرگز نباید آدرسِ خام (URL) داشته باشد — لینک فقط داخلِ متادیتایِ استیکرِ link می‌آید.
+- ⚠️ **استیکرِ نوعِ link ننویس.** استیکرِ لینک فقط وقتی ساخته می‌شود که خودِ اپلیکیشن یک مقصدِ تأییدشده بدهد؛ در این مسیر چنین ورودی‌ای وجود ندارد. **هیچ آدرسی (URL) نساز، حدس نزن و از روی موضوع بازسازی نکن** — حتی آدرسی که به‌نظر آدرسِ خودِ فومنت می‌آید. هر استیکرِ link حذف می‌شود.
+- متنِ خودِ فریم هم هرگز نباید آدرسِ خام (URL) داشته باشد.
 ${language === "fa" ? FA_BLOCK : EN_BLOCK}${lessons}`;
 }
 
@@ -99,9 +99,9 @@ const SHAPE_HINT = `{
 }
 ⚠️ نمونه‌ی «frames» بالا فقط ساختارِ ۲ فریمی را نشان می‌دهد — می‌تواند ۳ فریم هم باشد (با یک فریمِ میانیِ standard/statement/list بینِ همین دو). «stickers» کاملاً اختیاری است؛ اگر لازم نبود، این فیلد را اصلاً برنگردان.
 
-دو شکلِ دیگرِ استیکر — هر سه فیلدشان اجباری است، ناقصش را اصلاً ننویس:
+شکلِ دیگرِ استیکر — همه‌ی فیلدهایش اجباری است، ناقصش را اصلاً ننویس:
 question: { "type": "question", "frame": 0, "prompt": "سؤالِ بازِ کوتاه" }
-link: { "type": "link", "frame": 1, "label": "برچسبِ روی استیکر", "destination": "مقصدِ لینک" }
+⚠️ فقط همین دو نوع (poll و question). استیکرِ link ننویس و هیچ URL ای نساز.
 
 دو شکلِ دیگرِ فریم:
 statement: { "layout": "statement", "kicker": "برچسب", "heading": "یک جمله‌ی واحد و قاطع" }
@@ -121,9 +121,9 @@ const SHAPE_HINT_EN = `{
 }
 ⚠️ The "frames" example above shows the 2-frame shape only — a 3-frame set is also valid (one middle standard/statement/list frame between these two). "stickers" is fully optional — omit it entirely when not needed.
 
-The two other sticker shapes — every field is required; never write a partial one:
+The other sticker shape — every field is required; never write a partial one:
 question: { "type": "question", "frame": 0, "prompt": "a short open question" }
-link: { "type": "link", "frame": 1, "label": "sticker label", "destination": "link destination" }
+⚠️ Only these two types (poll and question). Never write a link sticker and never invent a URL.
 
 The two other frame shapes:
 statement: { "layout": "statement", "kicker": "label", "heading": "one single decisive sentence" }
