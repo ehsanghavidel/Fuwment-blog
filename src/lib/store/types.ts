@@ -63,7 +63,14 @@ export type RunStatus = "running" | "done" | "error";
  * عمداً در دیتابیس فقط text است و check constraint ندارد، چون با هر نوع
  * جدید باید constraint را drop/recreate می‌کردیم.
  */
-export type RunKind = "blog" | "repurpose" | "instagram" | "reels" | "linkedin" | "campaign";
+export type RunKind =
+  | "blog"
+  | "repurpose"
+  | "instagram"
+  | "reels"
+  | "linkedin"
+  | "campaign"
+  | "story";
 
 export type PipelineRun = {
   id: string;
@@ -87,12 +94,27 @@ export type PipelineRun = {
 
 export type SocialPlatform = "instagram" | "linkedin";
 /** ریلز هم پلتفرمش instagram است؛ همین فیلد فرقشان را می‌گوید */
-export type SocialFormat = "carousel" | "post" | "reels";
+export type SocialFormat = "carousel" | "post" | "reels" | "story";
 export type SocialStatus = "draft" | "approved";
+
+/**
+ * متادیتای استیکرِ تعاملیِ استوری (poll/question/link).
+ *
+ * ⚠️ `frame` صفرمبناست — فریمِ اول = ۰. استودیو برای انسان «فریم ۱/۲/۳»
+ * نشان می‌دهد؛ این تبدیل فقط در لایه‌ی نمایش است، هرگز در داده. این متادیتا
+ * هرگز روی PNG کشیده نمی‌شود — مصرف‌کننده‌اش اپراتور انسانی است که موقعِ
+ * آپلودِ دستی در اپ اینستاگرام آن را می‌چسباند (این پروژه به Graph API
+ * وصل نیست).
+ */
+export type StorySticker =
+  | { type: "poll"; frame: number; question: string; options: [string, string] }
+  | { type: "question"; frame: number; prompt: string }
+  | { type: "link"; frame: number; label: string; destination: string };
 
 /**
  * فیلدهای مخصوص هر قالب که ستون ثابت ندارند.
  * ریلز: متن روی تصویر، کپشن جدا از اسکریپت، و دلیل انتخاب CTA.
+ * استوری: استیکرهای تعاملی و کاروسلِ مبدأ.
  */
 export type SocialExtras = {
   /** متن کوتاهی که روی فریم قلاب نوشته می‌شود */
@@ -101,17 +123,48 @@ export type SocialExtras = {
   caption?: string;
   /** چرا این CTA انتخاب شد (یک جمله، بیرون از اسکریپت) */
   ctaReason?: string;
+  /** فقط استوری — استیکرهای تعاملی، اختیاری */
+  stickers?: StorySticker[];
+  /** فقط استوری — کاروسلِ همان‌روزی که این ست از آن مشتق شده */
+  sourceSocialPostId?: string;
+  /**
+   * متنِ آزادِ اپراتور برای پاسخِ دایرکت — فاز ۵.
+   *
+   * وجودش الزامی نیست حتی وقتی `dmKeyword` غیرخالی است در سطحِ تایپ؛
+   * قراردادِ نامتقارنِ فاز ۵ («dmKeyword غیرخالی ⇐ dmOffer ناخالی» ولی نه
+   * برعکس) در لایه‌ی API/ارکستریشن اجرا می‌شود، نه اینجا.
+   */
+  dmOffer?: string;
 };
 
-/** یک اسلاید کاروسل — فقط برای اینستاگرام */
-export type Slide = {
+/**
+ * فیلدهای مشترکِ هر سه چیدمانِ اسلاید.
+ *
+ * ⚠️ `imageSubject` عمداً اینجاست، نه در `StandardSlide`. کاور می‌تواند
+ * هر چیدمانی باشد (`standard` یا `statement`) و تولید تصویر AI
+ * (`storage.ts` → `post.slides[0]?.imageSubject`) نباید به یک شاخه‌ی
+ * خاص از union وابسته شود — وگرنه نیمی از کاورها بی‌صدا بی‌تصویر می‌مانند.
+ */
+type SlideCommon = {
   /** خط کوچک بالای اسلاید، مثل «قدم دوم» */
   kicker: string;
   /** تیتر درشت — کوتاه، چون باید در اندازه‌ی بندانگشتی خوانده شود */
   heading: string;
-  /** یکی دو جمله توضیح */
-  text: string;
+  /** صحنه‌ی فیزیکی پس‌زمینه — فقط کاور؛ نبودش یعنی بدون تصویر */
+  imageSubject?: string;
 };
+
+/** چیدمانِ پیش‌فرض — کیکر، تیتر، یک تا دو جمله بدنه */
+export type StandardSlide = SlideCommon & { layout: "standard"; text: string };
+
+/** یک جمله‌ی بزرگ با تایپوگرافیِ display — بدون بدنه */
+export type StatementSlide = SlideCommon & { layout: "statement" };
+
+/** ۲ تا ۳ بند کوتاه، برای محتوای شمارشی */
+export type ListSlide = SlideCommon & { layout: "list"; items: string[] };
+
+/** یک اسلاید کاروسل — فقط برای اینستاگرام */
+export type Slide = StandardSlide | StatementSlide | ListSlide;
 
 export type SocialCheckRecord = { name: string; pass: boolean; note: string };
 
@@ -143,12 +196,51 @@ export type SocialPost = {
   cta: string;
   /** فیلدهای مخصوص قالب (فعلاً فقط ریلز) */
   extras: SocialExtras;
+  /**
+   * زبان خروجی.
+   *
+   * ستونش از فاز دوزبانه‌سازی در دیتابیس بود ولی به این تایپ نرسیده
+   * بود. رندرکننده لازمش دارد: جهت و تراز متن از زبان می‌آید، نه از
+   * محتوا — تشخیص از روی متن روی جمله‌ی کوتاهِ ترکیبی اشتباه می‌کند.
+   */
+  language: "fa" | "en";
+  /**
+   * مسیر تصویرهای رندرشده در Supabase Storage، به ترتیب اسلاید.
+   *
+   * آرایه‌ی خالی یعنی «هنوز رندر نشده» — یک حالت معتبر، نه خرابی.
+   * فقط کاروسل تصویر دارد.
+   */
+  imagePaths: string[];
+  /**
+   * زمان آخرین رندر موفق.
+   *
+   * دو کار می‌کند: کلید شکستن کش در URL نمایش (`?v=`)، چون فایل‌ها با
+   * upsert روی مسیر ثابت می‌نشینند و پیش‌فرض کش Storage یک ساعت است؛ و
+   * در آینده، مبنای تشخیص کهنه‌بودن تصویر نسبت به متن.
+   */
+  renderedAt: string | null;
+  /**
+   * هفته‌ی محتوایی‌ای که این محتوا از آن آمده.
+   *
+   * nullable است چون هر محتوای اجتماعی به هفته تعلق ندارد — اجرای دستی
+   * استودیو، کمپین و بازآفرینی همه null می‌گیرند.
+   */
+  weekId: string | null;
   /** خروجی چک‌های قطعی (social-checks) برای نمایش در استودیو */
   checks: SocialCheckRecord[];
   score: number | null;
   status: SocialStatus;
   createdAt: string;
   approvedAt: string | null;
+  /**
+   * کلیدواژه‌ی دایرکت — یکتا در کلِ جدول، فاز ۵.
+   *
+   * ستون و ایندکسِ یکتای شرطی از فاز ۰ در دیتابیس هستند. `null` یعنی «این
+   * پست حالتِ دایرکت ندارد» — پیش‌فرض و حالتِ اکثریتِ ردیف‌ها. رزرو/تغییر/
+   * آزادسازی همیشه باید همراهِ `body` (خطِ CTA) و `checks` در یک نوشتنِ
+   * اتمی برود؛ `updateSocialPostWithDmKeyword` همین را تضمین می‌کند.
+   */
+  dmKeyword: string | null;
 };
 
 /* ── کمپین چندکاناله ────────────────────────────────────── */
@@ -187,6 +279,53 @@ export type Campaign = {
   /** تا وقتی استراتژیست تمام نشده، خالی است */
   narrative: CampaignNarrativeData | null;
   runIds: CampaignRunRef[];
+  status: RunStatus;
+  error: string | null;
+  createdAt: string;
+  finishedAt: string | null;
+};
+
+/* ── هفته‌ی محتوایی ──────────────────────────────────────── */
+
+/**
+ * یک اسلات از هفته — پیکربندی شبکه به‌علاوه‌ی چیزی که برنامه‌ریز ساخته.
+ *
+ * مثل CampaignNarrativeData: شکل داده اینجا تعریف می‌شود و اعتبارسنجی‌اش
+ * با zod در agents/types.ts. لایه‌ی store به ایجنت‌ها وابسته نمی‌شود.
+ */
+export type WeeklySlotData = {
+  /** ۰ = شنبه … ۶ = جمعه */
+  day: number;
+  language: "fa" | "en";
+  route: string;
+  audienceGroup: string | null;
+  contentType: string;
+  journeyStage: string;
+  topic: string;
+  hook: string;
+  painPoint: string;
+};
+
+/** اجرای هر اسلات، با شناسه‌ی رکورد pipeline_runs خودش */
+export type WeekRunRef = {
+  day: number;
+  runId: string;
+  status: RunStatus;
+};
+
+/**
+ * هفته‌ی محتوایی — والدِ هفت اجرای اینستاگرام.
+ *
+ * دقیقاً الگوی Campaign: والد جدول خودش را دارد و فرزندها رکورد
+ * pipeline_runs معمولی با kind واقعی خودشان می‌گیرند. RunKind دست نمی‌خورد.
+ */
+export type ContentWeek = {
+  id: string;
+  /** شنبه‌ی همان هفته به وقت تهران، YYYY-MM-DD — با src/lib/week.ts */
+  weekStart: string;
+  /** تا وقتی برنامه‌ریز تمام نشده، خالی است */
+  plan: WeeklySlotData[];
+  runIds: WeekRunRef[];
   status: RunStatus;
   error: string | null;
   createdAt: string;
@@ -248,12 +387,33 @@ export interface BlogStore {
     sourcePostId?: string;
     platform?: SocialPlatform;
   }): Promise<SocialPost[]>;
+  /**
+   * رزرو/تغییرِ اتمیِ کلیدواژه‌ی دایرکت — فاز ۵.
+   *
+   * `patch` باید `dmKeyword` + `body` + `checks` + `extras` را با هم حمل
+   * کند و در **یک** نوشتنِ دیتابیسی بنشیند — نه چند فراخوانیِ جدا.
+   *
+   * true  = نشست.
+   * false = فقط برخوردِ ایندکسِ یکتا (کلیدواژه مالِ ردیفِ دیگری است).
+   * هر خطای دیگرِ دیتابیس throw می‌شود؛ اینجا بی‌صدا قورت داده نمی‌شود.
+   */
+  updateSocialPostWithDmKeyword(
+    id: string,
+    patch: Partial<SocialPost> & { dmKeyword: string }
+  ): Promise<boolean>;
 
   // کمپین‌های چندکاناله
   createCampaign(c: Campaign): Promise<void>;
   updateCampaign(id: string, patch: Partial<Campaign>): Promise<void>;
   getCampaign(id: string): Promise<Campaign | null>;
   listCampaigns(limit?: number): Promise<Campaign[]>;
+
+  // هفته‌های محتوایی
+  createWeek(week: ContentWeek): Promise<void>;
+  updateWeek(id: string, patch: Partial<ContentWeek>): Promise<void>;
+  getWeek(id: string): Promise<ContentWeek | null>;
+  /** محافظ «دوباره نساز» — ستون week_start در دیتابیس unique است */
+  getWeekByStart(weekStart: string): Promise<ContentWeek | null>;
 
   // درس‌ها (حافظه‌ی خودبهبودی)
   addLesson(lesson: Lesson): Promise<void>;

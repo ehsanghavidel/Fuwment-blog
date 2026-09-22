@@ -10,6 +10,8 @@ import type {
   PostStatus,
   SocialPlatform,
   SocialPost,
+  ContentWeek,
+  Slide,
 } from "./types";
 
 /**
@@ -34,6 +36,26 @@ function client(): SupabaseClient {
     }
   );
 }
+
+/**
+ * سقفِ زمانِ نوشتنِ جدولِ `pipeline_runs` — و **فقط** این جدول.
+ *
+ * ⚠️ این یک سیاستِ سراسری نیست. طبقِ تصمیمِ بازبینی‌شده، `client()` عمومی
+ * دست‌نخورده می‌ماند؛ فقط `createRun`/`updateRun` که مسیرِ آینه‌کردنِ زنده‌ی
+ * استودیو هستند سقف می‌گیرند.
+ *
+ * چرا ۱۰ ثانیه: نوشتِ سالمِ این جدول زیرِ یک ثانیه است (اندازه‌گیریِ لپ‌تاپ
+ * ۷۷ms). در اجرای شکست‌خورده‌ی واقعیِ استوری روی Vercel Preview همین نوشت‌ها
+ * ۴۰ تا ۷۰ ثانیه هنگ کردند و ۳۰۰ ثانیه بودجه را خوردند. ۱۰ ثانیه سقفی است
+ * که نوشتِ کندِ ولی سالم را نمی‌کشد، و هنگِ واقعی را زودتر از آنکه محافظِ
+ * مهلتِ ۴۰ ثانیه‌ای بی‌اثر شود قطع می‌کند.
+ *
+ * postgrest-js روی این abort خطا **برمی‌گرداند** (throw نمی‌کند):
+ * `{ error: { message: "TimeoutError: ...", code: "" }, status: 0 }` — پس
+ * شرطِ `if (error) throw` پایین همان‌طور که هست کار می‌کند (تأییدشده با
+ * یک سرور TCP که پاسخ نمی‌دهد).
+ */
+const PIPELINE_RUN_PERSIST_TIMEOUT_MS = 10_000;
 
 /* ── تبدیل ردیف ↔ تایپ ─────────────────────────────────── */
 
@@ -132,11 +154,30 @@ function socialPostToRow(p: SocialPost) {
     cta: p.cta,
     checks: p.checks,
     extras: p.extras,
+    // camelCase ساده — رفت‌وبرگشت partialToRow سالم است (weekId ↔ week_id)
+    week_id: p.weekId,
+    language: p.language,
+    image_paths: p.imagePaths,
+    rendered_at: p.renderedAt,
     score: p.score,
     status: p.status,
     created_at: p.createdAt,
     approved_at: p.approvedAt,
+    // camelCase ساده — رفت‌وبرگشت partialToRow سالم است (dmKeyword ↔ dm_keyword)
+    dm_keyword: p.dmKeyword,
   };
+}
+
+/**
+ * ردیف‌های پیش از فازِ تنوعِ چیدمان — همه‌ی اسلایدهای موجود بدونِ `layout`اند
+ * (اندازه‌گیریِ مستقیم روی دیتابیس: ۲۷۳ اسلاید، صفرشان `layout` دارد).
+ *
+ * ⚠️ سازگاریِ داده‌ی قدیمی **فقط اینجاست**، نه در zod — طبقِ تصمیمِ قفل‌شده‌ی
+ * پروژه (بند ۸ در `MASTER_PLAN.md`). `preprocess` در `SlideSchema` فقط
+ * خروجیِ **مدل** را می‌بخشد و کاملاً جداست از این مسیر.
+ */
+function normalizeSlide(s: any): Slide {
+  return s?.layout ? s : { ...s, layout: "standard" };
 }
 
 function socialPostFromRow(r: any): SocialPost {
@@ -148,16 +189,23 @@ function socialPostFromRow(r: any): SocialPost {
     format: r.format,
     title: r.title,
     body: r.body,
-    slides: r.slides ?? [],
+    slides: (r.slides ?? []).map(normalizeSlide),
     hashtags: r.hashtags ?? [],
     cta: r.cta ?? "",
     checks: r.checks ?? [],
     // رکوردهای ساخته‌شده پیش از افزودن این ستون
     extras: r.extras ?? {},
+    weekId: r.week_id ?? null,
+    // ردیف‌های پیش از این فازها
+    language: r.language ?? "fa",
+    imagePaths: r.image_paths ?? [],
+    renderedAt: r.rendered_at ?? null,
     score: r.score,
     status: r.status,
     createdAt: r.created_at,
     approvedAt: r.approved_at,
+    // ردیف‌های پیش از فاز ۵
+    dmKeyword: r.dm_keyword ?? null,
   };
 }
 
@@ -182,6 +230,32 @@ function campaignFromRow(r: any): Campaign {
     // شیء خالی یعنی «هنوز ساخته نشده» — به null تبدیلش می‌کنیم تا UI
     // مجبور نباشد هر دو حالت را بشناسد
     narrative: n && Object.keys(n).length > 0 ? n : null,
+    runIds: r.run_ids ?? [],
+    status: r.status,
+    error: r.error,
+    createdAt: r.created_at,
+    finishedAt: r.finished_at,
+  };
+}
+
+function weekToRow(w: ContentWeek) {
+  return {
+    id: w.id,
+    week_start: w.weekStart,
+    plan: w.plan,
+    run_ids: w.runIds,
+    status: w.status,
+    error: w.error,
+    created_at: w.createdAt,
+    finished_at: w.finishedAt,
+  };
+}
+
+function weekFromRow(r: any): ContentWeek {
+  return {
+    id: r.id,
+    weekStart: r.week_start,
+    plan: r.plan ?? [],
     runIds: r.run_ids ?? [],
     status: r.status,
     error: r.error,
@@ -244,14 +318,21 @@ export class SupabaseStore implements BlogStore {
   }
 
   async createRun(run: PipelineRun) {
-    const { error } = await client().from("pipeline_runs").insert(runToRow(run));
-    if (error) throw new Error(`ثبت اجرا ناموفق بود: ${error.message}`);
+    const { error } = await client()
+      .from("pipeline_runs")
+      .insert(runToRow(run))
+      .abortSignal(AbortSignal.timeout(PIPELINE_RUN_PERSIST_TIMEOUT_MS));
+    if (error) throw new Error(`[pipeline-run-persist] ثبت اجرا ناموفق بود: ${error.message}`);
   }
 
   async updateRun(id: string, patch: Partial<PipelineRun>) {
     const row = partialToRow(patch, runToRow as any);
-    const { error } = await client().from("pipeline_runs").update(row).eq("id", id);
-    if (error) throw new Error(`به‌روزرسانی اجرا ناموفق بود: ${error.message}`);
+    const { error } = await client()
+      .from("pipeline_runs")
+      .update(row)
+      .eq("id", id)
+      .abortSignal(AbortSignal.timeout(PIPELINE_RUN_PERSIST_TIMEOUT_MS));
+    if (error) throw new Error(`[pipeline-run-persist] به‌روزرسانی اجرا ناموفق بود: ${error.message}`);
   }
 
   async getRun(id: string) {
@@ -293,6 +374,33 @@ export class SupabaseStore implements BlogStore {
     return (data ?? []).map(socialPostFromRow);
   }
 
+  async updateSocialPostWithDmKeyword(
+    id: string,
+    patch: Partial<SocialPost> & { dmKeyword: string }
+  ) {
+    const row = partialToRow(patch, socialPostToRow as any);
+    // ⚠️ بدونِ .select() این متد پیش‌فرضِ postgrest-js (Prefer: return=minimal)
+    // را می‌گیرد: چه صفر ردیف مچ شود چه یک ردیف، error همیشه null است — هیچ
+    // راهی برای تشخیصِ «پستی با این id نبود» از «موفق شد» وجود ندارد. با
+    // .select("id") خودِ UPDATE ردیفِ برگشتی را هم می‌دهد، بدونِ کوئریِ دومی و
+    // بدونِ شکستنِ «یک UPDATE اتمی».
+    const { data, error } = await client()
+      .from("social_posts")
+      .update(row)
+      .eq("id", id)
+      .select("id");
+    if (error) {
+      // 23505 = برخوردِ ایندکسِ یکتای dm_keyword — تصادمِ کاندید، نه خطا.
+      // هر کدِ دیگر باید صدا داشته باشد (قاعده‌ی ۶ CLAUDE.md)، نه بی‌صدا false.
+      if (error.code === "23505") return false;
+      throw new Error(`[dm-keyword] رزرو کلیدواژه ناموفق بود: ${error.message}`);
+    }
+    if (!data || data.length === 0) {
+      throw new Error(`[dm-keyword] پستِ اجتماعی با id=${id} برای رزرو پیدا نشد`);
+    }
+    return true;
+  }
+
   async createCampaign(c: Campaign) {
     const { error } = await client().from("content_campaigns").insert(campaignToRow(c));
     if (error) throw new Error(`ثبت کمپین ناموفق بود: ${error.message}`);
@@ -316,6 +424,31 @@ export class SupabaseStore implements BlogStore {
       .order("created_at", { ascending: false })
       .limit(limit);
     return (data ?? []).map(campaignFromRow);
+  }
+
+  async createWeek(week: ContentWeek) {
+    const { error } = await client().from("content_weeks").insert(weekToRow(week));
+    if (error) throw new Error(`ثبت هفته ناموفق بود: ${error.message}`);
+  }
+
+  async updateWeek(id: string, patch: Partial<ContentWeek>) {
+    const row = partialToRow(patch, weekToRow as any);
+    const { error } = await client().from("content_weeks").update(row).eq("id", id);
+    if (error) throw new Error(`به‌روزرسانی هفته ناموفق بود: ${error.message}`);
+  }
+
+  async getWeek(id: string) {
+    const { data } = await client().from("content_weeks").select("*").eq("id", id).maybeSingle();
+    return data ? weekFromRow(data) : null;
+  }
+
+  async getWeekByStart(weekStart: string) {
+    const { data } = await client()
+      .from("content_weeks")
+      .select("*")
+      .eq("week_start", weekStart)
+      .maybeSingle();
+    return data ? weekFromRow(data) : null;
   }
 
   async addLesson(lesson: Lesson) {

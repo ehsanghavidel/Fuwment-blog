@@ -4,6 +4,8 @@ import { z } from "zod";
 import { getStore } from "@/lib/store";
 import { distillFeedback } from "@/lib/agents/critic";
 import { isStudioAuthorized, unauthorized } from "@/lib/auth";
+import { slideText } from "@/lib/slide-spec";
+import { FORMAT_META } from "@/lib/social-format";
 
 /**
  * POST /api/feedback — ثبت بازخورد انسانی روی یک پست بلاگ یا محتوای اجتماعی.
@@ -24,12 +26,6 @@ const BodySchema = z.object({
   rating: z.enum(["up", "down"]),
   comment: z.string().max(2000).default(""),
 });
-
-const FORMAT_LABEL: Record<string, string> = {
-  carousel: "کاروسل اینستاگرام",
-  post: "پست لینکدین",
-  reels: "اسکریپت ریلز",
-};
 
 export async function POST(req: NextRequest) {
   if (!isStudioAuthorized(req)) return unauthorized();
@@ -57,12 +53,12 @@ export async function POST(req: NextRequest) {
   } else {
     const sp = await store.getSocialPost(targetId);
     if (!sp) return Response.json({ error: "محتوای اجتماعی پیدا نشد." }, { status: 404 });
-    contentKind = FORMAT_LABEL[sp.format] ?? "محتوای اجتماعی";
+    contentKind = FORMAT_META[sp.format].label;
     title = sp.title;
     // اسلایدها هم بخشی از محتوا هستند و باید در قضاوت دیده شوند
     content =
       sp.slides.length > 0
-        ? `${sp.body}\n\nاسلایدها:\n${sp.slides.map((s, i) => `${i + 1}. ${s.heading} — ${s.text}`).join("\n")}`
+        ? `${sp.body}\n\nاسلایدها:\n${sp.slides.map((s, i) => `${i + 1}. ${slideText(s)}`).join("\n")}`
         : sp.body;
   }
 

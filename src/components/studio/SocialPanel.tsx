@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { studioFetch } from "./api";
+import { readRunError } from "./runResponse";
 import { RunTimeline } from "./RunTimeline";
 import { SocialPostCard } from "./SocialPostCard";
 import type { PipelineRun, Post, SocialPost } from "@/lib/store/types";
@@ -32,7 +33,48 @@ import {
  * همه‌ی انواع اجرا در یک جدول زندگی می‌کنند.
  */
 
-type Mode = "repurpose" | "instagram" | "linkedin" | "reels";
+type Mode = "repurpose" | "instagram" | "linkedin" | "reels" | "story";
+
+/**
+ * مسیرهای برند — همان فهرست و همان برچسب‌های پنل «خط تولید».
+ *
+ * ⚠️ عمداً کپی شده و import نشده: RunPanel فایل ناحیه‌ی بلاگ است و قرارداد
+ * این پروژه می‌گوید بازش نکن. مثل خودِ RunPanel، منبع حقیقتِ مقادیر
+ * `BRAND_ROUTES` در types.ts است — اگر آنجا عوض شد، هر دو فهرست باید عوض شوند.
+ */
+const ROUTE_OPTIONS = [
+  { value: "brand", label: "سطح برند", hint: "بی‌طرف نسبت به دو مسیر" },
+  { value: "global-talent", label: "Global Talent", hint: "بر پایه‌ی دستاورد و تاثیر فردی" },
+  {
+    value: "innovator-founder",
+    label: "Innovator Founder",
+    hint: "بر پایه‌ی ایده و کسب‌وکار",
+  },
+] as const;
+
+type RouteValue = (typeof ROUTE_OPTIONS)[number]["value"];
+
+/**
+ * زبان خروجی کاروسل.
+ *
+ * `runBrandChecks` پارامتر `language` می‌گیرد و برای «en» به فهرست چک
+ * انگلیسی (`runBrandChecksEn`) شاخه می‌زند — عنوان‌های حفاظت‌شده
+ * (lawyer، solicitor)، ادعاهای guarantee و success rate، و اقتدار کاذب
+ * مثل «Home Office approved». چهار چک نگارشیِ فارسی (ارقام، گیومه،
+ * نیم‌فاصله، اصلاح خودکار) عمداً برای انگلیسی خاموش‌اند، چون قاعده‌هایی
+ * هستند که در متن انگلیسی معنی ندارند و روشن‌ماندنشان روی هر پست
+ * انگلیسی خطای کاذب می‌ساخت.
+ */
+const LANGUAGE_OPTIONS = [
+  { value: "fa", label: "فارسی", hint: "پیش‌فرض" },
+  {
+    value: "en",
+    label: "English",
+    hint: "محتوای انگلیسی با فهرست چک برند مخصوص خودش سنجیده می‌شود.",
+  },
+] as const;
+
+type LanguageValue = (typeof LANGUAGE_OPTIONS)[number]["value"];
 
 /** برچسب فارسی نوع اجرا، برای نشان روی تایم‌لاین */
 const RUN_KIND_LABEL: Record<string, string> = {
@@ -40,6 +82,7 @@ const RUN_KIND_LABEL: Record<string, string> = {
   instagram: "کاروسل مستقل",
   linkedin: "پست لینکدین",
   reels: "اسکریپت ریلز",
+  story: "استوری",
 };
 
 export function SocialPanel({ onUnauthorized }: { onUnauthorized: () => void }) {
@@ -47,8 +90,15 @@ export function SocialPanel({ onUnauthorized }: { onUnauthorized: () => void }) 
   const [posts, setPosts] = useState<Post[]>([]);
   const [selected, setSelected] = useState<string>("");
   const [topicHint, setTopicHint] = useState("");
+  // کاروسل مستقل: مسیر و زبان — فقط همین حالت این دو را می‌فرستد
+  const [route, setRoute] = useState<RouteValue>("brand");
+  const [language, setLanguage] = useState<LanguageValue>("fa");
+  // آفرِ دایرکت — فاز ۵. فقط برای کاروسل مستقل؛ خالی = بدونِ حالتِ دایرکت.
+  const [dmOffer, setDmOffer] = useState("");
   // ریلز: یا لینک یا متن — نه هر دو
   const [reelsInput, setReelsInput] = useState("");
+  // استوری: کاروسلِ مبدأ
+  const [storySource, setStorySource] = useState<string>("");
   const [leadMagnet, setLeadMagnet] = useState("");
   // لینکدین: «مشاهده‌ی این هفته» — ماده‌ی خام ترجیحی این کانال
   const [observation, setObservation] = useState("");
@@ -89,6 +139,7 @@ export function SocialPanel({ onUnauthorized }: { onUnauthorized: () => void }) 
   async function start() {
     if (mode === "repurpose" && !selected) return;
     if (mode === "reels" && !reelsInput.trim()) return;
+    if (mode === "story" && !storySource) return;
     setError("");
     setNotice("");
     setBusy(true);
@@ -101,6 +152,7 @@ export function SocialPanel({ onUnauthorized }: { onUnauthorized: () => void }) 
       instagram: "/api/social/instagram",
       linkedin: "/api/social/linkedin",
       reels: "/api/social/reels",
+      story: "/api/social/story",
     };
     const endpoint = ENDPOINTS[mode];
 
@@ -113,14 +165,22 @@ export function SocialPanel({ onUnauthorized }: { onUnauthorized: () => void }) 
       mode === "repurpose"
         ? { runId, sourcePostId: selected }
         : mode === "instagram"
-          ? { runId, topicHint: topicHint || undefined }
+          ? {
+              runId,
+              topicHint: topicHint || undefined,
+              route,
+              language,
+              dmOffer: dmOffer.trim() || undefined,
+            }
           : mode === "linkedin"
             ? { runId, observation: observation.trim() || undefined }
-            : {
-              runId,
-              ...(isUrl ? { sourceUrl: trimmed } : { sourceText: trimmed }),
-              leadMagnet: leadMagnet.trim() || undefined,
-            };
+            : mode === "story"
+              ? { runId, sourceSocialPostId: storySource }
+              : {
+                runId,
+                ...(isUrl ? { sourceUrl: trimmed } : { sourceText: trimmed }),
+                leadMagnet: leadMagnet.trim() || undefined,
+              };
 
     // شروع polling قبل از POST — تا از اولین گام جا نمانیم
     pollRef.current = setInterval(async () => {
@@ -146,8 +206,18 @@ export function SocialPanel({ onUnauthorized }: { onUnauthorized: () => void }) 
         method: "POST",
         body: JSON.stringify(body),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "خطای ناشناخته");
+      // بدنه را یک‌بار به‌صورت متن می‌خوانیم — روی کشته‌شدنِ تابع در مهلتِ
+      // Vercel این متن JSON نیست و res.json() مستقیم SyntaxError می‌داد.
+      const raw = await res.text();
+      if (!res.ok) throw new Error(readRunError(res.status, raw));
+      let data: { run: PipelineRun };
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        throw new Error(
+          "پاسخِ سرور قابلِ‌خواندن نبود — تایم‌لاینِ همین اجرا را ببینید تا وضعیتش مشخص شود."
+        );
+      }
       setRun(data.run);
     } catch (e) {
       if (e instanceof Error && e.message === "PASSWORD_REQUIRED") {
@@ -194,7 +264,9 @@ export function SocialPanel({ onUnauthorized }: { onUnauthorized: () => void }) 
               ? "بدون مقاله‌ی مبدأ، یک کاروسل اینستاگرام از صفر ساخته می‌شود. موضوع دادن اختیاری است — اگر خالی بگذارید، ایده‌یاب خودش انتخاب می‌کند."
               : mode === "linkedin"
                 ? "«مشاهده‌ی این هفته» را بنویسید — الگویی که در جلسه‌ها دیده‌اید یا اشتباهی که تکرار می‌شود. پست لینکدین از تجربه‌ی دست‌اول جان می‌گیرد، نه از موضوع کلی."
-                : "یک لینک خبر/مقاله یا متن اولیه‌ی خودتان را بدهید تا اسکریپت ریلز ساخته شود — آماده‌ی بلندخوانی و ضبط."}
+                : mode === "story"
+                  ? "یک کاروسلِ موجود را انتخاب کنید تا از آن یک ستِ ۲ تا ۳ فریمیِ استوری ساخته شود — یک زاویه‌ی واحد، نه خلاصه‌ی کاروسل."
+                  : "یک لینک خبر/مقاله یا متن اولیه‌ی خودتان را بدهید تا اسکریپت ریلز ساخته شود — آماده‌ی بلندخوانی و ضبط."}
         </p>
 
         {/* سوئیچ حالت */}
@@ -208,6 +280,7 @@ export function SocialPanel({ onUnauthorized }: { onUnauthorized: () => void }) 
               { id: "instagram", label: "کاروسل مستقل", icon: IconInstagram },
               { id: "linkedin", label: "پست لینکدین", icon: IconLinkedin },
               { id: "reels", label: "اسکریپت ریلز", icon: IconVideo },
+              { id: "story", label: "استوری", icon: IconInstagram },
             ] as const
           ).map((m) => (
             <button
@@ -345,73 +418,232 @@ export function SocialPanel({ onUnauthorized }: { onUnauthorized: () => void }) 
               )}
             </button>
           </form>
-        ) : (
+        ) : mode === "story" ? (
+          /* ── استوری: انتخاب کاروسلِ مبدأ ── */
           <form
-            className="flex flex-col gap-3 sm:flex-row"
+            className="space-y-3"
             onSubmit={(e) => {
               e.preventDefault();
               if (!busy) start();
             }}
           >
-            <div className="flex-1">
-              {mode === "repurpose" ? (
-                <>
-                  <label htmlFor="source-post" className="sr-only">
-                    مقاله‌ی مبدأ
-                  </label>
-                  <select
-                    id="source-post"
-                    value={selected}
-                    onChange={(e) => setSelected(e.target.value)}
-                    disabled={busy}
-                    className="w-full cursor-pointer rounded-xl border border-surface-line bg-surface-dim px-4 py-3 transition-colors focus:border-brand-400 focus:bg-surface"
-                  >
-                    <option value="">— مقاله‌ی مبدأ را انتخاب کنید —</option>
-                    {posts.map((p) => (
-                      <option key={p.id} value={p.id}>
+            {socialPosts.filter((p) => p.format === "carousel").length === 0 ? (
+              <p className="rounded-xl bg-surface-dim px-4 py-3 text-sm leading-6 text-ink-muted">
+                هنوز کاروسل اینستاگرامی ندارید. اول از حالت «کاروسل مستقل» یا «بازآفرینی از
+                مقاله» یک کاروسل بسازید — استوری از روی همان مشتق می‌شود.
+              </p>
+            ) : (
+              <div>
+                <label htmlFor="story-source" className="mb-1.5 block text-sm font-bold text-ink">
+                  کاروسلِ مبدأ
+                </label>
+                <select
+                  id="story-source"
+                  value={storySource}
+                  onChange={(e) => setStorySource(e.target.value)}
+                  disabled={busy}
+                  className="w-full cursor-pointer rounded-xl border border-surface-line bg-surface-dim px-4 py-3 transition-colors focus:border-brand-400 focus:bg-surface"
+                >
+                  <option value="">— کاروسلِ مبدأ را انتخاب کنید —</option>
+                  {socialPosts
+                    .filter((p) => p.format === "carousel")
+                    .map((p) => (
+                      <option key={p.id} value={p.id} dir="auto">
                         {p.title}
                       </option>
                     ))}
-                  </select>
-                </>
-              ) : (
-                <>
-                  <label htmlFor="social-topic" className="sr-only">
-                    موضوع پیشنهادی (اختیاری)
-                  </label>
-                  <input
-                    id="social-topic"
-                    value={topicHint}
-                    onChange={(e) => setTopicHint(e.target.value)}
-                    placeholder="مثلاً: اشتباه‌های استخدام در کسب‌وکارهای کوچک"
-                    disabled={busy}
-                    className="w-full rounded-xl border border-surface-line bg-surface-dim px-4 py-3 transition-colors placeholder:text-ink-muted/60 focus:border-brand-400 focus:bg-surface"
-                  />
-                </>
-              )}
-            </div>
+                </select>
+                <p className="mt-1.5 text-xs leading-5 text-ink-muted">
+                  زاویه‌یاب استوری یک زاویه‌ی واحد از دلِ همین کاروسل انتخاب می‌کند — استوری
+                  خلاصه‌ی فشرده‌ی کاروسل نیست.
+                </p>
+              </div>
+            )}
+
             <button
               type="submit"
-              disabled={busy || (mode === "repurpose" && !selected)}
-              className="btn-action"
+              disabled={busy || !storySource}
+              className="btn-action w-full sm:w-auto"
             >
               {busy ? (
                 <>
                   <IconSpinner className="h-4 w-4" />
                   در حال اجرا…
                 </>
-              ) : mode === "repurpose" ? (
-                <>
-                  <IconRecycle className="h-4 w-4" />
-                  بازآفرینی
-                </>
               ) : (
                 <>
                   <IconInstagram className="h-4 w-4" />
-                  ساخت کاروسل
+                  ساخت استوری
                 </>
               )}
             </button>
+          </form>
+        ) : (
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!busy) start();
+            }}
+          >
+            {/*
+              مسیر و زبان فقط برای کاروسل مستقل‌اند. بازآفرینی مسیرش را از
+              مقاله‌ی مبدأ به ارث می‌برد و زبانش همان زبان مقاله است، پس آنجا
+              انتخابی نیستند — و این بلوک فرم بین هر دو حالت مشترک است.
+            */}
+            {mode === "instagram" && (
+              <>
+                <fieldset disabled={busy}>
+                  <legend className="mb-2 text-sm font-bold text-ink">مسیر برند</legend>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {ROUTE_OPTIONS.map((opt) => {
+                      const active = route === opt.value;
+                      return (
+                        <label
+                          key={opt.value}
+                          className={`cursor-pointer rounded-xl border px-4 py-3 transition-colors ${
+                            active
+                              ? "border-brand-600 bg-brand-50"
+                              : "border-surface-line bg-surface-dim hover:bg-sand/50"
+                          } ${busy ? "cursor-not-allowed opacity-60" : ""}`}
+                        >
+                          <input
+                            type="radio"
+                            name="social-route"
+                            value={opt.value}
+                            checked={active}
+                            onChange={() => setRoute(opt.value)}
+                            className="sr-only"
+                          />
+                          <span
+                            className={`block text-sm font-bold ${active ? "text-brand-700" : "text-ink"}`}
+                          >
+                            {opt.label}
+                          </span>
+                          <span className="mt-0.5 block text-xs text-ink-muted">{opt.hint}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+
+                <fieldset disabled={busy}>
+                  <legend className="mb-2 text-sm font-bold text-ink">زبان</legend>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {LANGUAGE_OPTIONS.map((opt) => {
+                      const active = language === opt.value;
+                      return (
+                        <label
+                          key={opt.value}
+                          className={`cursor-pointer rounded-xl border px-4 py-3 transition-colors ${
+                            active
+                              ? "border-brand-600 bg-brand-50"
+                              : "border-surface-line bg-surface-dim hover:bg-sand/50"
+                          } ${busy ? "cursor-not-allowed opacity-60" : ""}`}
+                        >
+                          <input
+                            type="radio"
+                            name="social-language"
+                            value={opt.value}
+                            checked={active}
+                            onChange={() => setLanguage(opt.value)}
+                            className="sr-only"
+                          />
+                          <span
+                            className={`block text-sm font-bold ${active ? "text-brand-700" : "text-ink"}`}
+                          >
+                            {opt.label}
+                          </span>
+                          <span className="mt-0.5 block text-xs text-ink-muted">{opt.hint}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+
+                <div>
+                  <label htmlFor="dm-offer" className="mb-1.5 block text-sm font-bold text-ink">
+                    آفرِ دایرکت <span className="font-normal text-ink-muted">(اختیاری)</span>
+                  </label>
+                  <input
+                    id="dm-offer"
+                    value={dmOffer}
+                    onChange={(e) => setDmOffer(e.target.value)}
+                    disabled={busy}
+                    maxLength={200}
+                    placeholder="مثلاً: چک‌لیست شواهد گلوبال تلنت"
+                    className="w-full rounded-xl border border-surface-line bg-surface-dim px-4 py-3 transition-colors placeholder:text-ink-muted/60 focus:border-brand-400 focus:bg-surface"
+                  />
+                  <p className="mt-1.5 text-xs leading-5 text-ink-muted">
+                    اگر پر کنید، پایپ‌لاین یک کلیدواژه‌ی یکتا برای دایرکت رزرو می‌کند — چیزی که
+                    مخاطب باید در دایرکت بفرستد تا این آفر را بگیرد. خودِ کلیدواژه را اینجا
+                    انتخاب نمی‌کنید.
+                  </p>
+                </div>
+              </>
+            )}
+
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <div className="flex-1">
+                {mode === "repurpose" ? (
+                  <>
+                    <label htmlFor="source-post" className="sr-only">
+                      مقاله‌ی مبدأ
+                    </label>
+                    <select
+                      id="source-post"
+                      value={selected}
+                      onChange={(e) => setSelected(e.target.value)}
+                      disabled={busy}
+                      className="w-full cursor-pointer rounded-xl border border-surface-line bg-surface-dim px-4 py-3 transition-colors focus:border-brand-400 focus:bg-surface"
+                    >
+                      <option value="">— مقاله‌ی مبدأ را انتخاب کنید —</option>
+                      {posts.map((p) => (
+                        <option key={p.id} value={p.id} dir="auto">
+                          {p.title}
+                        </option>
+                      ))}
+                    </select>
+                  </>
+                ) : (
+                  <>
+                    <label htmlFor="social-topic" className="sr-only">
+                      موضوع پیشنهادی (اختیاری)
+                    </label>
+                    <input
+                      id="social-topic"
+                      value={topicHint}
+                      onChange={(e) => setTopicHint(e.target.value)}
+                      placeholder="مثلاً: اشتباه‌های استخدام در کسب‌وکارهای کوچک"
+                      disabled={busy}
+                      className="w-full rounded-xl border border-surface-line bg-surface-dim px-4 py-3 transition-colors placeholder:text-ink-muted/60 focus:border-brand-400 focus:bg-surface"
+                    />
+                  </>
+                )}
+              </div>
+              <button
+                type="submit"
+                disabled={busy || (mode === "repurpose" && !selected)}
+                className="btn-action"
+              >
+                {busy ? (
+                  <>
+                    <IconSpinner className="h-4 w-4" />
+                    در حال اجرا…
+                  </>
+                ) : mode === "repurpose" ? (
+                  <>
+                    <IconRecycle className="h-4 w-4" />
+                    بازآفرینی
+                  </>
+                ) : (
+                  <>
+                    <IconInstagram className="h-4 w-4" />
+                    ساخت کاروسل
+                  </>
+                )}
+              </button>
+            </div>
           </form>
         )}
 

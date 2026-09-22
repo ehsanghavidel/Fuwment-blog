@@ -1,13 +1,7 @@
 import "server-only";
 import { getDeadline } from "@vercel/functions";
 import { getStore, type PipelineRun, type StepRecord } from "@/lib/store";
-
-/**
- * کمینه‌ی زمان لازم برای شروع یک گام تازه.
- * کندترین گام در اندازه‌گیری واقعی ۳۶ ثانیه بود (پژوهشگر).
- * خارج از Vercel، getDeadline مقدار undefined می‌دهد و این محافظ خاموش است.
- */
-const MIN_SECONDS_FOR_STEP = 40;
+import { hasTimeForStep, secondsUntilDeadline } from "./deadline-guard";
 
 /**
  * سازنده‌ی تابع step — همان مکانیزمی که نمایش زنده‌ی استودیو را ممکن می‌کند.
@@ -27,12 +21,60 @@ const MIN_SECONDS_FOR_STEP = 40;
 export function makeStepRunner(run: PipelineRun) {
   const store = getStore();
 
+  /**
+   * آینه‌کردنِ آرایه‌ی steps در دیتابیس — رصدپذیری/بازیابی‌پذیری، نه صحت.
+   *
+   * ⚠️ عمداً هرگز throw نمی‌کند. یک اجرای واقعیِ شکست‌خورده روی Vercel Preview
+   * نشان داد که این نوشت‌ها گاهی ۴۰ تا ۷۰ ثانیه هنگ می‌کنند؛ اگر هنگ/خطای
+   * آن‌ها کلِ اجرا را بشکند، محافظِ مهلت هرگز فرصتِ عمل پیدا نمی‌کند.
+   * `updateRun` روی جدولِ pipeline_runs سقفِ زمانی دارد (supabase.ts) و روی
+   * timeout خطا برمی‌گرداند؛ اینجا فقط با صدا لاگ می‌کنیم و می‌گذریم.
+   *
+   * از دست نمی‌رود چون هر `updateRun` کلِ `run.steps` را می‌نویسد: اگر آینه‌ی
+   * «پایان» گامِ N نرسید، آینه‌ی «شروع» گامِ N+1 همان آرایه‌ی کامل را دوباره
+   * می‌نویسد. فقط آخرین گام (منتقد) پیگیرِ بعدی ندارد و منتقد هم درس‌هایش را
+   * مستقلاً در جدولِ lessons ذخیره می‌کند.
+   */
+  async function mirror(phase: "start" | "done" | "error", label: string) {
+    try {
+      await store.updateRun(run.id, { steps: run.steps });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const prefix = phase === "start" ? "[mirror-timeout]" : "[pipeline-run-persist]";
+      console.error(`${prefix} آینه‌ی «${phase}» گام «${label}» ذخیره نشد — اجرا ادامه می‌یابد: ${msg}`);
+    }
+  }
+
   /** ثبت شروع/پایان هر گام + آینه‌کردن آن در دیتابیس */
   return async function step<T>(
     agent: string,
     label: string,
     fn: () => Promise<{ output: T; summary: string }>
   ): Promise<T> {
+    /**
+     * محافظ مهلت — **پیش از هر کاری**: پیش از push کردنِ رکوردِ «running» و
+     * پیش از هر نوشتِ آینه‌ای.
+     *
+     * چرا اینجا و نه بعد از آینه‌ی شروع (جای قبلی‌اش): آینه‌ی شروع خودش یک
+     * `await store.updateRun` است که روی Vercel Preview دیده شده ۴۰ تا ۷۰
+     * ثانیه هنگ کند. اگر محافظ **پشتِ** آن نوشت باشد، تا وقتی محافظ اجرا شود
+     * مهلت گذشته و «۰ ثانیه مانده» گزارش می‌دهد — دقیقاً همان چیزی که در اجرای
+     * شکست‌خورده‌ی واقعی رخ داد. درخواستی که وقتِ کافی ندارد نباید حتی یک
+     * ثانیه صرفِ انتظارِ Supabase کند.
+     *
+     * خارج از Vercel، `getDeadline()` مقدار undefined می‌دهد و
+     * `hasTimeForStep` همیشه true — رفتارِ محلی بدونِ تغییر.
+     */
+    const deadline = getDeadline();
+    if (!hasTimeForStep(deadline)) {
+      const left = secondsUntilDeadline(deadline) ?? 0;
+      const msg =
+        `مهلت اجرا رو به پایان است (${left.toFixed(0)} ثانیه مانده) — ` +
+        `گام «${label}» شروع نشد. اجرا تا همین‌جا ذخیره شد.`;
+      console.error(`[deadline] ${msg}`);
+      throw new Error(msg);
+    }
+
     const record: StepRecord = {
       agent,
       label,
@@ -43,34 +85,7 @@ export function makeStepRunner(run: PipelineRun) {
       finishedAt: null,
     };
     run.steps.push(record);
-    await store.updateRun(run.id, { steps: run.steps });
-
-    /**
-     * محافظ مهلت — پیش از شروع هر گام.
-     *
-     * روی Vercel، تابع در `maxDuration` کشته می‌شود چه پاسخ داده باشد چه
-     * نه (`waitUntil` هم همان مهلت را دارد؛ مستندات صریح است). کشته‌شدنِ
-     * ناگهانی یعنی رکورد اجرا برای همیشه روی «running» می‌ماند و استودیو
-     * تا ابد poll می‌کند.
-     *
-     * پس قبل از شروع هر گام می‌پرسیم آیا وقت کافی هست. اگر نه، تمیز
-     * می‌ایستیم و اجرا با پیام روشن «error» می‌شود — کاربر می‌بیند تا کجا
-     * پیش رفته و کدام گام شروع نشده.
-     *
-     * آستانه ۴۰ ثانیه است چون کندترین گام (پژوهشگر) در اندازه‌گیری ۳۶
-     * ثانیه طول کشید.
-     */
-    const deadline = getDeadline();
-    if (deadline) {
-      const left = (deadline.getTime() - Date.now()) / 1000;
-      if (left < MIN_SECONDS_FOR_STEP) {
-        const msg =
-          `مهلت اجرا رو به پایان است (${left.toFixed(0)} ثانیه مانده) — ` +
-          `گام «${label}» شروع نشد. اجرا تا همین‌جا ذخیره شد.`;
-        console.error(`[deadline] ${msg}`);
-        throw new Error(msg);
-      }
-    }
+    await mirror("start", label);
 
     // زمان‌سنجی هر گام. روی Vercel سقف اجرا ۳۰۰ ثانیه است و بدون این،
     // «کجا وقت می‌رود» فقط حدس است. هزینه‌اش یک Date.now() است.
@@ -83,14 +98,14 @@ export function makeStepRunner(run: PipelineRun) {
       record.summary = summary;
       record.output = output;
       record.finishedAt = new Date().toISOString();
-      await store.updateRun(run.id, { steps: run.steps });
+      await mirror("done", label);
       console.log(`[timing] ${agent.padEnd(20)} ${elapsed().padStart(6)}s  ${label}`);
       return output;
     } catch (err) {
       record.status = "error";
       record.summary = err instanceof Error ? err.message : String(err);
       record.finishedAt = new Date().toISOString();
-      await store.updateRun(run.id, { steps: run.steps });
+      await mirror("error", label);
       console.log(`[timing] ${agent.padEnd(20)} ${elapsed().padStart(6)}s  ${label} — خطا`);
       throw err;
     }

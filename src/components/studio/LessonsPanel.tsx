@@ -29,6 +29,8 @@ const AGENT_LABELS: Record<string, string> = {
   "reels-writer": "کپی‌رایتر ریلز",
   "campaign-strategist": "استراتژیست کمپین",
   "social-editor": "ویراستار اجتماعی",
+  // فاز ۷ — برنامه‌ریزی هفتگی
+  "weekly-planner": "برنامه‌ریز هفتگی",
 };
 
 export function LessonsPanel({ onUnauthorized }: { onUnauthorized: () => void }) {
@@ -121,7 +123,9 @@ export function LessonsPanel({ onUnauthorized }: { onUnauthorized: () => void })
                   )}
                 </span>
               </div>
-              <p className="text-sm leading-7 text-ink-soft">{l.lesson}</p>
+              <p dir="auto" className="text-sm leading-7 text-ink-soft">
+                {l.lesson}
+              </p>
             </div>
 
             <button

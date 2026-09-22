@@ -107,6 +107,7 @@ export async function runReelsPipeline(opts: {
       hookAngle: "قلاب باید در سه تا پنج ثانیه‌ی اول مخاطب را متوقف کند",
       proofPoint: source.text.slice(0, 1500),
       cta: `یکی از این‌ها: ${allowed.join("، ")}`,
+      language: "fa",
     };
 
     // ── ۲ و ۳. کپی‌رایتر ریلز ⇄ ویراستار (حلقه‌ی مشترک) ──
@@ -172,10 +173,18 @@ export async function runReelsPipeline(opts: {
           caption,
           ctaReason: d.ctaReason,
         },
+        // این مسیرها هنوز فقط فارسی تولید می‌کنند
+        language: "fa",
+        // این محتوا به هفته‌ی محتوایی تعلق ندارد
+        weekId: null,
+        imagePaths: [],
+        renderedAt: null,
         score: reels.review.score,
         status: "draft",
         createdAt: now,
         approvedAt: null,
+        // فاز ۵ فقط کاروسلِ اینستاگرام را پوشش می‌دهد
+        dmKeyword: null,
       };
       await store.createSocialPost(post);
 

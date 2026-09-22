@@ -1,4 +1,7 @@
-import type { Slide } from "@/lib/store";
+import type { Slide, StorySticker } from "@/lib/store";
+import { slideText } from "@/lib/slide-spec";
+import { LIMITS_BY_LAYOUT } from "./types";
+import { countDmCtaLine } from "@/lib/dm-keyword";
 
 /**
  * چک‌های قطعی محتوای اجتماعی — بدون LLM.
@@ -34,9 +37,82 @@ export type SocialCheck = {
  * نقطه‌کدها پیمایش می‌کنیم تا شمارش به آنچه اینستاگرام نشان می‌دهد نزدیک
  * باشد. نیم‌فاصله (‌) عمداً شمرده می‌شود، چون پلتفرم‌ها هم می‌شمارند.
  */
+
+
 function charCount(s: string): number {
   return [...s].length;
 }
+
+/**
+ * شمارش اموجی — با گرافیم، نه با regex.
+ *
+ * ⚠️ `\p{Extended_Pictographic}` جواب غلط می‌دهد و غلط بودنش دو طرفه است:
+ *   «سلام 👨‍👩‍👧 و ✌️ و 🇬🇧» → سه اموجیِ دیده‌شده
+ *   match(/\p{Extended_Pictographic}/gu) → ۴  (خانواده سه‌تا شمرده می‌شود)
+ *   و پرچم 🇬🇧 اصلاً Extended_Pictographic نیست، پس شمرده نمی‌شود.
+ *
+ * یعنی کپشنی با دقیقاً ۳ اموجی رد می‌شد و یک دور بازنویسی بی‌دلیل
+ * راه می‌افتاد — همان تله‌ی «چک قطعی غلط بدتر از نداشتن چک است».
+ *
+ * Intl.Segmenter واحد شمارش را همان چیزی می‌کند که چشم می‌بیند.
+ */
+
+const EMOJI_LIMIT = 3;
+
+function countEmoji(text: string): number {
+  const segmenter = new Intl.Segmenter("fa", { granularity: "grapheme" });
+  let count = 0;
+  for (const { segment } of segmenter.segment(text)) {
+    if (/\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(segment)) count++;
+  }
+  return count;
+}
+
+/**
+ * تشخیص زبان متن با نسبت حروف — نه با فهرست واژه.
+ *
+ * چرا لازم شد: `language` را به لایه‌ی چک برند وصل کردیم ولی کپی‌رایتر
+ * هنوز فارسی می‌نویسد. نتیجه در اولین اجرای انگلیسی: چک‌های انگلیسی روی
+ * متن فارسی اجرا شدند، هیچ واژه‌ی ممنوعی پیدا نکردند، و ۱۶ از ۱۶ سبز شد
+ * در حالی که **هیچ گاردی روی آن پست نبود**. شکست بی‌صدا، با ظاهر موفقیت.
+ *
+ * این چک همان حالت را می‌گیرد، و مهم‌تر: هر ناهماهنگی زبانی در آینده را
+ * هم می‌گیرد. اعتماد به «دو لایه هماهنگ می‌مانند» کافی نیست.
+ *
+ * فقط حروف شمرده می‌شوند؛ رقم، نشانه و فاصله بی‌اثرند.
+ */
+function persianLetterRatio(text: string): number {
+  const persian = (text.match(/[\u0600-\u06FF]/gu) ?? []).length;
+  const latin = (text.match(/[A-Za-z]/gu) ?? []).length;
+  const total = persian + latin;
+  return total === 0 ? -1 : persian / total;
+}
+
+export function checkLanguageMatch(text: string, expected: "fa" | "en"): SocialCheck {
+  const ratio = persianLetterRatio(text);
+
+  // متن بدون حرف — چیزی برای قضاوت نیست
+  if (ratio < 0) {
+    return { name: "تطابق زبان", severity: "blocking", pass: true, note: "متن حرفی ندارد" };
+  }
+
+  const pct = Math.round(ratio * 100);
+
+  // آستانه‌ها نامتقارن‌اند و باید باشند: متن فارسی طبیعتاً واژه‌های لاتین
+  // دارد (Global Talent، Innovator Founder)، ولی متن انگلیسیِ سالم تقریباً
+  // هیچ حرف فارسی ندارد.
+  const pass = expected === "fa" ? ratio >= 0.5 : ratio <= 0.15;
+
+  return {
+    name: "تطابق زبان",
+    severity: "blocking",
+    pass,
+    note: pass
+      ? `متن ${expected === "fa" ? "فارسی" : "انگلیسی"} است (${pct}٪ حروف فارسی)`
+      : `زبان درخواستی «${expected}» بود ولی متن ${pct}٪ حروف فارسی دارد — چک‌های برند روی زبان اشتباه اجرا می‌شوند و عملاً هیچ گاردی وجود ندارد`,
+  };
+}
+
 
 const URL_RE = /(https?:\/\/|www\.)/i;
 const HASHTAG_RE = /^#[^\s#]+$/;
@@ -75,6 +151,45 @@ function firstSentence(s: string): string {
   return (m ? m[0] : firstLine).trim();
 }
 
+/**
+ * آیا اسلاید از سقفِ چیدمانِ خودش رد شده؟ چیدمان‌آگاه: هر واریانت فقط
+ * فیلدهای خودش را می‌سنجد.
+ */
+function slideOverLimit(s: Slide): boolean {
+  if (charCount(s.heading) > LIMITS_BY_LAYOUT[s.layout].heading) return true;
+  switch (s.layout) {
+    case "standard":
+      return charCount(s.text) > LIMITS_BY_LAYOUT.standard.text;
+    case "statement":
+      return false;
+    case "list":
+      return s.items.some((item) => charCount(item) > LIMITS_BY_LAYOUT.list.item);
+    default: {
+      const neverSlide: never = s;
+      throw new Error(`چیدمانِ ناشناخته: ${JSON.stringify(neverSlide)}`);
+    }
+  }
+}
+
+/** توضیحِ چیدمان‌آگاهِ ایرادِ طول، برای پیامِ چک */
+function slideLimitNote(s: Slide): string {
+  const headingNote = `تیتر ${charCount(s.heading)} (سقف ${LIMITS_BY_LAYOUT[s.layout].heading})`;
+  switch (s.layout) {
+    case "standard":
+      return `${headingNote} و متن ${charCount(s.text)} (سقف ${LIMITS_BY_LAYOUT.standard.text}) کاراکتر`;
+    case "statement":
+      return `${headingNote} کاراکتر`;
+    case "list": {
+      const longest = Math.max(...s.items.map(charCount));
+      return `${headingNote} و بلندترین بند ${longest} (سقف ${LIMITS_BY_LAYOUT.list.item}) کاراکتر`;
+    }
+    default: {
+      const neverSlide: never = s;
+      throw new Error(`چیدمانِ ناشناخته: ${JSON.stringify(neverSlide)}`);
+    }
+  }
+}
+
 /* ── اینستاگرام ─────────────────────────────────────────── */
 
 export function runInstagramChecks(input: {
@@ -104,17 +219,36 @@ export function runInstagramChecks(input: {
     note: `${slides.length} اسلاید (بازه‌ی مطلوب ۵–۸)`,
   });
 
-  // متن اسلاید باید روی تصویر خوانا باشد
-  const longSlide = slides.findIndex(
-    (s) => charCount(s.heading) > 40 || charCount(s.text) > 140
-  );
+  // متن اسلاید باید روی تصویر خوانا باشد.
+  //
+  // ⚠️ این چک تا پیش از این **مرده** بود: SlideSchema سقف‌ها را با
+  // clampText می‌بُرید، پس heading همیشه ≤۴۰ می‌رسید و شرط هرگز درست
+  // نمی‌شد. حالا اسکیما نمی‌بُرد و این واقعاً اندازه می‌گیرد.
+  const longSlide = slides.findIndex(slideOverLimit);
   checks.push({
     name: "طول متن اسلایدها",
     pass: longSlide === -1,
     note:
       longSlide === -1
         ? "همه‌ی اسلایدها در حد خوانایی روی تصویرند"
-        : `اسلاید ${longSlide + 1} بلند است (تیتر ≤۴۰ و متن ≤۱۴۰ کاراکتر)`,
+        : `اسلاید ${longSlide + 1} بلند است — ${slideLimitNote(slides[longSlide])}`,
+  });
+
+  // تنوعِ چیدمانِ اسلایدهای میانی — advisory: یکنواختی زشت است، نه غلط.
+  // کاور و اسلاید آخر عمداً بیرون‌اند: نقشِ ساختاریِ ثابتی دارند و
+  // چیدمانشان معیارِ تنوع نیست.
+  const middleSlides = slides.slice(1, -1);
+  const distinctLayouts = new Set(middleSlides.map((s) => s.layout));
+  checks.push({
+    name: "تنوع چیدمانِ اسلایدهای میانی",
+    pass: middleSlides.length === 0 || distinctLayouts.size > 1,
+    severity: "advisory",
+    note:
+      middleSlides.length === 0
+        ? "اسلاید میانی‌ای وجود ندارد"
+        : distinctLayouts.size > 1
+          ? `${distinctLayouts.size} چیدمانِ متفاوت در اسلایدهای میانی`
+          : `همه‌ی ${middleSlides.length} اسلایدِ میانی چیدمانِ «${[...distinctLayouts][0]}» دارند`,
   });
 
   // ⚠️ اینجا عمداً چکی برای «آیا اسلاید آخر دعوت به اقدام دارد؟» نداریم.
@@ -127,9 +261,16 @@ export function runInstagramChecks(input: {
   // ویراستار اجتماعی سپرده شده (platformFit).
 
   checks.push({
-    name: "تعداد هشتگ‌ها",
-    pass: hashtags.length >= 8 && hashtags.length <= 15,
-    note: `${hashtags.length} هشتگ (بازه‌ی مطلوب ۸–۱۵)`,
+    name: "تعداد هشتگ‌های کاروسل",
+    pass: hashtags.length >= 3 && hashtags.length <= 5,
+    note: `${hashtags.length} هشتگ (بازه‌ی مطلوب ۳–۵)`,
+  });
+
+  const emojiCount = countEmoji(caption);
+  checks.push({
+    name: "تعداد اموجی",
+    pass: emojiCount <= EMOJI_LIMIT,
+    note: `${emojiCount} اموجی در کپشن (حداکثر ${EMOJI_LIMIT} — قاعده‌ی برندگاید)`,
   });
 
   const badTags = hashtags.filter((h) => !HASHTAG_RE.test(h));
@@ -162,6 +303,36 @@ export function runInstagramChecks(input: {
   });
 
   return checks;
+}
+
+/* ── دایرکت (فاز ۵) ─────────────────────────────────────── */
+
+/**
+ * نامِ پایدار — Stage ۳ هنگامِ ویرایش/آزادسازیِ دستیِ کلیدواژه با همین
+ * رشته این چک را پیدا و جایگزین/حذف می‌کند. اگر این نام را عوض کردی،
+ * آن مسیر هم باید عوض شود.
+ */
+export const DM_CTA_CHECK_NAME = "خط دایرکت";
+
+/**
+ * فقط وقتی `dmKeyword` غیرخالی است به فهرستِ چک‌ها اضافه می‌شود.
+ *
+ * واحدِ سنجش خطِ کاملِ سیستم است (`countDmCtaLine` در `dm-keyword.ts`)، نه
+ * توکنِ تنهای کلیدواژه — کپشنی که «TALENT» را جای دیگری هم به‌عنوانِ واژه‌ی
+ * عادی دارد نباید رد شود.
+ */
+export function checkDmCtaLine(body: string, keyword: string, language: "fa" | "en"): SocialCheck {
+  const count = countDmCtaLine(body, keyword, language);
+  return {
+    name: DM_CTA_CHECK_NAME,
+    pass: count === 1,
+    note:
+      count === 1
+        ? `خطِ سیستمِ کلیدواژه‌ی «${keyword}» دقیقاً یک‌بار در متن هست`
+        : count === 0
+          ? "خطِ دایرکت در متن نیست"
+          : `خطِ دایرکت ${count} بار تکرار شده`,
+  };
 }
 
 /* ── ریلز ───────────────────────────────────────────────── */
@@ -297,7 +468,7 @@ export function runReelsChecks(input: {
 
   const badTags = hashtags.filter((h) => !HASHTAG_RE.test(h));
   checks.push({
-    name: "تعداد هشتگ‌ها",
+    name: "تعداد هشتگ‌های ریلز",
     pass: hashtags.length >= 3 && hashtags.length <= 5 && badTags.length === 0,
     note:
       badTags.length > 0
@@ -377,7 +548,7 @@ export function runLinkedinChecks(input: {
 
   const badTags = hashtags.filter((h) => !HASHTAG_RE.test(h));
   checks.push({
-    name: "تعداد هشتگ‌ها",
+    name: "تعداد هشتگ‌های لینکدین",
     pass: hashtags.length >= 3 && hashtags.length <= 5 && badTags.length === 0,
     note:
       badTags.length > 0
@@ -395,6 +566,105 @@ export function runLinkedinChecks(input: {
     note: endsWithQuestion
       ? "پست با یک پرسش تمام می‌شود"
       : "پست با پرسش تمام نمی‌شود — گفت‌وگو در کامنت‌ها راه نمی‌افتد",
+  });
+
+  return checks;
+}
+
+/* ── استوری ─────────────────────────────────────────────── */
+
+export function runStoryChecks(input: {
+  frames: Slide[];
+  stickers: StorySticker[];
+}): SocialCheck[] {
+  const { frames, stickers } = input;
+  const checks: SocialCheck[] = [];
+
+  checks.push({
+    name: "تعداد فریم‌های استوری",
+    pass: frames.length === 2 || frames.length === 3,
+    note: `${frames.length} فریم (مجاز: ۲ یا ۳)`,
+  });
+
+  // همان چکِ طول کاروسل، همان سقف‌ها — چیدمانِ چهارم و سقفِ دومی برای
+  // استوری ساخته نشده.
+  const longFrame = frames.findIndex(slideOverLimit);
+  checks.push({
+    name: "طول متن فریم‌ها",
+    pass: longFrame === -1,
+    note:
+      longFrame === -1
+        ? "همه‌ی فریم‌ها در حد خوانایی روی تمام‌صفحه‌اند"
+        : `فریم ${longFrame + 1} بلند است — ${slideLimitNote(frames[longFrame])}`,
+  });
+
+  // تصویرِ AI فقط برای فریمِ اول ساخته می‌شود (تصمیمِ محصولیِ قفل‌شده)،
+  // پس نبودنش روی فریمِ اول یک نقصِ کیفیِ واقعی است، نه انتخاب — برخلافِ
+  // کاور کاروسل که در گریدِ بندانگشتی دیده می‌شود، فریمِ استوری تمام‌صفحه
+  // است.
+  const hasFirstFrameImage = Boolean(frames[0]?.imageSubject?.trim());
+  checks.push({
+    name: "تصویر فریم اول",
+    pass: hasFirstFrameImage,
+    note: hasFirstFrameImage
+      ? "فریم اول صحنه‌ی تصویر دارد"
+      : "فریم اول imageSubject ندارد — تصویرِ AI فقط برای همین فریم ساخته می‌شود",
+  });
+
+  const badRange = stickers.filter(
+    (s) => !Number.isInteger(s.frame) || s.frame < 0 || s.frame >= frames.length
+  );
+  checks.push({
+    name: "بازه‌ی فریمِ استیکر",
+    pass: badRange.length === 0,
+    note:
+      badRange.length === 0
+        ? "همه‌ی استیکرها به فریمی معتبر اشاره می‌کنند"
+        : `استیکر با frame نامعتبر: ${badRange.map((s) => s.frame).join("، ")}`,
+  });
+
+  // حداکثر یک استیکرِ تعاملی روی هر فریم — قرارداد MVP.
+  const frameCounts = new Map<number, number>();
+  for (const s of stickers) frameCounts.set(s.frame, (frameCounts.get(s.frame) ?? 0) + 1);
+  const dupFrames = [...frameCounts.entries()].filter(([, n]) => n > 1).map(([f]) => f);
+  checks.push({
+    name: "یکتاییِ استیکرِ هر فریم",
+    pass: dupFrames.length === 0,
+    note:
+      dupFrames.length === 0
+        ? "حداکثر یک استیکر روی هر فریم"
+        : `بیش از یک استیکر روی فریمِ ${dupFrames.join("، ")}`,
+  });
+
+  const badPolls = stickers.filter((s) => s.type === "poll" && s.options.length !== 2);
+  checks.push({
+    name: "نظرسنجی دقیقاً دو گزینه",
+    pass: badPolls.length === 0,
+    note:
+      badPolls.length === 0
+        ? "همه‌ی نظرسنجی‌ها دقیقاً دو گزینه دارند"
+        : `${badPolls.length} نظرسنجیِ با تعدادِ گزینه‌ی نامعتبر`,
+  });
+
+  const badLinks = stickers.filter((s) => s.type === "link" && !s.destination.trim());
+  checks.push({
+    name: "مقصدِ استیکرِ لینک",
+    pass: badLinks.length === 0,
+    note:
+      badLinks.length === 0
+        ? "همه‌ی استیکرهای لینک مقصد دارند"
+        : `${badLinks.length} استیکرِ لینکِ بدونِ مقصد`,
+  });
+
+  // لینک باید متادیتای استیکر باشد، نه متنِ خامِ روی فریم — همان قاعده‌ی
+  // «بدون لینک در کپشن» کاروسل، اینجا روی متنِ خودِ فریم.
+  const urlInText = frames.some((f) => URL_RE.test(slideText(f)));
+  checks.push({
+    name: "بدون URL خام در متنِ فریم",
+    pass: !urlInText,
+    note: urlInText
+      ? "متنِ یک فریم آدرسِ خام دارد — لینک باید متادیتای استیکرِ link باشد"
+      : "متنِ فریم‌ها آدرسِ خام ندارد",
   });
 
   return checks;

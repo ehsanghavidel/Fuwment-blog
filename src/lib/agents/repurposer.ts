@@ -44,7 +44,7 @@ ${input.post.contentMd.slice(0, 8000)}
 
 یک بریف اجتماعی بساز.`;
 
-  return runAgentJSON({
+  const result = await runAgentJSON({
     agent: "repurposer",
     system,
     prompt,
@@ -59,4 +59,8 @@ ${input.post.contentMd.slice(0, 8000)}
   "cta": "دعوت طبیعی به قدم بعدی"
 }`,
   });
+  // بازآفرینی فعلاً فقط فارسی است — به همان دلیل linkedin-angle-finder:
+  // SocialBrief بعد از parse زبان را الزامی می‌داند، ولی تایپ ورودی
+  // runAgentJSON آن را اختیاری می‌بیند.
+  return { ...result, language: "fa" as const };
 }

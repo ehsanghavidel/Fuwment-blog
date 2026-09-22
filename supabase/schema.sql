@@ -189,3 +189,150 @@ create index if not exists idx_content_campaigns_status on content_campaigns(sta
 -- برای خطا نداریم: حالتِ «تأیید شده ولی wp_post_id خالی» یعنی ارسال نشده.
 alter table posts add column if not exists wp_post_id   int;
 alter table posts add column if not exists wp_edit_link text;
+-- ── افزودن قالب استوری ──────────────────────────────────────
+-- همان الگوی drop/add که برای ریلز استفاده شد.
+--
+-- شکل استوری: هر «ست استوری» یک ردیف است، نه سه ردیف. یک اجرای
+-- استوری‌ساز سه استوری یک روز را با هم تولید می‌کند و با هم تأیید
+-- می‌شوند؛ پس مثل کاروسل، یک مجموعه‌ی مرتب است.
+-- بازه‌ی ۱ تا ۳: معمولاً سه‌تا، ولی یک استوری فوریِ تکی هم باید بشود.
+alter table social_posts drop constraint if exists social_posts_format_check;
+alter table social_posts add constraint social_posts_format_check
+  check (format in ('carousel','post','reels','story'));
+
+alter table social_posts drop constraint if exists social_posts_shape;
+alter table social_posts add constraint social_posts_shape check (
+  (format = 'carousel' and jsonb_array_length(slides) between 5 and 8)
+  or (format = 'story' and jsonb_array_length(slides) between 1 and 3)
+  or (format in ('post','reels') and jsonb_array_length(slides) = 0)
+);
+
+-- ── ستون‌های فازهای بعد ─────────────────────────────────────
+-- الان اضافه می‌شوند تا یک بار SQL دستی اجرا شود، نه سه بار.
+--
+-- ⚠️ نام‌گذاری: partialToRow فقط camelCaseِ ساده را به snake_case
+--    تبدیل می‌کند. نامی با رقم یا حروف بزرگ پیاپی (imageURL, slide1Path)
+--    بی‌صدا حذف می‌شود. پس: language, dmKeyword, imagePaths.
+
+alter table social_posts add column if not exists language text not null default 'fa';
+alter table social_posts drop constraint if exists social_posts_language_check;
+alter table social_posts add constraint social_posts_language_check
+  check (language in ('fa','en'));
+
+-- کلیدواژه‌ی دعوت به دایرکت — باید در کل جدول یکتا باشد، وگرنه دو پست
+-- مختلف با یک کلیدواژه یعنی پاسخ خودکار نمی‌داند کدام را بفرستد.
+alter table social_posts add column if not exists dm_keyword text;
+create unique index if not exists idx_social_posts_dm_keyword
+  on social_posts(dm_keyword) where dm_keyword is not null;
+
+-- مسیر فایل‌های رندرشده در Supabase Storage، به ترتیب اسلاید
+alter table social_posts add column if not exists image_paths jsonb not null default '[]';
+
+create index if not exists idx_social_posts_language on social_posts(language);
+-- ── هفته‌ی محتوایی ──────────────────────────────────────────
+--
+-- والدِ هفت اجرای اینستاگرام. دقیقاً الگوی content_campaigns:
+-- والد جدول خودش را دارد و فرزندها رکورد pipeline_runs معمولی با
+-- kind واقعی خودشان می‌گیرند. RunKind دست نمی‌خورد.
+--
+-- ⚠️ week_start را همیشه با src/lib/week.ts حساب کن، نه با now().
+--    ستون date بی‌منطقه است و همین درست است — ولی مقدارش باید در کد
+--    با Asia/Tehran صریح ساخته شود. تهران UTC+3:30 است، پس هر شب یک
+--    بازه‌ی ۳٫۵ ساعته هست که «امروز» در UTC و تهران فرق می‌کند. اگر
+--    از تاریخ سرور بگیری، اجرای شب‌هنگام در هفته‌ی اشتباه می‌افتد و
+--    چون unique است یا رکورد تکراری می‌سازد یا هفته را جا می‌اندازد.
+create table if not exists content_weeks (
+  id           uuid primary key,
+  -- شنبه‌ی همان هفته به وقت تهران. هفته‌ی محتوایی، هفته‌ی مخاطب است.
+  week_start   date not null unique,
+  -- هفت اسلات: [{ day, language, route, audienceGroup, contentType,
+  --               journeyStage, topic, hook, painPoint }]
+  plan         jsonb not null default '[]',
+  -- [{ runId, day, status }]
+  run_ids      jsonb not null default '[]',
+  status       text not null default 'running' check (status in ('running','done','error')),
+  error        text,
+  created_at   timestamptz not null default now(),
+  finished_at  timestamptz
+);
+
+create index if not exists idx_content_weeks_status on content_weeks(status);
+
+-- پیوند فرزند به والد. nullable چون هر محتوای اجتماعی به هفته تعلق ندارد
+-- (اجرای دستی، کمپین، بازآفرینی).
+alter table social_posts add column if not exists week_id uuid;
+create index if not exists idx_social_posts_week on social_posts(week_id);
+
+-- ───────────────────────────────────────────────
+-- فاز ۸ — تصویرهای رندرشده‌ی کاروسل (Supabase Storage)
+-- ───────────────────────────────────────────────
+
+-- مسیر فایل‌ها در ستون social_posts.image_paths می‌نشیند (بالاتر).
+-- خودِ فایل‌ها اینجا.
+
+-- ساخت bucket، اگر نبود.
+insert into storage.buckets (id, name, public)
+values ('social-assets', 'social-assets', true)
+on conflict (id) do nothing;
+
+-- ⚠️ خط بالا برای bucketی که **از قبل ساخته شده** هیچ کاری نمی‌کند.
+--    «on conflict do nothing» یعنی اگر id موجود باشد، ردیف دست‌نخورده
+--    می‌ماند — از جمله public. bucket این پروژه با public = false ساخته
+--    شده بود و آن insert بی‌صدا از رویش رد می‌شد.
+--
+--    پس update جداگانه لازم است. این خط هم دوباره‌اجراپذیر است.
+update storage.buckets set public = true where id = 'social-assets';
+
+-- چرا عمومی؟ توضیح کامل در CLAUDE.md بخش «امنیت». خلاصه: مسیرها UUID
+-- دارند، محتوا قرار است روی اینستاگرام عمومی منتشر شود، و استودیو پشت
+-- Basic Auth است پس URL جایی درز نمی‌کند. در عوض getPublicUrl یک الحاق
+-- رشته است — بدون انقضا و بدون هیچ فراخوانی شبکه‌ای.
+--
+-- نوشتن نیازی به policy ندارد: سرور با SUPABASE_SERVICE_ROLE_KEY کار
+-- می‌کند و کلید سرویس از RLS عبور می‌کند. خواندن هم عمومی است.
+
+-- ── زمان آخرین رندر ──
+--
+-- کنار image_paths می‌نشیند و دو کار می‌کند:
+--
+-- ۱. **شکستن کش.** فایل‌ها با upsert روی مسیر ثابت
+--    ({socialPostId}/{index}.png) نوشته می‌شوند تا فایل یتیم انباشته
+--    نشود. ولی پیش‌فرض cacheControl در Supabase Storage ۳۶۰۰ ثانیه
+--    است — هم در مرورگر، هم در CDN. یعنی بعد از «رندر دوباره» تا یک
+--    ساعت ممکن است تصویر قدیمی دیده شود و کاربر فکر کند دکمه کار نکرد.
+--    URL نمایش «?v={rendered_at}» می‌گیرد: کلید کش عوض می‌شود، مسیر
+--    ذخیره‌سازی ثابت می‌ماند، و cacheControl می‌تواند بلند بماند.
+--
+-- ۲. **تشخیص ناهماهنگی متن و تصویر، در آینده.** امروز ممکن نیست چون
+--    استودیو ویرایش متن ندارد (هر دو مسیر PATCH فقط status می‌پذیرند).
+--    اگر روزی اضافه شود، مقایسه‌ی این ستون با زمان ویرایش می‌گوید
+--    تصویرها کهنه‌اند — بدون مهاجرت دوم.
+--
+-- nullable است: «هنوز رندر نشده» یک حالت معتبر است، نه خرابی. مثل
+-- wp_post_id که نبودش یعنی «هنوز به وردپرس نرفته».
+--
+-- ⚠️ rendered_at ↔ renderedAt رفت‌وبرگشت partialToRow را سالم رد
+--    می‌کند (بدون رقم، بدون دو حرف بزرگ پیاپی).
+alter table social_posts add column if not exists rendered_at timestamptz;
+
+-- ───────────────────────────────────────────────
+-- فاز ۵ — رجیستری کلیدواژه‌ی دایرکت
+-- ───────────────────────────────────────────────
+--
+-- ستون و ایندکسِ یکتای شرطیِ dm_keyword از فاز ۰ موجودند (بالاتر در همین
+-- فایل). آن ایندکس روی متنِ خام است — TALENT و talent دو مقدارِ جدا حساب
+-- می‌شدند. این CHECK بدونِ درگیرشدن با خودِ ایندکس، عملاً یکتاییِ
+-- حساس‌به‌حروف‌نبودن را تحمیل می‌کند: چون فقط حروفِ بزرگِ ASCII معتبرند،
+-- «talent» اصلاً نمی‌تواند در ستون بنشیند.
+--
+-- کلاسِ کاراکتر عمداً کامل نوشته شده، نه [A-Z]/[0-9] — بازه‌های regex در
+-- پستگرس به collation وابسته‌اند و در بعضی collationها حروفِ کوچک را هم
+-- می‌گیرند. فهرستِ صریح این وابستگی را حذف می‌کند.
+--
+-- صفر ردیفِ موجود تحتِ تأثیر است (تأییدِ زنده: ۰ از ۷۵ ردیف مقدار دارند)،
+-- پس این constraint بدونِ خطا اضافه می‌شود.
+alter table social_posts drop constraint if exists social_posts_dm_keyword_format;
+alter table social_posts add constraint social_posts_dm_keyword_format check (
+  dm_keyword is null
+  or dm_keyword ~ '^[ABCDEFGHIJKLMNOPQRSTUVWXYZ][ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789]{3,11}$'
+);

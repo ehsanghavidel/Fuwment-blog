@@ -68,14 +68,14 @@ ${input.observation}
 توجه: چون تجربه‌ی دست‌اول در کار نیست، بیشتر مراقب باش که محتوا به کلی‌گویی نیفتد.
 
 ${input.ideas
-  .map((i, n) => `${n + 1}. «${i.title}» (امتیاز ${i.score})\n   قلاب: ${i.hook}\n   درد مخاطب: ${i.painPoint}`)
-  .join("\n")}`;
+      .map((i, n) => `${n + 1}. «${i.title}» (امتیاز ${i.score})\n   قلاب: ${i.hook}\n   درد مخاطب: ${i.painPoint}`)
+      .join("\n")}`;
 
   const prompt = `${source}
 
 بر این اساس بریف اجتماعی بنویس.`;
 
-  return runAgentJSON({
+  const result = await runAgentJSON({
     agent: "linkedin-angle-finder",
     system,
     prompt,
@@ -90,4 +90,8 @@ ${input.ideas
   "cta": "پرسشی که گفت‌وگو راه می‌اندازد"
 }`,
   });
+  // لینکدین فعلاً فقط فارسی است. صریح می‌نویسیم چون SocialBrief بعد از
+  // parse زبان را الزامی می‌داند (z.default)، ولی تایپ ورودی runAgentJSON
+  // آن را اختیاری می‌بیند.
+  return { ...result, language: "fa" as const };
 }

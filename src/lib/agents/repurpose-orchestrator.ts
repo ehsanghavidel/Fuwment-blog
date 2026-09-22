@@ -9,6 +9,9 @@ import { SOCIAL_APPROVE_THRESHOLD } from "./social-editor";
 import { runInstagramChecks, runLinkedinChecks } from "./social-checks";
 import { writeAndReview } from "./social-loop";
 import { runSocialCritic } from "./critic";
+import { renderSlidesForPost } from "@/lib/storage";
+import { clampSlides, guardPositionLayout } from "./types";
+import { slideText } from "@/lib/slide-spec";
 import type { InstagramCarousel, LinkedInPost } from "./types";
 
 /**
@@ -88,8 +91,7 @@ export async function runRepurpose(opts: {
       check: (d) =>
         runInstagramChecks({ caption: d.caption, slides: d.slides, hashtags: d.hashtags }),
       // کپشن + متن همه‌ی اسلایدها + دعوت به اقدام
-      brandText: (d) =>
-        [d.caption, ...d.slides.map((s) => `${s.kicker} ${s.heading} ${s.text}`), d.cta].join("\n"),
+      brandText: (d) => [d.caption, ...d.slides.map(slideText), d.cta].join("\n"),
       describe: (d) => `${d.slides.length} اسلاید، ${d.hashtags.length} هشتگ`,
     });
 
@@ -120,17 +122,27 @@ export async function runRepurpose(opts: {
         format: "carousel",
         title: ig.draft.title,
         body: ig.draft.caption,
-        slides: ig.draft.slides,
+        // همان تور نجات ناشر اینستاگرام — این مسیر هم کاروسل می‌سازد.
+        // ترتیب مهم است: guardPositionLayout بعد از clampSlides.
+        slides: guardPositionLayout(clampSlides(ig.draft.slides)),
         hashtags: ig.draft.hashtags,
         cta: ig.draft.cta,
         checks: ig.checks,
         extras: {},
+        // این مسیرها هنوز فقط فارسی تولید می‌کنند
+        language: "fa",
+        // این محتوا به هفته‌ی محتوایی تعلق ندارد
+        weekId: null,
+        imagePaths: [],
+        renderedAt: null,
         score: ig.review.score,
         // همیشه draft: انتشار روی شبکه‌ی اجتماعی دستی است و باید انسان
         // تأییدش کند (human-in-the-loop، مثل ناشر بلاگ).
         status: "draft",
         createdAt: now,
         approvedAt: null,
+        // فاز ۵ اینجا رزرو نمی‌کند
+        dmKeyword: null,
       };
 
       const liPost: SocialPost = {
@@ -147,10 +159,18 @@ export async function runRepurpose(opts: {
         cta: li.draft.cta,
         checks: li.checks,
         extras: {},
+        // این مسیرها هنوز فقط فارسی تولید می‌کنند
+        language: "fa",
+        // این محتوا به هفته‌ی محتوایی تعلق ندارد
+        weekId: null,
+        imagePaths: [],
+        renderedAt: null,
         score: li.review.score,
         status: "draft",
         createdAt: now,
         approvedAt: null,
+        // فاز ۵ فقط کاروسلِ اینستاگرام را پوشش می‌دهد
+        dmKeyword: null,
       };
 
       await store.createSocialPost(igPost);
@@ -171,6 +191,21 @@ export async function runRepurpose(opts: {
 
     run.socialPostIds = [published.instagramId, published.linkedinId];
     await store.updateRun(runId, { socialPostIds: run.socialPostIds });
+
+    // این مسیر هم کاروسل می‌سازد، پس همان گام رندر را می‌گیرد.
+    // توضیح کاملش بالای همین گام در instagram-orchestrator.ts.
+    await step<unknown>("slide-render", "رندر تصویر اسلایدها", async () => {
+      const result = await renderSlidesForPost(published.instagramId);
+      return {
+        output: result,
+        summary:
+          result.status === "rendered"
+            ? `${result.count.toLocaleString("fa-IR")} تصویر ۱۰۸۰×۱۳۵۰ ساخته و آپلود شد`
+            : result.status === "skipped"
+              ? `رندر انجام نشد (${result.reason}) — متن سالم است`
+              : `رندر ناموفق بود: ${result.error}`,
+      };
+    });
 
     // ── ۵. منتقد (خودبهبودی) ──
     // مثل پایپ‌لاین بلاگ: خطای منتقد نباید اجرای موفق را خراب کند.

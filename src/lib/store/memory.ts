@@ -1,6 +1,7 @@
 import type {
   BlogStore,
   Campaign,
+  ContentWeek,
   Feedback,
   Lesson,
   PipelineRun,
@@ -24,6 +25,7 @@ import type {
 type MemoryState = {
   posts: Map<string, Post>;
   campaigns: Map<string, Campaign>;
+  weeks: Map<string, ContentWeek>;
   socialPosts: Map<string, SocialPost>;
   runs: Map<string, PipelineRun>;
   lessons: Map<string, Lesson>;
@@ -40,6 +42,7 @@ function state(): MemoryState {
     g.__fuwmentBlogMemoryV1 = {
       posts: new Map(),
       campaigns: new Map(),
+      weeks: new Map(),
       socialPosts: new Map(),
       runs: new Map(),
       lessons: new Map(),
@@ -111,6 +114,43 @@ export class MemoryStore implements BlogStore {
     if (opts?.sourcePostId) all = all.filter((p) => p.sourcePostId === opts.sourcePostId);
     if (opts?.platform) all = all.filter((p) => p.platform === opts.platform);
     return all.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async updateSocialPostWithDmKeyword(
+    id: string,
+    patch: Partial<SocialPost> & { dmKeyword: string }
+  ) {
+    // پستِ نبود یعنی خطای واقعی، نه «کاندید گرفته شده» — Stage 2 نبودِ false
+    // را «کاندیدِ بعدی را امتحان کن» می‌خواند؛ نبودِ خودِ پست باید بلند شکست
+    // بخورد، نه اینکه رزرو را همچنان روی کاندیدِ بعدی ادامه دهد.
+    const cur = state().socialPosts.get(id);
+    if (!cur) {
+      throw new Error(`[dm-keyword] پستِ اجتماعی با id=${id} برای رزرو پیدا نشد`);
+    }
+    // بینِ این پیمایش و set زیر هیچ await نیست — در مدلِ تک‌رشته‌ایِ جاوااسکریپت
+    // اتمی است، همان معادلِ صادقانه‌ی ایندکسِ یکتای دیتابیس.
+    for (const other of state().socialPosts.values()) {
+      if (other.id !== id && other.dmKeyword === patch.dmKeyword) return false;
+    }
+    state().socialPosts.set(id, { ...cur, ...patch });
+    return true;
+  }
+
+  async createWeek(week: ContentWeek) {
+    state().weeks.set(week.id, week);
+  }
+
+  async updateWeek(id: string, patch: Partial<ContentWeek>) {
+    const cur = state().weeks.get(id);
+    if (cur) state().weeks.set(id, { ...cur, ...patch });
+  }
+
+  async getWeek(id: string) {
+    return state().weeks.get(id) ?? null;
+  }
+
+  async getWeekByStart(weekStart: string) {
+    return [...state().weeks.values()].find((w) => w.weekStart === weekStart) ?? null;
   }
 
   async createCampaign(c: Campaign) {

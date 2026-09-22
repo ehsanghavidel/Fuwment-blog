@@ -185,8 +185,12 @@ export function PostsPanel({ onUnauthorized }: { onUnauthorized: () => void }) {
             </time>
           </div>
 
-          <h3 className="mb-1.5 font-extrabold leading-8 text-ink">{post.title}</h3>
-          <p className="mb-4 text-sm leading-7 text-ink-muted">{post.excerpt}</p>
+          <h3 dir="auto" className="mb-1.5 font-extrabold leading-8 text-ink">
+            {post.title}
+          </h3>
+          <p dir="auto" className="mb-4 text-sm leading-7 text-ink-muted">
+            {post.excerpt}
+          </p>
 
           <div className="flex flex-wrap items-center gap-2 text-sm">
             {post.status === "published" ? (
