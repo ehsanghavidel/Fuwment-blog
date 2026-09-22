@@ -306,7 +306,7 @@ npm run dev
 | `STUDIO_PASSWORD` | قفل استودیو برای دیپلوی عمومی |
 | `CRON_SECRET` | محافظت endpoint کرون |
 | `WORDPRESS_URL` + `WORDPRESS_USER` + `WORDPRESS_APP_PASSWORD` | ساخت خودکار **پیش‌نویس** مقاله در وردپرس بعد از تأیید. رمز از Users → Profile → Application Passwords |
-| `WORDPRESS_CATEGORY_ID` | دسته‌ی پست‌ها در وردپرس؛ بدون آن همه در Uncategorized می‌افتند |
+| `WORDPRESS_CATEGORY_ID` | دسته‌ی پست‌ها در وردپرس؛ بدون آن همه در Uncategorized می‌افتند. مخصوصِ همان نصب است — با عوض‌کردن `WORDPRESS_URL` باید دوباره از `/wp-json/wp/v2/categories` گرفته شود |
 
 ### دیپلوی روی Vercel
 
@@ -323,7 +323,7 @@ npm run dev
 | **اجرای پایپ‌لاین** (تولید مقاله و محتوای اجتماعی) | روی **لپ‌تاپ**، با `npm run dev` |
 | **استودیو** (دیدن اجراها، تأیید پست، ارسال به وردپرس) | روی **Vercel** |
 | **داده** | Supabase — هر دو طرف به همان دیتابیس وصل‌اند |
-| **بلاگ عمومی** | وردپرس روی `fuwment.com` |
+| **بلاگ عمومی** | وردپرس روی `fa.fuwment.com` |
 
 **چرا:** یک اجرای کامل ۱۷۵ تا ۲۹۳ ثانیه طول می‌کشد و سقف تابع در پلن Hobby ۳۰۰ ثانیه است — بدون امکان افزایش. `waitUntil` هم کمکی نمی‌کند: طبق [مستندات Vercel](https://vercel.com/docs/functions/functions-api-reference/vercel-functions-package)، «promiseهای داده‌شده به `waitUntil` همان timeout تابع را دارند» و مهلت «شامل پردازش درخواست و کارهای ناهمگام `waitUntil`» است. یعنی زودبرگرداندن پاسخ، کار را از سقف معاف نمی‌کند.
 

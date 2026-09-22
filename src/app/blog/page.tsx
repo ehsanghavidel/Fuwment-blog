@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export const metadata = {
   title: "پیش‌نمایش مقاله‌ها",
   description: "پیش‌نمایش داخلی مقاله‌های تولیدشده — منتشرنشده",
-  // بلاگ عمومی روی fuwment.com/blog است؛ این نسخه نباید ایندکس شود
+  // بلاگ عمومی روی fa.fuwment.com است؛ این نسخه نباید ایندکس شود
   robots: { index: false, follow: false },
 };
 
@@ -26,7 +26,7 @@ export default async function BlogPage() {
       <header className="mb-10">
         <h1 className="text-headline text-ink">پیش‌نمایش مقاله‌ها</h1>
         <p className="mt-2 leading-8 text-ink-muted">
-          خروجی پایپ‌لاین، برای بازبینی داخلی. انتشار عمومی روی fuwment.com/blog انجام می‌شود.
+          خروجی پایپ‌لاین، برای بازبینی داخلی. انتشار عمومی روی fa.fuwment.com انجام می‌شود.
         </p>
       </header>
 

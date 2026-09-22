@@ -25,7 +25,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     description: post.metaDescription,
     keywords: post.keywords,
     // ⚠️ نه canonical و نه openGraph اینجا نمی‌گذاریم: نسخه‌ی منتشرشده روی
-    // fuwment.com/blog است و این صفحه نباید خودش را مرجع معرفی کند.
+    // fa.fuwment.com است و این صفحه نباید خودش را مرجع معرفی کند.
     // متادیتای سئوی ایجنت (metaTitle/metaDescription) برای بازبینی انسانی
     // نگه داشته شده، نه برای موتور جستجو.
     robots: { index: false, follow: false, nocache: true },
