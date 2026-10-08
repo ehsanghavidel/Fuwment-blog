@@ -4,6 +4,7 @@ import { LIMITS_BY_LAYOUT } from "./types";
 import { countDmCtaLine } from "@/lib/dm-keyword";
 import {
   ABSOLUTE_DISMISSAL_FA,
+  BENCHMARK_REQUIREMENT_FA,
   DISMISSAL_NEGATED_FRAME,
   type DismissalPattern,
 } from "@/lib/brand/instagram";
@@ -261,28 +262,54 @@ export function checkBriefTargeting(brief: {
  * «بی‌ارزش است» تبدیل می‌کنند؛ «به‌تنهایی … نشان نمی‌دهد» هیچ‌کدام را فعال
  * نمی‌کند. فهرست در `@/lib/brand/instagram.ts`.
  */
-export function checkAbsoluteDismissalFa(text: string): SocialCheck {
-  // جمله‌به‌جمله، با دو استثنا که روی متن خودِ راهنمای برند پیدا شدند:
-  // پرسشِ بلاغی برای رد کردن («این یعنی تجربه‌ات بی‌ارزش است؟») و
-  // دستورِ ضدِ رد کردن («هرگز نگو مقاله بی‌ارزش است»). هیچ‌کدام حکم نیست.
+/**
+ * تطبیق جمله‌به‌جمله، با دو استثنا که روی متن خودِ راهنمای برند پیدا شدند:
+ * پرسشِ بلاغی («این یعنی تجربه‌ات بی‌ارزش است؟»، «باید با بازار مقایسه
+ * کنی؟») و قابِ نفی پیش از الگو («هرگز نگو مقاله بی‌ارزش است»). هیچ‌کدام
+ * حکم نیست.
+ */
+function sentenceHitsFa(text: string, patterns: DismissalPattern[]): DismissalPattern[] {
   const hits = new Set<DismissalPattern>();
   for (const sentence of text.match(/[^.!؟?\n]+[.!؟?]?/g) ?? []) {
     if (/[؟?]\s*$/.test(sentence)) continue;
-    for (const p of ABSOLUTE_DISMISSAL_FA) {
+    for (const p of patterns) {
       const m = sentence.match(p.re);
       if (!m) continue;
       if (DISMISSAL_NEGATED_FRAME.test(sentence.slice(0, m.index))) continue;
       hits.add(p);
     }
   }
+  return [...hits];
+}
+
+export function checkAbsoluteDismissalFa(text: string): SocialCheck {
+  const hits = sentenceHitsFa(text, ABSOLUTE_DISMISSAL_FA);
   return {
     name: "حکم مطلق درباره‌ی مدرک",
     severity: "blocking",
-    pass: hits.size === 0,
+    pass: hits.length === 0,
     note:
-      hits.size === 0
+      hits.length === 0
         ? "هیچ مدرکی مطلق رد نشده و حکمی درباره‌ی ذهن ارزیاب نیامده"
-        : `${[...hits].map((p) => `${p.label} → ${p.safer}`).join(" | ")} — «به‌تنهایی کافی نیست» را به «ارزشی ندارد» تبدیل نکن`,
+        : `${hits.map((p) => `${p.label} → ${p.safer}`).join(" | ")} — «به‌تنهایی کافی نیست» را به «ارزشی ندارد» تبدیل نکن`,
+  };
+}
+
+/**
+ * مقایسه‌ی درآمد با بازار که الزام شده (کاروسل فارسی، v3.7). بحثِ خودِ
+ * بنچمارک و درصدِ گزارش‌شده آزاد است؛ فقط قابِ «باید/لازم/مهم این است/
+ * ارزیاب می‌خواهد/معیار اصلی» گرفته می‌شود. فهرست در `@/lib/brand/instagram.ts`.
+ */
+export function checkBenchmarkRequirementFa(text: string): SocialCheck {
+  const hits = sentenceHitsFa(text, BENCHMARK_REQUIREMENT_FA);
+  return {
+    name: "مقایسه با بازار به‌عنوان الزام",
+    severity: "blocking",
+    pass: hits.length === 0,
+    note:
+      hits.length === 0
+        ? "مقایسه با بازار (اگر آمده) به‌عنوان یک راه ممکن آمده، نه الزام"
+        : `${hits.map((p) => `${p.label} → ${p.safer}`).join(" | ")} — بنچمارک بازار یک راه ممکن برای توضیح زمینه است، نه شرط یا روش ارزیاب`,
   };
 }
 
@@ -386,7 +413,9 @@ export function runInstagramChecks(input: {
 
   // v3.7: فقط کاروسل فارسی — استوری/ریلز/لینکدین چک‌های خودشان را دارند
   if (language === "fa") {
-    checks.push(checkAbsoluteDismissalFa([caption, ...slides.map(slideText)].join("\n")));
+    const copy = [caption, ...slides.map(slideText)].join("\n");
+    checks.push(checkAbsoluteDismissalFa(copy));
+    checks.push(checkBenchmarkRequirementFa(copy));
   }
 
   const hasUrl = URL_RE.test(caption);

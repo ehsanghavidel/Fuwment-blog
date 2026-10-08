@@ -102,6 +102,14 @@ const TIMEOUT_MS = 60_000;
  *      ته‌رنگ، رنگ سرد از اشیای خودِ صحنه نه از فیلتر، رنگ طبیعی مواد،
  *      و یک نقطه‌ی گرمِ **دیدنی ولی محدود** که عکاسی‌شده باشد نه لایه‌ی
  *      گرافیکی — و صریحاً «شیء نارنجی اضافه نکن». قالب انتزاعی دست‌نخورده.
+ *    - **اصلاح دوم (اجرای زنده‌ی بعدی):** کاور هنوز آبی/فیروزه‌ای تمام‌قاب بود.
+ *      «Overall cool tone» خودش کل قاب را سرد می‌خواست. حالا اصل «Cool
+ *      accents, not a cool colour cast»: تراز سفید خنثی تا خنثی‌-سرد، رنگ
+ *      سرد فقط از شیء/نور واقعی، «جدایی رنگی دیدنی بین مواد خنثی، سرد و
+ *      گرم»، دست‌کم یک ناحیه‌ی گرم‌ترِ طبیعی (چوب، کاغذ، پوست، آجر، نور
+ *      گرم)، و منع صریحِ «سرمه‌ای/فیروزه‌ای غالب در کل قاب» و «دیوار،
+ *      پنجره، کف، مبلمان و نور همه در یک خانواده‌ی آبی». هنوز مشترک بین
+ *      کاروسل و استوری؛ قالب انتزاعی دست‌نخورده.
  *    - کلیشه‌های ممنوعِ تازه: کره‌ی زمین، مهر ویزا، تاور بریج، دست‌دادنِ
  *      استوکیِ دو نفر با کت‌وشلوار، و عکس دفتر/ساختمان/میز خودمان به‌عنوان
  *      تصویر اصلی.
@@ -155,7 +163,8 @@ COMPOSITION
 
 LIGHT
 Soft, directional daylight — bright overcast or gentle indirect daylight,
-with a cool-neutral white balance and no overall colour cast. Gentle falloff, low contrast,
+with a neutral to cool-neutral white balance and no overall colour cast — whites
+stay white, not blue. Gentle falloff, low contrast,
 no harsh shadows, no flash, no rim lighting, no lens flare. The exposure
 stays bright, clean, and contemporary-editorial — never dim, muddy,
 sepia-toned, or nostalgic.
@@ -185,23 +194,27 @@ stays secondary and never becomes sharp enough to compete with the focal
 subject.
 
 PALETTE
-Overall cool tone with natural, balanced saturation. The cool notes (navy,
-slate, muted blue-teal) come from things actually in the scene — shadows, a
-wall, a window, fabric — not from a filter or grade laid over the whole
-image. Materials keep believable natural colours: wood looks like wood,
-brick like brick, plants stay green, paper stays off-white, any skin tone
-stays natural.
-Where the composition permits, include one visible but restrained warm
-point — warm lamplight, a wooden surface catching light, a book or notebook
-cover, a mug, a sleeve — noticeable at first glance yet never dominant
-(roughly a tenth of the frame or less). It must feel photographed: part of
-the scene's real light and materials, never a graphic overlay, a colour
-splash or a selectively recoloured object. Do not add an orange object just
-to create it; if nothing warm belongs in the scene, let warm light or
-natural wood provide it.
-Not monochrome, not near-monochrome, not a uniform blue or teal wash, not
-duotone, not black-and-white, not teal-and-orange cinematic grading, not
-HDR, not over-saturated.
+Cool accents, not a cool colour cast. The overall white balance is neutral
+to cool-neutral and saturation is natural and balanced. Blue, slate or teal
+may appear only where a real object or real light in the scene has that
+colour — a shadow, a window, a fabric, a painted wall — never as a tint
+laid over the frame.
+The photograph should contain visible colour separation between neutral,
+cool and naturally warm materials. Preserve believable whites, greys, wood
+tones, skin tones, plants, paper and architectural materials exactly as a
+camera would record them; if the scene naturally contains warm material or
+warm light, keep it warm.
+Wherever the composition allows, include at least one naturally warmer area
+— wood, paper, skin, brick, furniture or warm practical light — visible
+enough to break any blue/teal field, never dominant. It must feel
+photographed: part of the scene's real light and materials, never a graphic
+overlay, a colour splash or a selectively recoloured object. Do not add a
+fake orange object or a graphic accent just to satisfy the palette.
+Do NOT make navy or teal the dominant colour across the entire frame. Do NOT
+render walls, windows, floor, furniture and lighting in the same blue/teal
+family. No cinematic teal grade, no uniform cool filter. Not monochrome, not
+near-monochrome, not duotone, not black-and-white, no teal-and-orange
+grading, not HDR, not over-saturated.
 
 MOOD
 Composed, credible, unhurried. Editorial photography, not advertising.
@@ -223,7 +236,8 @@ university façade as the hero image, no visibly old or decaying buildings,
 no antique furniture, no dark-wood heritage interiors, no rustic interiors,
 no weathered or crumbling masonry as the dominant element.
 No sepia or nostalgic colour grading, no period-drama atmosphere, no
-historic-postcard aesthetic. No blue or teal colour cast over the whole image.
+historic-postcard aesthetic. No blue or teal colour cast over the whole image,
+no cinematic teal grade, no uniform cool filter.
 No collage, split frames, borders, or vignettes.
 No 3D render, no illustration, no digital art — photographic only.
 
