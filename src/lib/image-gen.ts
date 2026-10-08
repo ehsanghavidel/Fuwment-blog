@@ -1,4 +1,5 @@
 import "server-only";
+import { ABSTRACT_BRAND_SUBJECT, GRADIENTS, PALETTE } from "@/lib/brand/visual";
 
 /**
  * تولید تصویر پس‌زمینه‌ی کاور — الگوی `wordpress.ts` و `storage.ts`:
@@ -89,6 +90,23 @@ const TIMEOUT_MS = 60_000;
  * انگلیسی است چون مدل‌های تصویرساز با انگلیسی قابل‌اعتمادترند. این یک
  * پارامتر فنی است، نه متن برند — قاعده‌ی «پاسخ‌ها فارسی» شاملش نمی‌شود.
  *
+ * ۸. **v3.7 (راهنمای برند ۳.۷):**
+ *    - PALETTE: «تناژ سرد با یک نقطه گرم. اشباع متعادل — نه HDR، نه
+ *      سیاه‌وسفید». نسخه‌ی قبلی («deep desaturated blue-teal, close to
+ *      monochrome») عملاً تک‌رنگ بود و همین را نقض می‌کرد.
+ *    - کلیشه‌های ممنوعِ تازه: کره‌ی زمین، مهر ویزا، تاور بریج، دست‌دادنِ
+ *      استوکیِ دو نفر با کت‌وشلوار، و عکس دفتر/ساختمان/میز خودمان به‌عنوان
+ *      تصویر اصلی.
+ *    - ممنوعیت «چهره‌ی قابل‌تشخیص» (بند ۴) **ماند**. v3.7 پرتره‌ی انسانی را
+ *      فقط برای منتورها و متقاضیان واقعی **با اجازه‌ی کتبی** مجاز می‌کند —
+ *      چیزی که مدل تصویرساز نمی‌تواند بسازد. چهره‌ی تولیدشده روی محتوای یک
+ *      مشاور مهاجرتی به‌عنوان «متقاضی واقعی» خوانده می‌شود.
+ *    - دسته‌ی سوم v3.7 («انتزاعی برند»: فرم‌های ایزومتریک، گرادیان
+ *      نارنجی-فیروزه‌ای، 3D) فقط با `imageSubject === ABSTRACT_BRAND_SUBJECT`
+ *      روشن می‌شود و قالب جدای خودش را دارد (`ABSTRACT_TEMPLATE`). عکاسیِ
+ *      ادیتوریال هیچ‌وقت بی‌صدا 3D نمی‌شود — ممنوعیتِ 3D در قالب عکاسی
+ *      دست‌نخورده است.
+ *
  * ── Stage ۲: بندِ COMPOSITION/FORMAT برای استوری ──
  *
  * فقط این دو بند بین کاروسل و استوری فرق دارند؛ LIGHT، BRITISH CONTEXT،
@@ -159,8 +177,11 @@ stays secondary and never becomes sharp enough to compete with the focal
 subject.
 
 PALETTE
-Deep desaturated blue-teal throughout, close to monochrome. Muted, cool,
-low contrast. At most one restrained warm accent.
+A cool, balanced palette: navy and blue-teal tones with natural, balanced
+saturation — not near-monochrome, not black-and-white, not HDR, not
+over-saturated. Exactly one small warm point (a warm amber or orange detail
+such as a lamp, a notebook cover or a sleeve) — never more than one, and
+never dominant.
 
 MOOD
 Composed, credible, unhurried. Editorial photography, not advertising.
@@ -171,10 +192,12 @@ No text, letters, numbers, words, captions, signage, labels, watermarks,
 logos, or brand marks anywhere in the frame.
 No charts, graphs, diagrams, tables, UI, or screens.
 No identifiable faces.
-No flags, passports, boarding passes, aeroplanes, suitcases, landmarks,
-or any migration iconography.
-No red telephone boxes, black cabs, double-decker buses, Big Ben, or any
-other postcard/tourist iconography of Britain.
+No flags, passports, visa stamps, boarding passes, aeroplanes, suitcases,
+globes, landmarks, or any migration iconography.
+No red telephone boxes, black cabs, double-decker buses, Big Ben, Tower
+Bridge, or any other postcard/tourist iconography of Britain.
+No stock-photo handshakes or people in suits posing on a plain background.
+No company office, company building or company desk shown as the main image.
 No castles, no Gothic or Victorian-heavy architecture, no grand historic
 university façade as the hero image, no visibly old or decaying buildings,
 no antique furniture, no dark-wood heritage interiors, no rustic interiors,
@@ -186,6 +209,58 @@ No 3D render, no illustration, no digital art — photographic only.
 
 FORMAT
 {format}`;
+
+/**
+ * قالب «انتزاعی برند» — دسته‌ی سوم تصویر در v3.7، از روی پرامپتِ خودِ
+ * راهنما («Abstract isometric composition of folded ribbon-like planes…»).
+ *
+ * ⚠️ فقط برای `imageSubject === ABSTRACT_BRAND_SUBJECT`. نسبت ۱۶:۹ راهنما
+ * با قالب FORMAT ما (۴:۵ یا ۹:۱۶) جایگزین می‌شود و «negative space on the
+ * right» با بند ترکیب‌بندیِ همان قالب — تا متن روی فرم‌ها نیفتد. گرادیان‌ها
+ * همان «گرادیان‌های رسمی» راهنما هستند.
+ */
+const ABSTRACT_TEMPLATE = `Abstract isometric composition of folded ribbon-like planes flowing
+upward, on a deep navy background (${PALETTE.navy}). One plane in a warm orange
+gradient (${GRADIENTS.orange[0]} to ${GRADIENTS.orange[1]}), another in a teal
+gradient (${GRADIENTS.teal[0]} to ${GRADIENTS.teal[1]}). Planes and edges follow a
+30-degree isometric angle. Soft studio lighting, clean and minimal, 3D render.
+
+COMPOSITION
+{composition}
+
+ABSOLUTELY EXCLUDE
+No text, letters, numbers, logos or brand marks. No people, no faces, no
+photographic scene, no migration iconography. No clutter.
+
+FORMAT
+{format}`;
+
+/** ترکیب‌بندی انتزاعی — فرم‌ها در همان باندی که سوژه‌ی عکس می‌نشست */
+const ABSTRACT_COMPOSITION_CAROUSEL = `The ribbon forms occupy the upper part of the frame, off-centre, no more
+than one third of the image. Generous empty navy negative space everywhere
+else, especially the lower half, which stays calm for text.`;
+
+const ABSTRACT_COMPOSITION_STORY = `The ribbon forms sit in the lower-middle band of the frame (roughly 55%
+to 70% of the way down), no more than one third of the image. The upper
+half stays empty navy for text; the bottom quarter stays quiet.`;
+
+function abstractStyleFor(frame: "carousel" | "story"): string {
+  return ABSTRACT_TEMPLATE.replace(
+    "{composition}",
+    frame === "story" ? ABSTRACT_COMPOSITION_STORY : ABSTRACT_COMPOSITION_CAROUSEL
+  ).replace("{format}", frame === "story" ? FORMAT_STORY : FORMAT_CAROUSEL);
+}
+
+/**
+ * پرامپت نهایی برای یک `imageSubject`.
+ *
+ * export شده برای تستِ منطقِ خالص — بدون هیچ فراخوانیِ شبکه. فقط برابریِ
+ * دقیقِ `ABSTRACT_BRAND_SUBJECT` قالب انتزاعی را می‌گیرد؛ هر چیز دیگری
+ * عکاسیِ ادیتوریال است.
+ */
+export function imagePromptFor(subject: string, frame: "carousel" | "story"): string {
+  return subject.trim() === ABSTRACT_BRAND_SUBJECT ? abstractStyleFor(frame) : styleFor(subject, frame);
+}
 
 export function isImageGenConfigured(): boolean {
   return Boolean(process.env.OPENROUTER_API_KEY);
@@ -219,7 +294,7 @@ export async function generateCoverImage(
   if (!clean) return { status: "skipped", reason: "no-subject" };
 
   const frame = opts?.frame ?? "carousel";
-  const prompt = styleFor(clean, frame);
+  const prompt = imagePromptFor(clean, frame);
   const t0 = Date.now();
 
   try {

@@ -192,12 +192,71 @@ function slideLimitNote(s: Slide): string {
 
 /* ── اینستاگرام ─────────────────────────────────────────── */
 
+/**
+ * خطِ هشتگ — v3.7.
+ *
+ * اینستاگرام فارسی: «حروف لاتین نه» و هشتگ هم متن است (تصمیم مالک) —
+ * پس هر هشتگی با حرف لاتین رد می‌شود. کانال انگلیسی (لینکدین، اینستاگرام
+ * انگلیسی): هشتگ با حرف فارسی رد می‌شود، چون قاعده‌ی فارسی نباید به خروجی
+ * انگلیسی نشت کند — و برعکس.
+ */
+export function checkHashtagScript(hashtags: string[], language: "fa" | "en"): SocialCheck {
+  const bad =
+    language === "fa"
+      ? hashtags.filter((h) => /[A-Za-z]/.test(h))
+      : hashtags.filter((h) => /[\u0600-\u06FF]/.test(h));
+  return {
+    name: language === "fa" ? "هشتگ با حروف فارسی" : "هشتگ انگلیسی",
+    severity: "blocking",
+    pass: bad.length === 0,
+    note:
+      bad.length === 0
+        ? language === "fa"
+          ? "همه‌ی هشتگ‌ها با حروف فارسی‌اند"
+          : "all hashtags are in English"
+        : language === "fa"
+          ? `هشتگ با حروف لاتین: ${bad.join("، ")} — در اینستاگرام فارسی هشتگ هم با حروف فارسی است (مثل #گلوبال_تلنت)`
+          : `hashtags with Persian script: ${bad.join(", ")} — English channels take English hashtags only`,
+  };
+}
+
+/**
+ * گروه مخاطب و مرحله‌ی سفر — v3.7: «پیش از ساخت هر محتوا … اگر پاسخ
+ * هرکدام همه بود، محتوا هنوز آماده نیست.»
+ *
+ * توصیه‌ای است، نه مسدودکننده: نبودش را بازنویسیِ متن درست نمی‌کند (بریف
+ * پیش از نویسنده ساخته شده)، پس یک دور بازنویسی فقط هزینه می‌سوزاند
+ * (قاعده‌ی ۲). اجبار واقعی در اسکیمای بریف (`TargetedSocialBriefSchema`) و
+ * در شبکه‌ی هفتگی است؛ این چک فقط حفره‌ی بریف‌های قدیمی/دستی را به
+ * بازبین انسانی نشان می‌دهد.
+ */
+export function checkBriefTargeting(brief: {
+  audienceGroup?: string | null;
+  journeyStage?: string | null;
+}): SocialCheck {
+  const missing = [
+    brief.audienceGroup ? null : "گروه مخاطب",
+    brief.journeyStage ? null : "مرحله‌ی سفر",
+  ].filter(Boolean);
+  return {
+    name: "گروه مخاطب و مرحله‌ی سفر",
+    severity: "advisory",
+    pass: missing.length === 0,
+    note:
+      missing.length === 0
+        ? `${brief.audienceGroup} / ${brief.journeyStage}`
+        : `بریف ${missing.join(" و ")} ندارد — طبق راهنمای برند، محتوایی که برای «همه» است آماده‌ی انتشار نیست`,
+  };
+}
+
 export function runInstagramChecks(input: {
   caption: string;
   slides: Slide[];
   hashtags: string[];
+  /** v3.7: هشتگ اینستاگرام فارسی فقط با حروف فارسی. پیش‌فرض «fa» */
+  language?: "fa" | "en";
 }): SocialCheck[] {
-  const { caption, slides, hashtags } = input;
+  const { caption, slides, hashtags, language = "fa" } = input;
   const checks: SocialCheck[] = [];
 
   // قلاب: اینستاگرام حدود ۱۲۵ کاراکتر اول را قبل از «... بیشتر» نشان می‌دهد،
@@ -286,12 +345,14 @@ export function runInstagramChecks(input: {
           : "همه‌ی هشتگ‌ها معتبر و یکتا هستند",
   });
 
+  checks.push(checkHashtagScript(hashtags, language));
+
   const hasUrl = URL_RE.test(caption);
   checks.push({
     name: "بدون لینک در کپشن",
     pass: !hasUrl,
     note: hasUrl
-      ? "اینستاگرام لینک کپشن را کلیک‌پذیر نمی‌کند — به‌جایش «لینک در بایو»"
+      ? "اینستاگرام لینک کپشن را کلیک‌پذیر نمی‌کند — لینک را حذف کن. (ارجاع به بایو فقط در پست فروش و فقط به شکل CTA اصلی: «لینک ارزیابی مسیر در بایو است.»)"
       : "کپشن لینک ندارد",
   });
 
@@ -446,25 +507,11 @@ export function runReelsChecks(input: {
     note: `${onScreenLen} کاراکتر (سقف ۴۵ — روی ویدیو باید یک‌نگاهی خوانده شود)`,
   });
 
-  // املای محاوره‌ای — برندگاید فارسی کتابی با خطاب «شما» می‌خواهد.
-  // این فهرست عمداً کوتاه و بی‌ابهام است: همه واژه‌های کاملی هستند که
-  // شکل کتابی مشخصی دارند، پس تطبیقِ کلمه‌کامل خطای کاذب نمی‌دهد.
-  // (برخلاف پسوندهایی مثل «تون» که داخل «ستون» هم پیدا می‌شوند.)
-  const COLLOQUIAL = [
-    "اگه", "دیگه", "میشه", "نمیشه", "بشه", "کنه", "بکنه", "میکنه",
-    "اینجوری", "این‌جوری", "چیه", "یه", "خیلیا", "اینا", "واسه", "بریم",
-  ];
-  const found = COLLOQUIAL.filter((w) =>
-    new RegExp(`(^|[\\s،.!؟:؛«»()"])${w}([\\s،.!؟:؛«»()"]|$)`).test(script)
-  );
-  checks.push({
-    name: "فارسی کتابی (نه محاوره‌ای)",
-    pass: found.length === 0,
-    note:
-      found.length > 0
-        ? `شکل محاوره‌ای: ${found.join("، ")} — طبق برندگاید باید کتابی نوشته شود`
-        : "متن با املای کتابی نوشته شده",
-  });
+  // ⚠️ چکِ «فارسی کتابی (نه محاوره‌ای)» از v3.7 حذف شد. ریلز حالا تابع
+  // زبان اینستاگرام فارسی است (تصمیم مالک): خطاب «تو» و قلاب محاوره‌ای —
+  // همان املایی که آن چک رد می‌کرد. نگه‌داشتنش یعنی چکِ قطعی‌ای که
+  // متنِ درستِ برند را جریمه کند (قاعده‌ی ۲).
+  checks.push(checkHashtagScript(hashtags, "fa"));
 
   const badTags = hashtags.filter((h) => !HASHTAG_RE.test(h));
   checks.push({
@@ -545,6 +592,20 @@ export function runLinkedinChecks(input: {
       ? `«${md[0].trim()}» — لینکدین مارک‌داون را رندر نمی‌کند و خام دیده می‌شود`
       : "متن بدون نشانه‌گذاری مارک‌داون است",
   });
+
+  // v3.7: «لینکدین — انگلیسی، بدون اموجی.» صفر، نه «کم».
+  const linkedinEmoji = countEmoji(body);
+  checks.push({
+    name: "بدون اموجی (لینکدین)",
+    severity: "blocking",
+    pass: linkedinEmoji === 0,
+    note:
+      linkedinEmoji === 0
+        ? "no emoji in the post"
+        : `${linkedinEmoji} اموجی در متن — راهنمای برند برای لینکدین اموجی را کامل ممنوع کرده`,
+  });
+
+  checks.push(checkHashtagScript(hashtags, "en"));
 
   const badTags = hashtags.filter((h) => !HASHTAG_RE.test(h));
   checks.push({

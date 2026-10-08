@@ -1,7 +1,8 @@
 import "server-only";
 import { runSocialEditor, type SocialChannel } from "./social-editor";
 import { runBrandChecks } from "./brand-checks";
-import { checkLanguageMatch, type SocialCheck } from "./social-checks";
+import { checkBriefTargeting, checkLanguageMatch, type SocialCheck } from "./social-checks";
+import { brandChannelFor } from "@/lib/brand";
 import type { makeStepRunner } from "./run-steps";
 import type { SocialBrief, SocialReview } from "./types";
 
@@ -59,11 +60,20 @@ export async function writeAndReview<T>(args: {
    * می‌گذرند — تزریق به پرامپت ویراستار، و اجباری‌کردن بازنویسی. جدا
    * نگه‌داشتنشان یعنی دو بار همان سیم‌کشی، و فراموش‌کردن یکی در آینده.
    */
+  /**
+   * کانال برند (v3.7) — قواعد کانال (لاتین و «تو» در اینستاگرام فارسی،
+   * انگلیسی در لینکدین) فقط از همین‌جا روشن می‌شوند. لینکدین همیشه
+   * انگلیسی است، پس زبانِ بریفش هم باید «en» باشد؛ اگر نبود،
+   * `checkLanguageMatch` بلند رد می‌کند.
+   */
+  const brandChannel = brandChannelFor(channel, brief.language);
+
   const allChecks = (draft: T): SocialCheck[] => [
     ...args.check(draft),
     // اول از همه: اگر زبان متن با زبان بریف نخواند، بقیه‌ی چک‌ها بی‌معنی‌اند
     checkLanguageMatch(args.brandText(draft), brief.language),
-    ...runBrandChecks({ text: args.brandText(draft), language: brief.language }),
+    ...runBrandChecks({ text: args.brandText(draft), language: brief.language, channel: brandChannel }),
+    checkBriefTargeting(brief),
   ];
 
   let draft = await step(writerAgent, `کپی‌رایتر ${label} — پیش‌نویس اول`, async () => {

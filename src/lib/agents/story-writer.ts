@@ -1,7 +1,16 @@
 import "server-only";
 import type { ZodType } from "zod";
 import { runAgentJSON } from "@/lib/ai";
-import { COMPANY_NAME, COMPANY_PROFILE, BRAND_VOICE } from "@/lib/company";
+import { COMPANY_NAME } from "@/lib/company";
+import {
+  AUDIENCE_BRIEFING_EN,
+  audienceProfileFa,
+  brandChannelFor,
+  brandContext,
+  instagramCtaBlockEn,
+  instagramCtaBlockFa,
+  type ContentGoal,
+} from "@/lib/brand";
 import { LIMITS_BY_LAYOUT } from "@/lib/slide-spec";
 import { lessonsBlockFor } from "./lessons";
 import {
@@ -32,23 +41,21 @@ import type { SocialCheck } from "./social-checks";
  */
 
 const FA_BLOCK = `
-زبان خروجی: **فارسی**. اعداد داخل متن را فارسی بنویس.`;
+زبان خروجی: **فارسی** — زبان اینستاگرام فارسی (تصمیم مالک): خطاب «تو»، قلاب محاوره‌ای، بدون هیچ حرف لاتین. قواعد کامل کانال بالاتر آمده.`;
 
 const EN_BLOCK = `
 زبان خروجی: **انگلیسی**. کل خروجی — عنوان، خلاصه‌ی داخلی، متنِ فریم‌ها، استیکرها و دعوت به اقدام — باید انگلیسی باشد. این ترجمه نیست؛ از نو به انگلیسی بنویس، با جمله‌های کوتاه‌تر از معادلِ فارسی‌شان. اعداد را لاتین بنویس.`;
 
-function systemPrompt(lessons: string, language: "fa" | "en"): string {
+function systemPrompt(lessons: string, language: "fa" | "en", goal: ContentGoal): string {
   return `تو «کپی‌رایترِ استوریِ اینستاگرام» ${COMPANY_NAME} هستی. از یک بریفِ اجتماعی، یک ستِ کوتاهِ استوری می‌سازی که یک مینی‌روایتِ واحد تعریف می‌کند — چیزی که در ۲ تا ۳ ثانیه‌ی هر فریم، پشتِ سرِ هم خوانده می‌شود.
 
-${COMPANY_PROFILE}
-
-${BRAND_VOICE}
+${brandContext(brandChannelFor("story", language))}
 
 قواعدِ روایت (رعایتشان اجباری است):
-- ست دقیقاً یک مینی‌روایت است، نه یک کاروسلِ کوچک‌شده. یا ۲ فریم (قلاب → دعوت) یا ۳ فریم (قلاب → یک حرفِ تازه → دعوت) — خودت تصمیم بگیر کدام؛ فقط وقتی سومی واقعاً یک اطلاعِ تازه اضافه می‌کند از ۳ فریم استفاده کن.
+- ست دقیقاً یک مینی‌روایت است، نه یک کاروسلِ کوچک‌شده. یا ۲ فریم (قلاب → قدم بعدی) یا ۳ فریم (قلاب → یک حرفِ تازه → قدم بعدی) — خودت تصمیم بگیر کدام؛ فقط وقتی سومی واقعاً یک اطلاعِ تازه اضافه می‌کند از ۳ فریم استفاده کن.
 - **فریمِ اول = قلاب.** باید بدونِ اینکه کاروسلِ مبدأ دیده شده باشد، به‌تنهایی معنی بدهد و یک تنش/سؤال/ایده‌ی مشخص را مطرح کند.
 - اگر ۳ فریم ساختی، **فریمِ میانی دقیقاً یک حرفِ تازه** می‌زند — چیزی که فریمِ اول نگفته، نه بازگوییِ همان با کلماتِ دیگر.
-- **فریمِ آخر = دعوت به اقدام / جمع‌بندی.** باید مینی‌روایت را تمام کند، نه اینکه فقط قلاب را دوباره بگوید.
+- **فریمِ آخر = قدم بعدیِ مطابق هدف پست** (بند «قدم بعدی» پایین‌تر). باید مینی‌روایت را تمام کند، نه اینکه فقط قلاب را دوباره بگوید.
 - هیچ فریمی جمله‌ی فریمِ دیگر را عیناً یا با کلماتِ کمی متفاوت تکرار نکند.
 
 قواعدِ چیدمان (همان سه چیدمانِ کاروسل، بدونِ تغییر):
@@ -71,11 +78,20 @@ ${BRAND_VOICE}
 - ⚠️ **اگر نمی‌توانی همه‌ی فیلدهای آن نوع را پر کنی، کلِ آن استیکر را ننویس.** استیکرِ ناقص هرگز ننویس، و برای هیچ فیلدِ اجباری‌ای مقدارِ null یا رشته‌ی خالی نگذار. استیکرِ ناقص حذف می‌شود — یعنی هزینه‌اش را داده‌ای و چیزی نگرفته‌ای.
 - ⚠️ **استیکرِ نوعِ link ننویس.** استیکرِ لینک فقط وقتی ساخته می‌شود که خودِ اپلیکیشن یک مقصدِ تأییدشده بدهد؛ در این مسیر چنین ورودی‌ای وجود ندارد. **هیچ آدرسی (URL) نساز، حدس نزن و از روی موضوع بازسازی نکن** — حتی آدرسی که به‌نظر آدرسِ خودِ فومنت می‌آید. هر استیکرِ link حذف می‌شود.
 - متنِ خودِ فریم هم هرگز نباید آدرسِ خام (URL) داشته باشد.
-${language === "fa" ? FA_BLOCK : EN_BLOCK}${lessons}`;
+${language === "fa" ? FA_BLOCK : EN_BLOCK}
+
+${language === "en" ? instagramCtaBlockEn(goal) : instagramCtaBlockFa(goal)}${lessons}`;
 }
 
 function briefBlock(brief: SocialBrief): string {
-  return `بریف اجتماعی:
+  const audience = brief.audienceGroup
+    ? brief.language === "en"
+      ? `\nAudience group: ${AUDIENCE_BRIEFING_EN[brief.audienceGroup]}`
+      : `\n${audienceProfileFa(brief.audienceGroup)}`
+    : "";
+  return `هدف پست: ${brief.contentGoal === "sales" ? "فروش/تبدیل" : "آموزشی"}${audience}
+
+بریف اجتماعی:
 پیام مرکزی: ${brief.coreMessage}
 مخاطب: ${brief.audience}
 زاویه‌ی قلاب: ${brief.hookAngle}
@@ -90,12 +106,12 @@ const SHAPE_HINT = `{
   "setSummary": "خلاصه‌ی داخلیِ ست برای اپراتور — کپشن نیست، هرگز جایی paste نمی‌شود",
   "frames": [
     { "layout": "standard", "kicker": "قلاب", "heading": "تیترِ کوتاهِ فریمِ اول", "text": "یکی دو جمله", "imageSubject": "صحنه‌ی فیزیکی — فقط فریمِ اول" },
-    { "layout": "standard", "kicker": "دعوت", "heading": "تیترِ فریمِ آخر", "text": "یکی دو جمله" }
+    { "layout": "standard", "kicker": "قدم بعدی", "heading": "تیترِ فریمِ آخر", "text": "یکی دو جمله" }
   ],
   "stickers": [
     { "type": "poll", "frame": 0, "question": "متنِ نظرسنجی", "options": ["گزینه‌ی اول", "گزینه‌ی دوم"] }
   ],
-  "cta": "دعوت به اقدامِ فریمِ آخر"
+  "cta": "قدم بعدیِ فریمِ آخر — طبق هدف پست"
 }
 ⚠️ نمونه‌ی «frames» بالا فقط ساختارِ ۲ فریمی را نشان می‌دهد — می‌تواند ۳ فریم هم باشد (با یک فریمِ میانیِ standard/statement/list بینِ همین دو). «stickers» کاملاً اختیاری است؛ اگر لازم نبود، این فیلد را اصلاً برنگردان.
 
@@ -134,7 +150,7 @@ export async function runStoryWriter(input: { brief: SocialBrief }): Promise<Ins
 
   return runAgentJSON<InstagramStory>({
     agent: "story-writer",
-    system: systemPrompt(lessons, input.brief.language),
+    system: systemPrompt(lessons, input.brief.language, input.brief.contentGoal ?? "educational"),
     prompt: `${briefBlock(input.brief)}
 
 ${input.brief.language === "en" ? "Write a complete Instagram story set in English." : "یک ستِ کاملِ استوری اینستاگرام بنویس."}`,
@@ -167,7 +183,7 @@ ${input.failedChecks.map((c) => `- ${c.name}: ${c.note}`).join("\n") || "- (هم
 
   return runAgentJSON<InstagramStory>({
     agent: "story-writer",
-    system: systemPrompt(lessons, input.brief.language),
+    system: systemPrompt(lessons, input.brief.language, input.brief.contentGoal ?? "educational"),
     prompt,
     temperature: 0.6,
     schema: InstagramStorySchema as ZodType<InstagramStory>,

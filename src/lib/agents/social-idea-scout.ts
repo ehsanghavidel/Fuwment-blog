@@ -1,4 +1,5 @@
 import "server-only";
+import { BRIEF_LANGUAGE_NOTE_FA } from "@/lib/brand";
 import { runAgentJSON } from "@/lib/ai";
 import { COMPANY_NAME, COMPANY_PROFILE } from "@/lib/company";
 import { lessonsBlockFor } from "./lessons";
@@ -24,6 +25,8 @@ export async function runSocialIdeaScout(input: {
   const system = `تو «ایده‌یاب شبکه‌های اجتماعی» تیم محتوای ${COMPANY_NAME} هستی — متخصص پیداکردن حرف‌هایی که مخاطبِ توصیف‌شده در پروفایل شرکت، وسط اسکرول کردن، برایشان می‌ایستد.
 
 ${COMPANY_PROFILE}
+
+${BRIEF_LANGUAGE_NOTE_FA}
 
 تفاوت کلیدی با محتوای بلاگ: در فید، **کسی دنبال شما نمی‌گردد**. مقاله جواب یک جستجوست، ولی کاروسل باید خودش توجه را بدزدد. پس ایده‌ای بده که یک باور رایج را به چالش بکشد، یک اشتباه پرتکرار را نام ببرد، یا عددی/تجربه‌ای بگوید که مخاطب انتظارش را ندارد. عنوان‌های خنثی و آموزشیِ عمومی («راهنمای جامع استراتژی») در فید مرده‌اند.${lessons}`;
 

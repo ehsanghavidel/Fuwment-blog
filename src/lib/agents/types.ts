@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { BrandRoute } from "@/lib/company";
+import { AUDIENCE_GROUPS, JOURNEY_STAGES } from "@/lib/brand";
 import { LIMITS_BY_LAYOUT, LIST_JOINER, MAX_LIST_ITEMS } from "@/lib/slide-spec";
 import type { ListSlide, Slide, StandardSlide } from "@/lib/store/types";
 
@@ -44,36 +45,14 @@ export const BRAND_ROUTES = [
 ] as const satisfies readonly BrandRoute[];
 
 /**
- * پنج گروه مخاطب — دقیقاً همان‌هایی که در COMPANY_PROFILE شماره‌گذاری شده‌اند.
- * اگر آن فهرست عوض شد، این هم باید عوض شود (Zod نمی‌تواند از متن بخواند).
- */
-export const AUDIENCE_GROUPS = [
-  "digital-tech",
-  "academic-research",
-  "arts-culture",
-  "engineering-medical",
-  "entrepreneurship",
-] as const;
-
-/**
- * هفت مرحله‌ی سفر مخاطب — بخش ۰۳ راهنمای برند (نسخه‌ی ۳.۵).
+ * پنج گروه مخاطب و هفت مرحله‌ی سفر — تعریفشان از v3.7 در `@/lib/brand`
+ * است و اینجا فقط بازصادر می‌شوند تا importهای موجود نشکنند و Zod یک
+ * منبع داشته باشد.
  *
- * قانون تولید محتوای برندگاید: پیش از ساخت هر محتوا باید مشخص باشد برای
+ * قانون تولید محتوای راهنما: پیش از ساخت هر محتوا باید مشخص باشد برای
  * کدام گروه و کدام مرحله است. اگر پاسخ هرکدام «همه» بود، محتوا آماده نیست.
- *
- * ⚠️ پیش از این، سه‌تایی استاندارد (awareness/consideration/decision) اینجا
- * بود با این توضیح که برندگاید فهرستی ندارد. آن توضیح غلط بود — جدول
- * هفت‌ردیفی در بخش ۰۳ هست.
  */
-export const JOURNEY_STAGES = [
-  "unaware",     // ۱. ناآگاه — «اصلاً همچین ویزایی هست؟» این مرحله نباید بفروشد.
-  "curious",     // ۲. کنجکاو — «من هم می‌توانم؟» کمک به خودارزیابی.
-  "evaluating",  // ۳. سنجش — «به کی اعتماد کنم؟» نشان‌دادن راهنما.
-  "decision",    // ۴. تصمیم — «ارزش هزینه‌اش را دارد؟» روشن‌کردن مسیر و ریسک.
-  "in-journey",  // ۵. همراهی — «الان کجای کارم؟» کاهش اضطراب حین مسیر.
-  "success",     // ۶. موفقیت — «حالا چه؟» نام‌گذاری لحظه‌ی تحول.
-  "referral",    // ۷. معرفی — «به کی بگویم؟» آسان‌کردن معرفی.
-] as const;
+export { AUDIENCE_GROUPS, JOURNEY_STAGES } from "@/lib/brand";
 
 export const BriefSchema = z.object({
   title: z.string(),
@@ -314,9 +293,33 @@ export const SocialBriefSchema = z.object({
 
   /** کدام مرحله از هفت مرحله‌ی سفر — قضاوت مدل */
   journeyStage: z.enum(JOURNEY_STAGES).optional(),
+
+  /**
+   * هدف پست (v3.7 «CTA بر اساس هدف پست») — تصمیم اجراست، نه قضاوت مدل.
+   * کد می‌چسباندش (از نوع محتوای شبکه‌ی هفتگی، یا پیش‌فرض «آموزشی»).
+   * نبودش یعنی آموزشی: «پستی که هدفش فروش یا تبدیل نیست، تابع ردیف آموزشی است».
+   */
+  contentGoal: z.enum(["educational", "sales"]).optional(),
 });
 
 export type SocialBrief = z.infer<typeof SocialBriefSchema>;
+
+/**
+ * همان بریف، با گروه مخاطب و مرحله‌ی سفر **اجباری** — برای تولیدکننده‌هایی
+ * که پرامپتشان هر دو را صریح می‌خواهد (v3.7: «اگر پاسخ هرکدام همه بود،
+ * محتوا هنوز آماده نیست»؛ و تصمیم مالک: هر محتوای انگلیسی هم گروه و مرحله
+ * دارد).
+ *
+ * ⚠️ چرا `SocialBriefSchema` خودش اجباری نشد: آن اسکیما در دیتابیس
+ * (خروجی گام‌های قدیمی) و در بریف‌های دست‌ساز (ریلز) هم خوانده می‌شود.
+ * اجباری‌کردنش آن‌ها را می‌شکست. اینجا فقط خروجیِ تازه‌ی مدل سخت‌گیرانه
+ * سنجیده می‌شود، و چون پرامپت و shapeHint هر دو فیلد را دارند، `runAgentJSON`
+ * با بازخورد خطا یک تلاش دوم هم دارد.
+ */
+export const TargetedSocialBriefSchema = SocialBriefSchema.extend({
+  audienceGroup: z.enum(AUDIENCE_GROUPS),
+  journeyStage: z.enum(JOURNEY_STAGES),
+});
 
 /**
  * سقف طول هر بخش اسلاید، به‌تفکیکِ چیدمان.
@@ -533,6 +536,13 @@ export const CampaignNarrativeSchema = z.object({
   linkedinAngle: z.string().min(10),
   /** زاویه‌ی ریلز — چیزی که باید گفته شود، نه خوانده */
   reelsAngle: z.string().min(10),
+  /**
+   * گروه مخاطب و مرحله‌ی سفرِ ریلز — اجباری (v3.7). پایپ‌لاین ریلز
+   * استراتژیست ندارد، پس در مسیر کمپین این دو از همین روایت می‌آیند.
+   * بقیه‌ی کانال‌های کمپین استراتژیست/زاویه‌یاب خودشان را دارند.
+   */
+  reelsAudienceGroup: z.enum(AUDIENCE_GROUPS),
+  reelsJourneyStage: z.enum(JOURNEY_STAGES),
 });
 
 export type CampaignNarrative = z.infer<typeof CampaignNarrativeSchema>;

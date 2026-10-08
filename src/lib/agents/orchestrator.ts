@@ -154,7 +154,7 @@ export async function runPipeline(opts: {
     });
 
     // چک‌های قطعی برند روی پیش‌نویس — قبل از ویراستار، چون خروجی‌شان ورودی اوست
-    let brandChecks: BrandCheck[] = runBrandChecks({ text: draft });
+    let brandChecks: BrandCheck[] = runBrandChecks({ text: draft, channel: "blog-fa" });
 
     let review: Review = await step("editor", "ویراستار — بازبینی اول", async () => {
       const out = await runEditor({ brief, draft, failedBrandChecks: brandChecks });
@@ -204,7 +204,7 @@ export async function runPipeline(opts: {
         };
       });
 
-      brandChecks = runBrandChecks({ text: draft });
+      brandChecks = runBrandChecks({ text: draft, channel: "blog-fa" });
 
       review = await step("editor", `ویراستار — بازبینی ${round + 1}`, async () => {
         const out = await runEditor({ brief, draft, failedBrandChecks: brandChecks });

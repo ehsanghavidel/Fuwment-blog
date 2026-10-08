@@ -11,6 +11,9 @@ import { runWeeklyPlanner, RECENT_TITLES_DAYS } from "./weekly-planner";
 import { WEEKLY_GRID, sceneFamilyFor } from "./weekly-grid";
 import { runInstagramPipeline } from "./instagram-orchestrator";
 import { runSocialCritic, type SocialCriticPart } from "./critic";
+// مرحله‌ی سفرِ ذخیره‌شده در برنامه رشته است (لایه‌ی store به برند وابسته نیست)
+// و با نگهبان مشترک برند سنجیده می‌شود.
+import { contentGoalFor, isJourneyStage } from "@/lib/brand";
 
 /**
  * ارکستریتور هفتگی — لایه‌ی بالای پایپ‌لاین اینستاگرام.
@@ -274,6 +277,11 @@ export async function runWeek(opts: {
             painPoint: slot.painPoint,
           },
           sceneFamily: sceneFamilyFor(config, ws).hint,
+          // v3.7: هدف پست از نوع محتوای شبکه (فقط «فروش مستقیم» CTAی فروش
+          // دارد) و گروه/مرحله از برنامه — همه تصمیم اجرا، نه قضاوت مدل.
+          contentGoal: contentGoalFor(config.contentType),
+          audienceGroup: config.audienceGroup,
+          journeyStage: isJourneyStage(slot.journeyStage) ? slot.journeyStage : undefined,
           weekId: week.id,
           // منتقدِ داخل اجرا خاموش می‌شود؛ دلیلش پایین‌تر
           collectForCritic: (part) => parts.push({ ...part, day: slot.day }),

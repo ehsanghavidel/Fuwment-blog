@@ -120,8 +120,8 @@ export async function runLinkedinPipeline(opts: {
         cta: li.draft.cta,
         checks: li.checks,
         extras: {},
-        // این مسیرها هنوز فقط فارسی تولید می‌کنند
-        language: "fa",
+        // v3.7: لینکدین انگلیسی است — همان زبانی که بریف از زاویه‌یاب گرفت
+        language: brief.language,
         // این محتوا به هفته‌ی محتوایی تعلق ندارد
         weekId: null,
         imagePaths: [],

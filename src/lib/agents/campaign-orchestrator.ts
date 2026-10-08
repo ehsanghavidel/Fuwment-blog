@@ -114,6 +114,10 @@ export async function runCampaign(opts: {
         // همان دلیل لینکدین: این متن را مدل ساخته، پس جزئیات عددی‌اش
         // واقعیت نیست و نباید وارد اسکریپت شود.
         sourceIsTrusted: false,
+        // v3.7: گروه و مرحله از روایت مادر — اسکیمای روایت هر دو را اجباری
+        // و از فهرست برند می‌سنجد.
+        audienceGroup: narrative.reelsAudienceGroup,
+        journeyStage: narrative.reelsJourneyStage,
       }),
     ]);
 

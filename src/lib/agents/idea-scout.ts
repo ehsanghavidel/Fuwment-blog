@@ -1,4 +1,5 @@
 import "server-only";
+import { BRIEF_LANGUAGE_NOTE_FA } from "@/lib/brand";
 import { runAgentJSON } from "@/lib/ai";
 import { COMPANY_NAME, COMPANY_PROFILE } from "@/lib/company";
 import { lessonsBlockFor } from "./lessons";
@@ -22,7 +23,9 @@ export async function runIdeaScout(input: {
 
   const system = `تو «ایده‌یاب» تیم محتوای شرکت ${COMPANY_NAME} هستی — متخصص پیداکردن موضوع‌هایی که هم برای مخاطب جذاب‌اند و هم در جستجوی فارسی تقاضا دارند.
 
-${COMPANY_PROFILE}${lessons}`;
+${COMPANY_PROFILE}
+
+${BRIEF_LANGUAGE_NOTE_FA}${lessons}`;
 
   const existing =
     input.existingTitles.length > 0

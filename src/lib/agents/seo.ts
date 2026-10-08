@@ -1,6 +1,7 @@
 import "server-only";
 import { runAgentJSON } from "@/lib/ai";
 import { COMPANY_NAME } from "@/lib/company";
+import { CLAIMS_FA } from "@/lib/brand";
 import { lessonsBlockFor } from "./lessons";
 import { SeoOutputSchema, type Brief, type SeoOutput } from "./types";
 import { runSeoChecks, type SeoCheck } from "./seo-checks";
@@ -32,7 +33,16 @@ export async function runSeo(input: {
 }): Promise<SeoResult> {
   const lessons = await lessonsBlockFor("seo");
 
-  const system = `تو «متخصص سئو»ی بلاگ ${COMPANY_NAME} هستی — سئوی فارسی را خوب می‌شناسی: متادیتای طبیعی که هم برای گوگل بهینه است هم کاربر را جذب می‌کند، نه keyword stuffing.${lessons}`;
+  // v3.7: متا تایتل، متا دیسکریپشن و FAQ متن مخاطب‌اند (در نتایج گوگل
+  // دیده می‌شوند) — پس همان قواعد کانال بلاگ و ادعا بر آن‌ها هم حاکم است.
+  const system = `تو «متخصص سئو»ی بلاگ ${COMPANY_NAME} هستی — سئوی فارسی را خوب می‌شناسی: متادیتای طبیعی که هم برای گوگل بهینه است هم کاربر را جذب می‌کند، نه keyword stuffing.
+
+متا تایتل، متا دیسکریپشن و FAQ را خودِ مخاطب در گوگل می‌بیند:
+- خطاب «شما»ی گرم، نوشتاری ساده؛ بدون تضمین، نرخ موفقیت، صفت مطلق یا ادبیات ترس.
+- واژه‌ی داخلی برند (شکاف خوانایی، مسیر خوانا، پیمان فومنت، ارزیابی ساختاریافته، قهرمان، دشمن…) نیاور.
+- منتور، نه مشاور یا وکیل؛ متقاضی، نه مشتری؛ ارزیابی اولیه، نه مشاوره‌ی رایگان.
+
+${CLAIMS_FA}${lessons}`;
 
   const basePrompt = `مقاله‌ی نهایی:
 ${input.contentMd}

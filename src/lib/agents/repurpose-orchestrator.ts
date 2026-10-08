@@ -89,22 +89,31 @@ export async function runRepurpose(opts: {
       revise: (draft, review, failedChecks) =>
         runInstagramRevision({ brief, draft, review, failedChecks }),
       check: (d) =>
-        runInstagramChecks({ caption: d.caption, slides: d.slides, hashtags: d.hashtags }),
+        runInstagramChecks({
+          caption: d.caption,
+          slides: d.slides,
+          hashtags: d.hashtags,
+          language: brief.language,
+        }),
       // کپشن + متن همه‌ی اسلایدها + دعوت به اقدام
       brandText: (d) => [d.caption, ...d.slides.map(slideText), d.cta].join("\n"),
       describe: (d) => `${d.slides.length} اسلاید، ${d.hashtags.length} هشتگ`,
     });
 
     // ── ۳. کپی‌رایتر لینکدین ⇄ ویراستار ──
+    // v3.7 (تصمیم مالک): لینکدین انگلیسی است. بریف همان بریف مشترک است
+    // (پیام یکی، لباس دو تا) — فقط زبان خروجی‌اش «en» می‌شود تا چک «تطابق
+    // زبان» و فهرست چک‌های انگلیسی روی پست اجرا شوند.
+    const liBrief = { ...brief, language: "en" as const };
     const li = await writeAndReview<LinkedInPost>({
       step,
       channel: "linkedin",
       writerAgent: "linkedin-writer",
       label: "لینکدین",
-      brief,
-      write: () => runLinkedinWriter({ brief }),
+      brief: liBrief,
+      write: () => runLinkedinWriter({ brief: liBrief }),
       revise: (draft, review, failedChecks) =>
-        runLinkedinRevision({ brief, draft, review, failedChecks }),
+        runLinkedinRevision({ brief: liBrief, draft, review, failedChecks }),
       check: (d) => runLinkedinChecks({ body: d.body, hashtags: d.hashtags }),
       brandText: (d) => `${d.body}\n${d.cta}`,
       describe: (d) => `${[...d.body].length} کاراکتر، ${d.hashtags.length} هشتگ`,
@@ -129,7 +138,7 @@ export async function runRepurpose(opts: {
         cta: ig.draft.cta,
         checks: ig.checks,
         extras: {},
-        // این مسیرها هنوز فقط فارسی تولید می‌کنند
+        // کاروسلِ بازآفرینی فارسی است
         language: "fa",
         // این محتوا به هفته‌ی محتوایی تعلق ندارد
         weekId: null,
@@ -159,8 +168,8 @@ export async function runRepurpose(opts: {
         cta: li.draft.cta,
         checks: li.checks,
         extras: {},
-        // این مسیرها هنوز فقط فارسی تولید می‌کنند
-        language: "fa",
+        // v3.7: لینکدین انگلیسی است
+        language: "en",
         // این محتوا به هفته‌ی محتوایی تعلق ندارد
         weekId: null,
         imagePaths: [],

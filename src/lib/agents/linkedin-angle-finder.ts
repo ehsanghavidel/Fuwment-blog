@@ -2,7 +2,8 @@ import "server-only";
 import { runAgentJSON } from "@/lib/ai";
 import { COMPANY_NAME, COMPANY_PROFILE, BRAND_VOICE } from "@/lib/company";
 import { lessonsBlockFor } from "./lessons";
-import { SocialBriefSchema, type SocialBrief, type SocialIdea } from "./types";
+import { TargetedSocialBriefSchema, type SocialBrief, type SocialIdea } from "./types";
+import { BRIEF_LANGUAGE_NOTE_FA, audienceChoiceListFa, journeyChoiceListFa } from "@/lib/brand";
 
 /**
  * ایجنت — زاویه‌یاب لینکدین
@@ -54,7 +55,15 @@ ${BRAND_VOICE}
 - نام مشتری، شرکت یا هر چیزی که هویت کسی را لو بدهد نیاور. مشاهده را بی‌نام کن.
 - keyPoints باید «ادعا» باشند، نه تیتر.
 - hookAngle باید درد یا تناقضی را بگوید که مخاطب در کار خودش تشخیص می‌دهد.
-- بریف را پلتفرم‌خنثی بنویس؛ خودِ کپی‌رایتر لباس لینکدین را می‌پوشاند.${lessons}`;
+- بریف را پلتفرم‌خنثی بنویس؛ خودِ کپی‌رایتر لباس لینکدین را می‌پوشاند.
+- پست نهایی **انگلیسی** است (v3.7: زبان لینکدین انگلیسی است). بریف می‌تواند فارسی بماند — داخلی است — ولی مثال‌ها و جزئیات را طوری بنویس که برای مخاطب بین‌المللی هم معنا داشته باشند.
+- دو فیلد اجباری (v3.7: «اگر پاسخ هرکدام همه بود، محتوا آماده نیست»):
+  · audienceGroup: ${audienceChoiceListFa()}
+    مخاطب اصلی لینکدین در راهنمای برند آکادمیک و کارآفرین است — ولی اگر مشاهده واقعاً درباره‌ی گروه دیگری است، همان را انتخاب کن.
+  · journeyStage:
+${journeyChoiceListFa()}
+
+${BRIEF_LANGUAGE_NOTE_FA}${lessons}`;
 
   const source = input.observation
     ? input.observationIsTrusted
@@ -80,18 +89,20 @@ ${input.ideas
     system,
     prompt,
     temperature: 0.5,
-    schema: SocialBriefSchema,
+    schema: TargetedSocialBriefSchema,
     shapeHint: `{
   "coreMessage": "درس عمومی که از این مشاهده بیرون می‌آید",
   "audience": "مخاطب مشخص این پست",
   "keyPoints": ["ادعای مستقل اول", "ادعای دوم", "ادعای سوم"],
   "hookAngle": "تناقض یا دردی که مخاطب در کار خودش می‌بیند",
   "proofPoint": "جزئیات ملموس و بی‌نام از همان مشاهده",
-  "cta": "پرسشی که گفت‌وگو راه می‌اندازد"
+  "cta": "پرسشی که گفت‌وگو راه می‌اندازد",
+  "audienceGroup": "academic-research",
+  "journeyStage": "curious"
 }`,
   });
-  // لینکدین فعلاً فقط فارسی است. صریح می‌نویسیم چون SocialBrief بعد از
-  // parse زبان را الزامی می‌داند (z.default)، ولی تایپ ورودی runAgentJSON
-  // آن را اختیاری می‌بیند.
-  return { ...result, language: "fa" as const };
+  // v3.7 (تصمیم مالک): لینکدین همیشه انگلیسی است. زبان تصمیم اجراست، نه
+  // قضاوت مدل — قطعی چسبانده می‌شود تا چک «تطابق زبان» و فهرست چک‌های
+  // انگلیسی روی پست اجرا شوند.
+  return { ...result, language: "en" as const };
 }

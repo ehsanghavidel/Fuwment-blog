@@ -37,6 +37,7 @@ import {
   storyBlockTopPx,
   type StoryRole,
 } from "./story-spec";
+import { FONT_FILES } from "./brand/visual";
 
 /**
  * رندرکننده‌ی اسلاید — JSON می‌گیرد، PNG می‌دهد. همین.
@@ -102,37 +103,41 @@ export type StoryRenderOptions = {
 /* ── فونت ────────────────────────────────────────────────── */
 
 /**
- * وزیرمتن برای هر دو زبان.
+ * دو فونت، بیشتر نه — v3.7: وزیرمتن برای محتوای فارسی، **Inter برای تمام
+ * متن و محتوای انگلیسی**.
  *
- * پوشش لاتینش کامل است (۱۳۳۳ گلیف، `ABCXYZabcxyz0123` همه موجود)، پس
- * Inter لازم نیست. اگر روزی خروجی انگلیسی بصری ضعیف بود، آن‌وقت
- * تصمیمِ افزودن Inter گرفته می‌شود — با نگاه به یک PNG واقعی، نه از قبل.
+ * پیش از v3.7 وزیرمتن برای هر دو زبان بود («پوشش لاتینش کامل است، پس
+ * Inter لازم نیست»). آن تصمیمِ فنی درست بود ولی قاعده‌ی برند را نقض
+ * می‌کرد: کاروسل و استوریِ انگلیسی با فونت فارسی رندر می‌شدند.
  *
+ * فایل‌ها از `public/fonts` (Inter 4.1، OFL — `Inter-OFL.txt`).
  * `next/font/google` به کار نمی‌آید: فایل‌هایش موقع بیلد در
  * `.next/static/media` با نام هش‌دار می‌نشینند و مسیر پایداری ندارند.
  */
-const FAMILY = "FuwmentSlide";
+const FAMILY: Record<"fa" | "en", string> = { fa: "FuwmentSlide", en: "FuwmentSlideEn" };
 let fontsReady = false;
 
 export function registerFonts(fontDir?: string): void {
   if (fontsReady) return;
   const dir = fontDir ?? path.join(process.cwd(), "public", "fonts");
-  // ⚠️ هر سه وزن با **یک نام خانواده** ثبت می‌شوند. canvas وزن را از
-  //    رشته‌ی font انتخاب می‌کند؛ اگر نام‌ها جدا باشند، `700 72px X`
+  // ⚠️ هر سه وزنِ هر زبان با **یک نام خانواده** ثبت می‌شوند. canvas وزن
+  //    را از رشته‌ی font انتخاب می‌کند؛ اگر نام‌ها جدا باشند، `700 72px X`
   //    بی‌صدا به وزن نزدیک می‌رسد و تیتر نازک درمی‌آید.
-  for (const [file, weight] of [
-    ["Vazirmatn-Regular.woff2", 400],
-    ["Vazirmatn-Medium.woff2", 500],
-    ["Vazirmatn-Bold.woff2", 700],
-  ] as const) {
-    GlobalFonts.registerFromPath(path.join(dir, file), FAMILY);
-    void weight;
+  for (const language of ["fa", "en"] as const) {
+    for (const file of Object.values(FONT_FILES[language])) {
+      GlobalFonts.registerFromPath(path.join(dir, file), FAMILY[language]);
+    }
   }
   fontsReady = true;
 }
 
-function font(level: keyof typeof TYPE): string {
-  return `${TYPE[level].weight} ${TYPE[level].size}px ${FAMILY}`;
+/** خانواده‌ی فونتِ رندر برای یک زبان — export برای تستِ منطق خالص */
+export function fontFamilyFor(language: "fa" | "en"): string {
+  return FAMILY[language];
+}
+
+function font(level: keyof typeof TYPE, language: "fa" | "en"): string {
+  return `${TYPE[level].weight} ${TYPE[level].size}px ${FAMILY[language]}`;
 }
 
 /** رنگِ متنِ هر بلوک — کیکر رنگِ تأکید می‌گیرد، بدنه شفافیتِ روی‌تصویر، بقیه توپر */
@@ -280,7 +285,7 @@ async function drawFrame(opts: DrawFrameOptions): Promise<Buffer> {
    */
   const wrapped = blocks
     .map((block) => {
-      ctx.font = font(block.level);
+      ctx.font = font(block.level, language);
       const lines = wrapText(ctx, block.text, block.marker ? listWidth : contentWidth);
       return { block, lines };
     })
@@ -300,7 +305,7 @@ async function drawFrame(opts: DrawFrameOptions): Promise<Buffer> {
     const { block, lines } = wrapped[i];
     const x = block.marker ? listStartX : startX;
 
-    ctx.font = font(block.level);
+    ctx.font = font(block.level, language);
     ctx.fillStyle = colorFor(block.level, accentColor, bodyOpacity);
 
     for (const [lineIndex, line] of lines.entries()) {
@@ -316,7 +321,7 @@ async function drawFrame(opts: DrawFrameOptions): Promise<Buffer> {
 
   // ── شماره‌ی صفحه، فقط اگر داده شود (کاروسل دارد، استوری ندارد) ──
   if (counter) {
-    ctx.font = font("counter");
+    ctx.font = font("counter", language);
     ctx.fillStyle = withAlpha(COLOR.fg, OPACITY.counter);
     ctx.direction = "ltr";
     ctx.textAlign = rtl ? "left" : "right";
@@ -415,6 +420,7 @@ export async function renderStoryFrame(
   const role: StoryRole = storyRoleFor(index, total);
   const blocks: Block[] = blocksFor(slide);
   // قاعده‌ی رنگ عیناً همان کاروسل است: فقط نقشِ cta نارنجی می‌گیرد.
+  // (COLOR.accent از v3.7 فیروزه‌ای روشن است — نسخه‌ی مجاز برای متن ریز.)
   const accentColor = role === "cta" ? COLOR.action : COLOR.accent;
 
   const needsDebugOverlay = Boolean(debugSafeArea || debugStickerZone);

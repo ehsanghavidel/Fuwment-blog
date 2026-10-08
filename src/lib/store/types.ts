@@ -264,6 +264,9 @@ export type CampaignNarrativeData = {
   instagramAngle: string;
   linkedinAngle: string;
   reelsAngle: string;
+  /** v3.7 — روایت‌های پیش از v3.7 این دو را ندارند */
+  reelsAudienceGroup?: string;
+  reelsJourneyStage?: string;
 };
 
 /** اجرای هر کانال، با شناسه‌ی رکورد pipeline_runs خودش */
