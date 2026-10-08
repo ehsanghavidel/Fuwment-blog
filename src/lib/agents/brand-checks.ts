@@ -17,7 +17,11 @@ import {
   BLOG_COLLOQUIAL_FA,
   EVIDENCE_OVERCLAIM_FA,
   EVIDENCE_TAG_LEAK,
+  DESCRIPTIVE_FRAME,
+  STAT_TO_RULE,
+  descriptiveFacts,
   officialFacts,
+  type OverclaimPattern,
   sourceAuthority,
   COMPANY_NAME,
   COMPANY_NAME_EN,
@@ -964,7 +968,7 @@ export function checkWrittenPersianBlog(text: string): BrandCheck {
 }
 
 /** همان بخشی از پژوهش که چک شواهد لازم دارد — فکت‌های برچسب‌دار و منابع نهایی مقاله */
-export type EvidenceBundle = { keyFacts: string[]; sources: { url: string }[] };
+export type EvidenceBundle = { keyFacts: string[]; sources: { url: string; title?: string }[] };
 
 /**
  * وضعیت شواهد — دو چک، بر اساس پشتوانه‌ی رسمیِ **سنجیده‌شده با کد**.
@@ -982,35 +986,59 @@ export type EvidenceBundle = { keyFacts: string[]; sources: { url: string }[] };
  *   همان را می‌گوید (قاعده‌ی ۲)؛ ویراستار و بازبین انسانی می‌سنجند.
  */
 export function checkEvidenceGroundingBlog(text: string, research: EvidenceBundle): BrandCheck[] {
-  const scan = stripNonProse(text);
   const official = officialFacts(research.keyFacts, research.sources);
-  const hits = EVIDENCE_OVERCLAIM_FA.filter((p) => p.re.test(scan));
-  const unsupported = hits.filter((p) => !official.some((f) => p.support.test(f)));
-  const supported = hits.filter((p) => !unsupported.includes(p));
-  const hasOfficialSource = research.sources.some((s) => sourceAuthority(s.url) === "official");
+  const descriptive = descriptiveFacts(research.keyFacts, research.sources);
+
+  /**
+   * جمله‌به‌جمله، چون «آیا این توصیف آماری است یا شرط؟» به خودِ جمله
+   * بستگی دارد (v3.7، سومین اجرا): «دارندگان این ویزا … ۱۰ درصد بالای …»
+   * با فکتِ [آمار رسمی] توصیف مجاز است؛ همان عدد کنار «پذیرش» یا «لازم»
+   * شرطِ ساختگی است. آمار رسمی هرگز پشتوانه‌ی «قاعده» نمی‌شود.
+   */
+  const unsupported = new Set<OverclaimPattern>();
+  const supported = new Set<OverclaimPattern>();
+  for (const sentence of stripNonProse(text).split(/[.؟?!؛\n]+/)) {
+    for (const p of EVIDENCE_OVERCLAIM_FA) {
+      if (!p.re.test(sentence)) continue;
+      const describesStatistic =
+        p.descriptiveOk === true &&
+        descriptive.some((f) => /[0-9۰-۹]/.test(f)) &&
+        DESCRIPTIVE_FRAME.test(sentence) &&
+        !STAT_TO_RULE.test(sentence);
+      if (describesStatistic) continue;
+      if (official.some((f) => p.support.test(f))) supported.add(p);
+      else unsupported.add(p);
+    }
+  }
+  for (const p of unsupported) supported.delete(p);
+  const hasOfficialSource = research.sources.some(
+    (s) => sourceAuthority(s.url, s.title) === "official"
+  );
 
   return [
     {
       name: "ادعای رسمی بدون پشتوانه‌ی رسمی",
       severity: "blocking",
-      pass: unsupported.length === 0,
+      pass: unsupported.size === 0,
       note:
-        unsupported.length === 0
+        unsupported.size === 0
           ? "هر ادعای رسمی یا قطعی، فکتِ رسمیِ مرتبط در پژوهش دارد"
-          : `${unsupported.map((p) => `${p.label} → ${p.safer}`).join(" | ")} — ${
+          : `${[...unsupported].map((p) => `${p.label} → ${p.safer}`).join(" | ")} — ${
               hasOfficialSource
                 ? "هیچ فکتِ [رسمی] پژوهش این را نمی‌گوید"
-                : "فهرست منابع این مقاله هیچ منبع رسمی (GOV.UK / قواعد مهاجرت) ندارد"
+                : descriptive.length > 0
+                  ? "فهرست منابع فقط آمار/ارزیابیِ رسمی دارد که وضعیت دارندگان ویزا را توصیف می‌کند و قاعده یا آستانه نمی‌سازد؛ هیچ راهنمای رسمیِ جاری در فهرست نیست"
+                  : "فهرست منابع این مقاله هیچ منبع رسمی (GOV.UK / قواعد مهاجرت) ندارد"
             }؛ به توصیه یا تفسیر بازنویسی کن یا حذف کن. منبع غیررسمی هرگز ادعا را رسمی نمی‌کند`,
     },
     {
       name: "وضعیت شواهد (رسمی / شاهد ممکن / توصیه)",
       severity: "advisory",
-      pass: supported.length === 0,
+      pass: supported.size === 0,
       note:
-        supported.length === 0
+        supported.size === 0
           ? "ادعای رسمیِ پشتیبانی‌شده‌ای نیست که دقتش باید سنجیده شود"
-          : `${supported.map((p) => p.label).join(" | ")} — فکت رسمیِ مرتبط هست؛ مطمئن شو جمله دقیقاً همان را می‌گوید، نه بیشتر`,
+          : `${[...supported].map((p) => p.label).join(" | ")} — فکت رسمیِ مرتبط هست؛ مطمئن شو جمله دقیقاً همان را می‌گوید، نه بیشتر`,
     },
   ];
 }

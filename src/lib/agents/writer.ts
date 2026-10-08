@@ -102,11 +102,11 @@ ${research.examples.map((e) => `- ${e}`).join("\n")}
 یادداشت پژوهشگر: ${research.angleNotes}${
     research.sources.length
       ? `\nمنابعی که پژوهشگر دیده (فهرستشان را سیستم انتهای مقاله می‌گذارد — تو ننویس):\n${research.sources
-          .map((s, i) => `- ${sourceRef(i)} ${s.title} — ${sourceAuthorityLabelFa(s.url)}`)
+          .map((s, i) => `- ${sourceRef(i)} ${s.title} — ${sourceAuthorityLabelFa(s.url, s.title)}`)
           .join("\n")}${
-          research.sources.some((s) => sourceAuthority(s.url) === "official")
+          research.sources.some((s) => sourceAuthority(s.url, s.title) === "official")
             ? ""
-            : "\n⚠️ هیچ‌کدام از این منابع رسمی نیست — در این مقاله هیچ جمله‌ای را «طبق راهنمای رسمی»، «معیار رسمی» یا «ارزیاب می‌خواهد» ننویس."
+            : "\n⚠️ هیچ‌کدام از این منابع راهنما یا قاعده‌ی رسمیِ جاری نیست — در این مقاله هیچ جمله‌ای را «طبق راهنمای رسمی»، «معیار رسمی» یا «ارزیاب می‌خواهد» ننویس. اگر آمار/ارزیابیِ رسمی هست، فقط با قاب توصیفی نقلش کن، نه به‌عنوان شرط."
         }`
       : "\n⚠️ این مقاله منبع وب ندارد — هیچ فکتی رسمی نیست؛ «طبق راهنمای رسمی»، «معیار رسمی» یا «ارزیاب می‌خواهد» ننویس."
   }`;

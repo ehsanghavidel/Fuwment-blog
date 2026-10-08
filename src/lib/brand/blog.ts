@@ -92,28 +92,33 @@ export const BLOG_COLLOQUIAL_FA: BlogTerm[] = [
 /* ── ب) برچسب وضعیت فکت‌های پژوهش ─────────────────────────── */
 
 /**
- * پژوهشگر بلاگ هر فکت را با یکی از این سه برچسب شروع می‌کند تا نویسنده و
+ * پژوهشگر بلاگ هر فکت را با یکی از این چهار برچسب شروع می‌کند تا نویسنده و
  * ویراستار بدانند کدام جمله را می‌شود «الزام رسمی» گفت.
  *
- * شکل کامل برچسب شماره‌ی منبع را هم دارد: «[رسمی S2]»، «[تفسیر S3]».
- * شماره به فهرست منابعِ **نهایی** مقاله اشاره می‌کند — همان فهرستی که
- * پایین مقاله چاپ می‌شود — پس هر فکت رسمی قابل ردیابی تا یک منبع چاپ‌شده است.
+ * شکل کامل برچسب شماره‌ی منبع را هم دارد: «[رسمی S2]»، «[آمار رسمی S4]»،
+ * «[تفسیر S3]». شماره به فهرست منابعِ **نهایی** مقاله اشاره می‌کند — همان
+ * فهرستی که پایین مقاله چاپ می‌شود — پس هر فکت قابل ردیابی تا یک منبع
+ * چاپ‌شده است.
+ *
+ * «[آمار رسمی]» (v3.7، سومین اجرای زنده): گزارش ارزیابی یا آمار وزارت کشور
+ * رسمی است ولی **توصیف** می‌کند (مثلاً پراکندگی درآمد دارندگان ویزا)، نه
+ * **قاعده**. هرگز آستانه، معیار یا شرط واجد شرایط بودن نمی‌سازد.
  *
  * ⚠️ برچسب داخلی است و هرگز وارد مقاله نمی‌شود — چک کانال بلاگ نشتش را
  * مسدود می‌کند.
  */
 export const EVIDENCE_TAGS = {
   official: "[رسمی]",
+  statistic: "[آمار رسمی]",
   interpretation: "[تفسیر]",
   practical: "[پیشنهاد عملی]",
 } as const;
 
 /** نشت برچسب پژوهش در متن مقاله */
-export const EVIDENCE_TAG_LEAK = /\[(?:رسمی|تفسیر|پیشنهاد[\s‌]+عملی)[^\]\n]{0,40}\]/;
+export const EVIDENCE_TAG_LEAK = /\[(?:رسمی|آمار[\s‌]+رسمی|تفسیر|پیشنهاد[\s‌]+عملی)[^\]\n]{0,40}\]/;
 
 /**
- * هاست‌هایی که «قاعده‌ی رسمی» حساب می‌شوند: راهنما و قواعد مهاجرت روی
- * GOV.UK و متن قانون.
+ * هاست‌هایی که «منبع رسمی» حساب می‌شوند: GOV.UK و متن قانون.
  *
  * ⚠️ برابری دقیق هاست، نه پسوند `gov.uk` — درس پژوهشگر: پسوندی‌بودن
  * شورای شهر لندن را «رسمی» کرده بود. نهادهای تأییدکننده، سایت‌های
@@ -128,20 +133,49 @@ const OFFICIAL_RULE_HOSTS = new Set([
   "www.legislation.gov.uk",
 ]);
 
-export type SourceAuthority = "official" | "interpretation";
+/**
+ * نشانه‌ی سند رسمیِ **توصیفی** (آمار، ارزیابی، پژوهش) در آدرس یا عنوان.
+ * اگر نشانه‌ی راهنما/قاعده هم داشت («caseworker guidance»، «Immigration
+ * Rules»)، قاعده حساب می‌شود — محافظه‌کارانه به سمت سخت‌گیری روی آمار نیست،
+ * به سمت اینکه راهنمای واقعی را آمار جا نزنیم.
+ */
+const DESCRIPTIVE_MARKERS = /\/government\/statistics\/|evaluation|statistic|research|survey|analysis|outcomes?\b|\bdata\b|transparency|impact assessment|\breport\b/i;
+const RULE_MARKERS = /guidance|immigration[-\s]rules|eligib|\/apply|caseworker|appendix/i;
+/** صفحه‌ی خودِ مسیر روی GOV.UK (`/global-talent…`) — فقط در ابتدای مسیر؛ «/publications/global-talent-evaluation» صفحه‌ی مسیر نیست */
+const ROUTE_PAGE = /^\/(?:global-talent|innovator-founder)/;
 
-export function sourceAuthority(url: string): SourceAuthority {
+/**
+ * - `official`: راهنما یا قاعده‌ی جاری (صفحه‌ی مسیر، واجد شرایط بودن،
+ *   قواعد مهاجرت، راهنمای کارشناس پرونده)
+ * - `official-research`: آمار و ارزیابیِ رسمی — توصیفی، نه قاعده
+ * - `interpretation`: هر منبع دیگر
+ */
+export type SourceAuthority = "official" | "official-research" | "interpretation";
+
+export function sourceAuthority(url: string, title = ""): SourceAuthority {
+  let host: string;
+  let path: string;
   try {
-    return OFFICIAL_RULE_HOSTS.has(new URL(url).hostname.toLowerCase()) ? "official" : "interpretation";
+    const u = new URL(url);
+    host = u.hostname.toLowerCase();
+    path = u.pathname.toLowerCase();
   } catch {
     return "interpretation";
   }
+  if (!OFFICIAL_RULE_HOSTS.has(host)) return "interpretation";
+  if (host.includes("legislation.gov.uk")) return "official";
+  if (ROUTE_PAGE.test(path)) return "official";
+  const hay = `${path} ${title}`;
+  return DESCRIPTIVE_MARKERS.test(hay) && !RULE_MARKERS.test(hay) ? "official-research" : "official";
 }
 
-export function sourceAuthorityLabelFa(url: string): string {
-  return sourceAuthority(url) === "official"
-    ? "منبع رسمی (GOV.UK / قواعد مهاجرت)"
-    : "منبع غیررسمی — فقط تفسیر و زمینه";
+export function sourceAuthorityLabelFa(url: string, title = ""): string {
+  const a = sourceAuthority(url, title);
+  return a === "official"
+    ? "منبع رسمی — راهنما/قاعده (GOV.UK / قواعد مهاجرت)"
+    : a === "official-research"
+      ? "منبع رسمیِ توصیفی — آمار/ارزیابی، نه قاعده"
+      : "منبع غیررسمی — فقط تفسیر و زمینه";
 }
 
 /** شناسه‌ی منبع در پرامپت پژوهشگر/نویسنده/ویراستار: S1، S2، … */
@@ -150,8 +184,10 @@ export function sourceRef(index: number): string {
 }
 
 type EvidenceKind = keyof typeof EVIDENCE_TAGS;
+type SourceLike = { url: string; title?: string };
 
-const TAG_RE = /^\s*\[(رسمی|تفسیر|پیشنهاد[\s‌]+عملی)(?:[\s:：]*S?([0-9۰-۹]+))?\s*\]\s*/;
+const TAG_RE =
+  /^\s*\[(رسمی|آمار[\s‌]+رسمی|تفسیر|پیشنهاد[\s‌]+عملی)(?:[\s:：]*S?([0-9۰-۹]+))?\s*\]\s*/;
 
 function toLatinDigits(s: string): string {
   return s.replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)));
@@ -161,7 +197,8 @@ function toLatinDigits(s: string): string {
 export function parseEvidenceTag(fact: string): { kind: EvidenceKind | null; sourceIndex: number | null; body: string } {
   const m = fact.match(TAG_RE);
   if (!m) return { kind: null, sourceIndex: null, body: fact.trim() };
-  const kind: EvidenceKind = m[1] === "رسمی" ? "official" : m[1] === "تفسیر" ? "interpretation" : "practical";
+  const kind: EvidenceKind =
+    m[1] === "رسمی" ? "official" : m[1].startsWith("آمار") ? "statistic" : m[1] === "تفسیر" ? "interpretation" : "practical";
   const n = m[2] ? Number(toLatinDigits(m[2])) - 1 : null;
   return { kind, sourceIndex: n, body: fact.slice(m[0].length).trim() };
 }
@@ -178,24 +215,36 @@ function formatTag(kind: EvidenceKind, sourceIndex: number | null): string {
  * هیچ کدی نمی‌سنجید که منبع پشتش واقعاً رسمی است — یا اصلاً در فهرست
  * منابع چاپ‌شده هست. «[رسمی]» یک ادعاست، نه مدرک.
  *
- * قاعده: «[رسمی Sn]» فقط وقتی می‌ماند که Sn در فهرست باشد و هاستش در
- * فهرست مجاز رسمی. وگرنه به «[تفسیر Sn]» (منبع معتبرِ غیررسمی) یا
- * «[پیشنهاد عملی]» (بدون منبع قابل ردیابی) پایین می‌آید. فکت بی‌برچسب هم
- * «[پیشنهاد عملی]» می‌شود — هیچ‌چیز به‌طور پیش‌فرض رسمی نیست.
+ * قاعده: نوع برچسب را **منبع** تعیین می‌کند، نه مدل —
+ * - منبع راهنما/قاعده‌ی رسمی → «[رسمی Sn]» می‌ماند
+ * - منبع آمار/ارزیابیِ رسمی → «[آمار رسمی Sn]» (حتی اگر مدل [رسمی] زده)
+ * - منبع غیررسمی → «[تفسیر Sn]»
+ * - بدون منبع قابل ردیابی → «[پیشنهاد عملی]»
+ * فکت بی‌برچسب هم «[پیشنهاد عملی]» می‌شود — هیچ‌چیز به‌طور پیش‌فرض رسمی
+ * نیست. «[تفسیر]» و «[پیشنهاد عملی]» مدل هرگز ارتقا نمی‌یابند.
  */
 export function normalizeEvidenceTags(
   facts: string[],
-  sources: { url: string }[]
+  sources: SourceLike[]
 ): { facts: string[]; downgraded: string[] } {
   const downgraded: string[] = [];
   const out = facts.map((fact) => {
     const { kind, sourceIndex, body } = parseEvidenceTag(fact);
     const valid = sourceIndex !== null && sourceIndex >= 0 && sourceIndex < sources.length ? sourceIndex : null;
+    const authority = valid === null ? null : sourceAuthority(sources[valid].url, sources[valid].title);
 
     let finalKind: EvidenceKind = kind ?? "practical";
-    if (finalKind === "official" && (valid === null || sourceAuthority(sources[valid].url) !== "official")) {
-      finalKind = valid === null ? "practical" : "interpretation";
-      downgraded.push(body.slice(0, 80));
+    if (finalKind === "official" || finalKind === "statistic") {
+      const allowed: EvidenceKind =
+        authority === "official"
+          ? finalKind
+          : authority === "official-research"
+            ? "statistic"
+            : authority === "interpretation"
+              ? "interpretation"
+              : "practical";
+      if (allowed !== finalKind) downgraded.push(body.slice(0, 80));
+      finalKind = allowed;
     }
     if (finalKind === "interpretation" && valid === null) finalKind = "practical";
 
@@ -204,11 +253,20 @@ export function normalizeEvidenceTags(
   return { facts: out, downgraded };
 }
 
-/** فکت‌هایی که پس از سنجش کد هنوز رسمی‌اند */
-export function officialFacts(facts: string[], sources: { url: string }[]): string[] {
+function factsOfKind(facts: string[], sources: SourceLike[], kind: EvidenceKind): string[] {
   return normalizeEvidenceTags(facts, sources)
-    .facts.filter((f) => parseEvidenceTag(f).kind === "official")
+    .facts.filter((f) => parseEvidenceTag(f).kind === kind)
     .map((f) => parseEvidenceTag(f).body);
+}
+
+/** فکت‌هایی که پس از سنجش کد هنوز «راهنما/قاعده‌ی رسمی»اند */
+export function officialFacts(facts: string[], sources: SourceLike[]): string[] {
+  return factsOfKind(facts, sources, "official");
+}
+
+/** فکت‌های آمار/ارزیابیِ رسمی — توصیفی، هرگز پشتوانه‌ی قاعده */
+export function descriptiveFacts(facts: string[], sources: SourceLike[]): string[] {
+  return factsOfKind(facts, sources, "statistic");
 }
 
 /* ── ج) ادعای رسمی و قطعیت — الگوها ──────────────────────────── */
@@ -229,7 +287,26 @@ export function officialFacts(facts: string[], sources: { url: string }[]): stri
  * … معیار/شاخص است» فقط با فکتی پشتیبانی می‌شود که خودش هم درآمد را
  * «معیار» بنامد.
  */
-export type OverclaimPattern = { re: RegExp; label: string; safer: string; support: RegExp };
+export type OverclaimPattern = {
+  re: RegExp;
+  label: string;
+  safer: string;
+  support: RegExp;
+  /**
+   * v3.7: آیا همین جمله می‌تواند **توصیف آماری** باشد؟ اگر فکتِ «[آمار رسمی]»
+   * مرتبط هست و جمله صراحتاً قاب توصیفی دارد («دارندگان این ویزا»،
+   * «گزارش ارزیابی») و هیچ واژه‌ی واجد شرایط بودن ندارد، مجاز است.
+   */
+  descriptiveOk?: boolean;
+};
+
+/** قاب توصیفی: جمله درباره‌ی گروهی از دارندگان ویزا یا یک گزارش است، نه درباره‌ی شرط */
+export const DESCRIPTIVE_FRAME =
+  /(?:دارندگان|دریافت[\s‌]*کنندگان|صاحبان)[\s‌]+(?:این[\s‌]+)?ویزا|متقاضیان[\s‌]+موفق|گزارش[\s‌]+(?:ارزیابی|وزارت)|ارزیابی[\s‌]+وزارت[\s‌]+کشور|آمار|نظرسنجی/;
+
+/** واژه‌هایی که توصیف را به شرط تبدیل می‌کنند */
+export const STAT_TO_RULE =
+  /شانس|احتمال|پذیرش|تأیید|تایید|واجد[\s‌]+شرایط|کافی|لازم|حداقل|آستانه|معیار|باید|ملاک/;
 
 const W = "[\\s\\u200C]+";
 const INCOME = "(?:درآمد|حقوق|دستمزد|salary|income)";
@@ -248,16 +325,18 @@ export const EVIDENCE_OVERCLAIM_FA: OverclaimPattern[] = [
     support: /معیار|الزام|شرط|criteri|requir|must/i,
   },
   {
-    re: /ارزیاب(?:‌?(?:ها|ان))?[\s‌]+(?:[^.؟!\n]{0,20}?)(?:به[\s‌]+)?(?:دنبال|می‌خواه|می‌گرد|انتظار[\s‌]+دار)/,
-    label: "«ارزیاب به دنبال … است / می‌خواهد»",
-    safer: "«راهنمای رسمی … را می‌خواهد» فقط اگر فکتِ رسمی گفته؛ وگرنه «معمولاً کمک می‌کند که…»",
-    support: /ارزیاب|assessor|assess|endors|تأییدکننده|تاییدکننده/i,
+    // v3.7 (سومین اجرا): «ارزیاب عدد خام را ملاک قرار نمی‌دهد»، «ارزیاب به
+    // جایگاه شما در بازار نگاه می‌کند» — ادعا درباره‌ی ذهن ارزیاب، مثبت یا منفی
+    re: /(?:ارزیاب(?:‌?(?:ها|ان))?|کارشناس(?:ان)?[\s‌]+پرونده|نهاد(?:‌?های)?[\s‌]+(?:تأییدکننده|تاییدکننده))[\s‌]+(?:[^.؟!؛\n]{0,40}?)(?:به[\s‌]+)?(?:دنبال|می‌خواه|می‌گرد|انتظار[\s‌]+دار|نگاه[\s‌]+می‌کن|ملاک|می‌سنج|توجه[\s‌]+می‌کن|در[\s‌]+نظر[\s‌]+می‌گیر|اهمیت[\s‌]+(?:نمی‌|می‌)ده|ارزش[\s‌]+(?:نمی‌|می‌)گذار)/,
+    label: "«ارزیاب به دنبال … است / نگاه می‌کند / ملاک قرار می‌دهد»",
+    safer: "«راهنمای رسمی … را می‌خواهد» فقط اگر فکتِ رسمی گفته؛ وگرنه «معمولاً کمک می‌کند که…» یا «ممکن است…»",
+    support: /ارزیاب|assessor|assess|endors|تأییدکننده|تاییدکننده|caseworker|کارشناس/i,
   },
   {
     // نفی صادقانه («درآمد به‌تنهایی معیار نیست») ادعا نیست — همان منطق
     // نفیِ تضمین در claims.ts
     re: new RegExp(
-      `${INCOME}[^.؟!\\n]{0,80}?(?:معیار|شاخص(?:${W}معتبر)?|criterion|criteria)(?![^.؟!\\n]{0,20}?(?:نیست|نمی‌))`,
+      `${INCOME}[^.؟!\\n]{0,80}?(?:معیار|شاخص(?:${W}معتبر)?|criterion|criteria)(?![^.؟!؛\\n]{0,50}?(?:نیست|نمی‌))`,
       "i"
     ),
     label: "درآمد به‌عنوان «معیار» یا «شاخص معتبر»",
@@ -284,9 +363,45 @@ export const EVIDENCE_OVERCLAIM_FA: OverclaimPattern[] = [
   },
   {
     re: /[0-9۰-۹]+[\s‌]*(?:درصد|٪|%)[\s‌]*(?:برتر|بالای|بالایی|اول)/,
-    label: "آستانه‌ی درصدی («۱۰ درصد برتر/بالای…»)",
-    safer: "عدد را حذف کن و کیفی بگو («در میان پردرآمدهای این حرفه»)، مگر منبع رسمی همین عدد را گفته باشد",
-    support: /[0-9۰-۹]+[\s‌]*(?:درصد|٪|%|percent)/i,
+    label: "آستانه‌ی درصدی («۵ یا ۱۰ درصد برتر/بالای…»)",
+    safer: "عدد را حذف کن و کیفی بگو («در میان پردرآمدهای این حرفه»)، مگر قاعده‌ی رسمی همین عدد را تعریف کرده باشد. اگر آمار توصیفی وزارت کشور است، بگو «دارندگان این ویزا…» و روشن کن که معیار نیست",
+    support: /[0-9۰-۹]+[\s‌]*(?:درصد|٪|%|percent)[^.]{0,80}(?:threshold|minimum|آستانه|حداقل|must|required|لازم)|(?:threshold|minimum|آستانه|حداقل)[^.]{0,80}[0-9۰-۹]+/i,
+    descriptiveOk: true,
+  },
+  {
+    // آمار توصیفی که به شرط تبدیل شده: «۱۰ درصد بالای … شانس پذیرش بیشتری دارند»
+    re: /(?:[0-9۰-۹]+[\s‌]*(?:درصد|٪|%)|صدک|دهک|بازه(?:‌?ی|‌?های)?[\s‌]+درآمد)[^.؟!؛\n]{0,80}?(?:شانس|احتمال|پذیرش|تأیید|تایید|واجد[\s‌]+شرایط|کافی|لازم|حداقل|آستانه|معیار|ملاک)(?![^.؟!؛\n]{0,50}?(?:نیست|نمی‌))/,
+    label: "آمار درآمد به‌عنوان آستانه یا شرط پذیرش",
+    safer: "«این آمار وضعیت دارندگان ویزا را توصیف می‌کند و معیار درآمدی برای پذیرش پرونده تعیین نمی‌کند.»",
+    support: /[0-9۰-۹]+[\s‌]*(?:درصد|٪|%|percent)[^.]{0,80}(?:threshold|minimum|آستانه|حداقل|must|required|لازم)|(?:threshold|minimum|آستانه|حداقل)[^.]{0,80}[0-9۰-۹]+/i,
+  },
+  {
+    // «درآمد لازم/مورد انتظار»، «حداقل/آستانه‌ی درآمد»
+    re: /(?:درآمد|حقوق|دستمزد)[\s‌]+(?:لازم|مورد[\s‌]+(?:نیاز|انتظار))|(?:حداقل|آستانه(?:‌?ی)?)[\s‌]+(?:درآمد|حقوق|دستمزد)/,
+    label: "«درآمد لازم» / «حداقل درآمد»",
+    safer: "آستانه‌ی درآمد را فقط وقتی بگو که قاعده‌ی رسمی تعریفش کرده — وگرنه «سطح درآمد یکی از عواملی است که ممکن است دیده شود»",
+    support: /threshold|minimum|آستانه|حداقل/i,
+  },
+  {
+    // بنچمارک بازار = توصیه، نه روش استاندارد یا شرط
+    re: /(?:مقایسه|سنجش|بنچمارک|benchmark)[^.؟!؛\n]{0,50}?بازار[^.؟!؛\n]{0,60}?(?:الزامی|لازم|ضروری|استاندارد|ملاک|معیار|روش[\s‌]+(?:اصلی|رسمی))(?![^.؟!؛\n]{0,50}?(?:نیست|نمی‌))/i,
+    label: "مقایسه با بازار به‌عنوان روش استاندارد/الزامی",
+    safer: "«یکی از راه‌های ممکن برای توضیح زمینه، مقایسه‌ی درآمد با داده‌های بازار است»",
+    support: /market|benchmark|بازار/i,
+  },
+  {
+    // هر دو ترتیب: «باید ثابت کنید درآمدتان…» و «لازم است جایگاه درآمد را … اثبات کنید»
+    re: /(?:باید|لازم[\s‌]+است|موظف(?:ید)?)(?:[^.؟!؛\n]{0,60}?(?:ثابت|اثبات|نشان)[^.؟!؛\n]{0,40}?(?:درآمد|حقوق|بازار|صدک|دهک)|[^.؟!؛\n]{0,60}?(?:درآمد|حقوق|بازار|صدک|دهک)[^.؟!؛\n]{0,60}?(?:ثابت|اثبات))/,
+    label: "«باید جایگاه درآمدتان را ثابت کنید»",
+    safer: "«می‌توانید برای ایجاد زمینه، جایگاه درآمدتان را در بازار نشان دهید»",
+    support: /must|required|لازم|باید/i,
+  },
+  {
+    // «این درآمدها جزو شواهد حرفه‌ای محسوب نمی‌شوند» — حکم مطلق درباره‌ی شواهد
+    re: /(?:جزو|به[\s‌]*عنوان)[\s‌]+(?:شواهد|مدارک|مدرک)[^.؟!؛\n]{0,30}?(?:محسوب|حساب|پذیرفته|قبول)[\s‌]+(?:نمی‌|می‌)(?:شو|کن)/,
+    label: "«… جزو شواهد محسوب (نمی‌)شود»",
+    safer: "«ممکن است در کنار سایر شواهد کمتر به کار بیاید» یا «بسته به پرونده، می‌تواند…»",
+    support: /evidence|شواهد|مدرک/i,
   },
   {
     re: /(?:تحت|ذیل|زیر)[\s‌]+معیار[^.؟!\n]{0,80}?بررسی[\s‌]+می‌شو(?:د|ند)/,
@@ -336,6 +451,12 @@ export const PLAIN_PERSIAN_CALIBRATION_FA: { bad: string; plain: string; why: st
   { bad: "در هماهنگی کامل", plain: "هماهنگ با", why: "قید اداری" },
   { bad: "بررسی ساختارمند", plain: "بررسی قدم‌به‌قدم", why: "صفت مشاوره‌ای" },
   { bad: "قابلیت دفاع در برابر معیارهای سخت‌گیرانه", plain: "اینکه بشود از آن دفاع کرد", why: "زنجیره‌ی اسم" },
+  // سومین اجرای زنده
+  { bad: "اثبات صدک درآمدی", plain: "نشان‌دادن اینکه درآمدتان در بازار کجاست", why: "اصطلاح آماری + اسم‌سازی" },
+  { bad: "بستر اقتصاد محلی", plain: "بازار کشوری که در آن کار می‌کنید", why: "اسم انتزاعی" },
+  { bad: "بسته‌های درآمدی", plain: "حقوق و مزایا", why: "زبان مشاوره‌ای" },
+  { bad: "گردآوری شواهد", plain: "جمع‌کردن مدارک", why: "واژه‌ی کتابی" },
+  { bad: "به صورت ساختاریافته بسنجید", plain: "قدم‌به‌قدم بررسی کنید", why: "قید مشاوره‌ای" },
 ];
 
 export const BLOG_PLAIN_PERSIAN_FA = `فارسی ساده‌ی نوشتاری (بلاگ):
@@ -350,8 +471,9 @@ export const BLOG_PLAIN_PERSIAN_FA = `فارسی ساده‌ی نوشتاری (�
 - محاوره‌ای هم نه: بلاگ «تو» و فارسی شکسته («می‌شه»، «می‌تونید»، «اون») ندارد — آن زبان اینستاگرام است. خطاب «شما»ی گرم.`;
 
 export const EVIDENCE_STATUS_RULES_FA = `دقت وضعیت شواهد (ادعای مهاجرتی، واجد شرایط بودن و مدرک):
-هر جمله درباره‌ی مدرک یا معیار یکی از این سه است — و باید همان‌طور گفته شود:
-  الف) الزام یا معیار رسمی: فقط وقتی فکتِ پژوهش برچسب ${EVIDENCE_TAGS.official} با شماره‌ی منبع دارد (کد سنجیده که آن منبع GOV.UK یا متن قواعد مهاجرت است). فقط این‌جا «طبق راهنمای رسمی»، «لازم است»، «معیار است» یا «ارزیاب … می‌خواهد» درست است — و فقط به همان اندازه که فکت گفته.
+هر جمله درباره‌ی مدرک یا معیار یکی از این چهار است — و باید همان‌طور گفته شود:
+  الف) الزام یا معیار رسمی: فقط وقتی فکتِ پژوهش برچسب ${EVIDENCE_TAGS.official} با شماره‌ی منبع دارد (کد سنجیده که آن منبع راهنما یا قاعده‌ی جاری روی GOV.UK یا متن قواعد مهاجرت است). فقط این‌جا «طبق راهنمای رسمی»، «لازم است»، «معیار است» یا «ارزیاب … می‌خواهد» درست است — و فقط به همان اندازه که فکت گفته.
+  الف٢) آمار رسمیِ توصیفی (${EVIDENCE_TAGS.statistic} — گزارش ارزیابی یا آمار وزارت کشور): رسمی است ولی وضعیت دارندگان ویزا را **توصیف** می‌کند، نه شرط پذیرش را. می‌شود نقلش کرد با قاب توصیفی («در گزارش ارزیابی وزارت کشور، دارندگان این ویزا…») و یک جمله‌ی روشن‌کننده: «این آمار وضعیت دارندگان ویزا را توصیف می‌کند و معیار درآمدی برای پذیرش پرونده تعیین نمی‌کند.» هرگز از آن آستانه‌ی درآمد، «درآمد معمولِ لازم»، صدک ۵ یا ۱۰ درصد به‌عنوان شرط، یا «درآمد در این بازه شانس را بالا می‌برد» نساز. گزارش ارزیابیِ قدیمی جای راهنمای جاری را نمی‌گیرد.
   ب) شاهد ممکن: «می‌تواند بخشی از شواهد باشد»، «در کنار سایر شواهد قابل استفاده است»، «می‌تواند نشان دهد…».
   ج) توصیه یا برداشت عملی (${EVIDENCE_TAGS.interpretation} از سایت وکالتی، مشاوره، وبلاگ مهاجرتی، گزارش حقوق یا کارفرما؛ یا ${EVIDENCE_TAGS.practical}): «ممکن است به تصویر کلی پرونده کمک کند»، «یک راه ممکن این است که…».
 - هرگز «ب» یا «ج» را با لحن «الف» نگو. اگر منبع رسمی چیزی را الزام نکرده، آن را الزام یا معیار رسمی معرفی نکن.
@@ -359,5 +481,7 @@ export const EVIDENCE_STATUS_RULES_FA = `دقت وضعیت شواهد (ادعا�
 - اگر هیچ فکت ${EVIDENCE_TAGS.official} نداری، در کل مقاله «طبق راهنمای رسمی»، «معیار رسمی» یا «ارزیاب دنبال … است» ننویس.
 - این‌ها را قاعده‌ی رسمی معرفی نکن مگر فکتِ رسمی صریحاً گفته باشد: آستانه‌ی «۱۰ درصد برتر»، مقایسه‌ی حقوق با بازار به‌عنوان معیار تأیید، ESOP یا صورت‌حساب بانکی یا نامه‌ی منابع انسانی به‌عنوان مدرکِ لازم، درآمد به‌عنوان «معیار» یا «شاخص معتبر»، و برتری وزن شواهد درآمدی بر بقیه. می‌شود آن‌ها را «مثال» یا «یک راه ممکن برای توضیح زمینه» گفت.
 - وقتی GOV.UK می‌گوید سطح درآمد «یکی از عواملی» است که ممکن است در ارزیابی کلی دیده شود، همان را بگو؛ آن را «معیار مستقل درآمد» نکن.
+- مقایسه‌ی حقوق با بازار (صدک، دهک، داده‌ی حقوق محلی) فقط «یک راه ممکن برای توضیح زمینه» است: «یکی از راه‌های ممکن برای توضیح زمینه…»، «می‌توانید برای ایجاد زمینه…»، «ممکن است به توضیح جایگاه درآمد کمک کند…». نه «ارزیاب این را می‌خواهد»، نه «روش استاندارد»، نه «معیار»، نه «باید ثابت کنید». عددهای ۵ یا ۱۰ درصد را آستانه‌ی معنادار جلوه نده مگر قاعده‌ی رسمیِ مستند تعریفشان کرده باشد.
+- درباره‌ی ذهن ارزیاب حکم مطلق نده — نه مثبت («ارزیاب به جایگاه شما در بازار نگاه می‌کند») و نه منفی («ارزیاب عدد خام را ملاک قرار نمی‌دهد»، «این درآمدها جزو شواهد محسوب نمی‌شوند») — مگر فکتِ رسمی دقیقاً همین را گفته باشد. «ممکن است…» و «معمولاً کمک می‌کند…» دقیق‌تر است.
 - اگر منبع‌ها با هم نمی‌خوانند، GOV.UK مقدم است؛ با احتیاط بنویس و قطعیت نساز.
-- برچسب‌ها (${EVIDENCE_TAGS.official}، ${EVIDENCE_TAGS.interpretation}، ${EVIDENCE_TAGS.practical}) و شماره‌های S داخلی‌اند؛ هرگز در متن مقاله نیاور.`;
+- برچسب‌ها (${EVIDENCE_TAGS.official}، ${EVIDENCE_TAGS.statistic}، ${EVIDENCE_TAGS.interpretation}، ${EVIDENCE_TAGS.practical}) و شماره‌های S داخلی‌اند؛ هرگز در متن مقاله نیاور.`;
