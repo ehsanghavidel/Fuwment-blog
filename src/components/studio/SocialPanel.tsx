@@ -6,6 +6,8 @@ import { readRunError } from "./runResponse";
 import { RunTimeline } from "./RunTimeline";
 import { SocialPostCard } from "./SocialPostCard";
 import type { PipelineRun, Post, SocialPost } from "@/lib/store/types";
+import { AUDIENCES, AUDIENCE_GROUPS, type AudienceGroup } from "@/lib/brand/audiences";
+import { JOURNEY, JOURNEY_STAGES, type JourneyStage } from "@/lib/brand/journey";
 import {
   IconAlert,
   IconCheck,
@@ -97,6 +99,10 @@ export function SocialPanel({ onUnauthorized }: { onUnauthorized: () => void }) 
   const [dmOffer, setDmOffer] = useState("");
   // ریلز: یا لینک یا متن — نه هر دو
   const [reelsInput, setReelsInput] = useState("");
+  // ریلز: گروه مخاطب و مرحله‌ی سفر — اجباری (v3.7) و عمداً بدون پیش‌فرض،
+  // تا انتخاب همیشه آگاهانه باشد نه یک مقدار پیش‌گزیده که کسی ندیده.
+  const [reelsAudience, setReelsAudience] = useState<AudienceGroup | "">("");
+  const [reelsStage, setReelsStage] = useState<JourneyStage | "">("");
   // استوری: کاروسلِ مبدأ
   const [storySource, setStorySource] = useState<string>("");
   const [leadMagnet, setLeadMagnet] = useState("");
@@ -138,7 +144,7 @@ export function SocialPanel({ onUnauthorized }: { onUnauthorized: () => void }) 
 
   async function start() {
     if (mode === "repurpose" && !selected) return;
-    if (mode === "reels" && !reelsInput.trim()) return;
+    if (mode === "reels" && (!reelsInput.trim() || !reelsAudience || !reelsStage)) return;
     if (mode === "story" && !storySource) return;
     setError("");
     setNotice("");
@@ -180,6 +186,8 @@ export function SocialPanel({ onUnauthorized }: { onUnauthorized: () => void }) 
                 runId,
                 ...(isUrl ? { sourceUrl: trimmed } : { sourceText: trimmed }),
                 leadMagnet: leadMagnet.trim() || undefined,
+                audienceGroup: reelsAudience,
+                journeyStage: reelsStage,
               };
 
     // شروع polling قبل از POST — تا از اولین گام جا نمانیم
@@ -392,17 +400,61 @@ export function SocialPanel({ onUnauthorized }: { onUnauthorized: () => void }) 
                 value={leadMagnet}
                 onChange={(e) => setLeadMagnet(e.target.value)}
                 disabled={busy}
-                placeholder="مثلاً: چک‌لیست ۷ مرحله‌ای قیمت‌گذاری"
+                placeholder="مثلاً: چک‌لیست خودارزیابی مسیر"
                 className="w-full rounded-xl border border-surface-line bg-surface-dim px-4 py-3 transition-colors placeholder:text-ink-muted/60 focus:border-brand-400 focus:bg-surface"
               />
               <p className="mt-1.5 text-xs leading-5 text-ink-muted">
-                فقط اگر پرش کنید، دعوت به اقدامِ «کامنت کلمه‌ی کلیدی» مجاز می‌شود.
+                فقط به‌عنوان زمینه به نویسنده داده می‌شود؛ قدم بعدیِ ویدیو از هدفش می‌آید
+                (آموزشی: ذخیره/ارسال).
               </p>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label htmlFor="reels-audience" className="mb-1.5 block text-sm font-bold text-ink">
+                  گروه مخاطب
+                </label>
+                <select
+                  id="reels-audience"
+                  value={reelsAudience}
+                  onChange={(e) => setReelsAudience(e.target.value as AudienceGroup | "")}
+                  disabled={busy}
+                  required
+                  className="w-full cursor-pointer rounded-xl border border-surface-line bg-surface-dim px-4 py-3 transition-colors focus:border-brand-400 focus:bg-surface"
+                >
+                  <option value="">— گروه مخاطب را انتخاب کنید —</option>
+                  {AUDIENCE_GROUPS.map((g) => (
+                    <option key={g} value={g}>
+                      {AUDIENCES[g].label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="reels-stage" className="mb-1.5 block text-sm font-bold text-ink">
+                  مرحله‌ی سفر مخاطب
+                </label>
+                <select
+                  id="reels-stage"
+                  value={reelsStage}
+                  onChange={(e) => setReelsStage(e.target.value as JourneyStage | "")}
+                  disabled={busy}
+                  required
+                  className="w-full cursor-pointer rounded-xl border border-surface-line bg-surface-dim px-4 py-3 transition-colors focus:border-brand-400 focus:bg-surface"
+                >
+                  <option value="">— مرحله را انتخاب کنید —</option>
+                  {JOURNEY_STAGES.map((st) => (
+                    <option key={st} value={st}>
+                      {JOURNEY[st].label} — «{JOURNEY[st].question}»
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <button
               type="submit"
-              disabled={busy || !reelsInput.trim()}
+              disabled={busy || !reelsInput.trim() || !reelsAudience || !reelsStage}
               className="btn-action w-full sm:w-auto"
             >
               {busy ? (

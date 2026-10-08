@@ -14,8 +14,19 @@ import { AUDIENCE_GROUPS } from "./types";
  * همان استدلال route و language: تصمیم اجرا، نه قضاوت مدل.
  *
  * روز صفر شنبه است، مطابق src/lib/week.ts.
- * انگلیسی route="brand" می‌گیرد چون مخاطبش نهاد و شریک بین‌المللی است،
- * نه متقاضی یک مسیر مشخص — پس audienceGroup هم ندارد.
+ *
+ * ⚠️ v3.7 (تصمیم مالک): **هر** محتوا — از جمله انگلیسی — گروه مخاطب و
+ * مرحله‌ی سفر دارد. پیش از این دو روز انگلیسی `audienceGroup: null`
+ * داشتند با فرض «مخاطب انگلیسی نهاد و شریک بین‌المللی است» — v3.7 این
+ * را رد می‌کند: انگلیسی زبان مرجع برند است و قهرمانش همان متخصص و
+ * بنیان‌گذار است. route همچنان «brand» می‌ماند (محتوای سطح برند، بی‌طرف
+ * نسبت به دو مسیر).
+ *
+ * انتخاب گروه‌ها برای دو روز انگلیسی (قابل بازبینی مالک):
+ * - دوشنبه → academic-research: v3.7 «لینکدین و ایمیل کانال اصلی این گروه
+ *   است» — مخاطبی که به انگلیسی حرفه‌ای می‌خواند.
+ * - پنجشنبه → entrepreneurship: «دسترسی به بازار، سرمایه و شبکه‌ی
+ *   بریتانیا» — همان زبانی که بنیان‌گذار بین‌المللی با آن تصمیم می‌گیرد.
  */
 
 export type ContentType = "education" | "proof" | "sales";
@@ -26,17 +37,26 @@ export type WeeklySlotConfig = {
     dayLabel: string;
     language: "fa" | "en";
     route: BrandRoute;
-    audienceGroup: (typeof AUDIENCE_GROUPS)[number] | null;
+    audienceGroup: (typeof AUDIENCE_GROUPS)[number];
     contentType: ContentType;
+    /**
+     * استخر خانواده‌ی صحنه، اگر با گروه مخاطب فرق دارد.
+     *
+     * ⚠️ از v3.7 لازم شد: دو روز انگلیسی حالا گروه مخاطب دارند، ولی
+     * صحنه‌شان باید همان استخر «brand» بماند — اگر از استخر گروهشان
+     * بخورند با روزهای فارسیِ همان گروه هم‌خانواده می‌شوند و جدول تنوعی
+     * که `assertSceneVariety` قفل کرده (با جستجوی کامل پیدا شده) می‌شکند.
+     */
+    scenePool?: "brand";
 };
 
 export const WEEKLY_GRID: readonly WeeklySlotConfig[] = [
     { day: 0, dayLabel: "شنبه", language: "fa", route: "global-talent", audienceGroup: "digital-tech", contentType: "education" },
     { day: 1, dayLabel: "یکشنبه", language: "fa", route: "global-talent", audienceGroup: "academic-research", contentType: "education" },
-    { day: 2, dayLabel: "دوشنبه", language: "en", route: "brand", audienceGroup: null, contentType: "education" },
+    { day: 2, dayLabel: "دوشنبه", language: "en", route: "brand", audienceGroup: "academic-research", contentType: "education", scenePool: "brand" },
     { day: 3, dayLabel: "سه‌شنبه", language: "fa", route: "innovator-founder", audienceGroup: "entrepreneurship", contentType: "proof" },
     { day: 4, dayLabel: "چهارشنبه", language: "fa", route: "global-talent", audienceGroup: "engineering-medical", contentType: "education" },
-    { day: 5, dayLabel: "پنجشنبه", language: "en", route: "brand", audienceGroup: null, contentType: "education" },
+    { day: 5, dayLabel: "پنجشنبه", language: "en", route: "brand", audienceGroup: "entrepreneurship", contentType: "education", scenePool: "brand" },
     { day: 6, dayLabel: "جمعه", language: "fa", route: "global-talent", audienceGroup: "arts-culture", contentType: "sales" },
 ] as const;
 
@@ -79,7 +99,7 @@ export const CONTENT_TYPE_BRIEFING: Record<ContentType, string> = {
  *
  * ── چرا استخر برند چهارتایی است ──
  *
- * دوشنبه و پنجشنبه هر دو `audienceGroup: null` دارند و از یک استخر
+ * دوشنبه و پنجشنبه (دو روز انگلیسی) با `scenePool: "brand"` از یک استخر
  * می‌خورند. با آفستِ `(weekIndex + day)` هرگز به یک خانه نمی‌افتند، ولی
  * استخر سه‌تایی فاصله‌ی کافی نمی‌داد. چهارتا شد.
  */
@@ -111,9 +131,21 @@ export type SceneFamily = {
   hint: string;
 };
 
-/** کلید استخر: گروه مخاطب، یا «brand» برای روزهای بی‌مخاطبِ انگلیسی */
-type PoolKey = NonNullable<WeeklySlotConfig["audienceGroup"]> | "brand";
+/** کلید استخر: گروه مخاطب، یا «brand» برای روزهای انگلیسیِ سطح برند */
+type PoolKey = WeeklySlotConfig["audienceGroup"] | "brand";
 
+/** استخرِ صحنه‌ی یک اسلات — `scenePool` صریح، وگرنه گروه مخاطب */
+function poolKeyOf(slot: WeeklySlotConfig): PoolKey {
+  return slot.scenePool ?? slot.audienceGroup;
+}
+
+/**
+ * ⚠️ v3.7: متن hintها از «قدیمی/کهنه» به معاصر رسید — راهنما «محیط پس از
+ * مقصد» (فضای کاری، آزمایشگاه، استودیو، دانشگاه، خیابان شهرهای بریتانیا)
+ * می‌خواهد و سبک تصویر (image-gen.ts) بنای کهنه و فضای عتیقه را صریحاً
+ * ممنوع کرده؛ hintِ «قدیمی» مدل را به همان سمت هل می‌داد. **برچسب گروه
+ * بصریِ هیچ خانواده‌ای عوض نشد**، پس جدولِ تنوعِ اثبات‌شده دست‌نخورده است.
+ */
 const SCENE_POOLS: Record<PoolKey, readonly SceneFamily[]> = {
   "digital-tech": [
     { group: "object", hint: "کابل‌های مرتب‌شده‌ی یک رک در نمای نزدیک، بدون هیچ نمایشگر" },
@@ -121,14 +153,14 @@ const SCENE_POOLS: Record<PoolKey, readonly SceneFamily[]> = {
     { group: "nature", hint: "پنجره‌ی بزرگ رو به شهر در سپیده‌دم، اتاق پشت آن خالی" },
   ],
   "academic-research": [
-    { group: "surface", hint: "دفترچه‌ی آزمایشگاه با نمودار دست‌نویس، کنار یک میکروسکوپ قدیمی" },
+    { group: "surface", hint: "دفترچه‌ی آزمایشگاه با نمودار دست‌نویس، کنار یک میکروسکوپ امروزی" },
     { group: "architecture", hint: "نمای بیرونی یک ساختمان دانشگاهی آجری در نور بعدازظهر" },
-    { group: "object", hint: "ردیف جلدهای کهنه‌ی کتاب در قفسه، نمای نزدیک با بافت پارچه" },
+    { group: "object", hint: "ردیف کتاب‌های تخصصی در قفسه‌ی یک کتابخانه‌ی دانشگاهی امروزی، نمای نزدیک" },
   ],
   "arts-culture": [
     { group: "interior", hint: "بوم نیمه‌کار روی سه‌پایه در کارگاه خالی، نور از پنجره‌ی سقفی" },
     { group: "object", hint: "قلم‌موهای شسته‌شده روی پارچه‌ی کتان، نمای نزدیک" },
-    { group: "architecture", hint: "نمای بیرونی یک سالن نمایش قدیمی در نور کم" },
+    { group: "architecture", hint: "نمای بیرونی یک سالن نمایش معاصر در نور غروب" },
   ],
   "engineering-medical": [
     { group: "object", hint: "ابزار دقیق فلزی روی پارچه‌ی تمیز، نمای نزدیک" },
@@ -141,10 +173,10 @@ const SCENE_POOLS: Record<PoolKey, readonly SceneFamily[]> = {
     { group: "object", hint: "یک صندلی تکی چوبی کنار دیوار ساده، نمای نزدیک" },
   ],
   brand: [
-    { group: "threshold", hint: "پله‌های سنگی یک ساختمان قدیمی، بدون هیچ نشانه‌ی مکان" },
-    { group: "interior", hint: "سالن انتظار خلوت با صندلی‌های چرمی و نور غیرمستقیم" },
+    { group: "threshold", hint: "پله‌های روشن یک ساختمان دانشگاهی معاصر، بدون هیچ نشانه‌ی مکان" },
+    { group: "interior", hint: "سالن انتظار خلوت و روشن با مبلمان ساده و نور غیرمستقیم" },
     { group: "nature", hint: "مه صبحگاهی روی یک محوطه‌ی باز، بدون بنا" },
-    { group: "architecture", hint: "نمای سنگی یک ساختمان اداری قدیمی در نور ملایم" },
+    { group: "architecture", hint: "نمای یک ساختمان اداری معاصر با جزئیات آجری در نور ملایم" },
   ],
 };
 
@@ -175,7 +207,7 @@ export function weekIndexOf(weekStart: string): number {
 
 /** خانواده‌ی صحنه‌ی یک اسلات در یک هفته‌ی مشخص */
 export function sceneFamilyFor(slot: WeeklySlotConfig, weekStart: string): SceneFamily {
-  const pool = SCENE_POOLS[slot.audienceGroup ?? "brand"];
+  const pool = SCENE_POOLS[poolKeyOf(slot)];
   // آفست شامل `day` است تا دو روزِ هم‌استخر (دوشنبه و پنجشنبه) هرگز
   // در یک هفته به یک خانواده نیفتند.
   return pool[(weekIndexOf(weekStart) + slot.day) % pool.length];
@@ -222,7 +254,7 @@ export function assertSceneVariety(): void {
 
   for (let w = 0; w < 200; w++) {
     const chosen = WEEKLY_GRID.map((slot) => {
-      const pool = SCENE_POOLS[slot.audienceGroup ?? "brand"];
+      const pool = SCENE_POOLS[poolKeyOf(slot)];
       return pool[(w + slot.day) % pool.length];
     });
 

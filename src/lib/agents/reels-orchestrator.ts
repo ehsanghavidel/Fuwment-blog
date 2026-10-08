@@ -7,7 +7,15 @@ import { runReelsWriter, runReelsRevision } from "./reels-writer";
 import { SOCIAL_APPROVE_THRESHOLD } from "./social-editor";
 import { runReelsChecks } from "./social-checks";
 import { writeAndReview } from "./social-loop";
-import { allowedCtaIds, directCtaIds } from "./brand-cta";
+import {
+  AUDIENCES,
+  goalCtaIds,
+  isAudienceGroup,
+  isJourneyStage,
+  type AudienceGroup,
+  type ContentGoal,
+  type JourneyStage,
+} from "@/lib/brand";
 import { runSocialCritic } from "./critic";
 import type { ReelsSource } from "./reels-source";
 import type { ReelsScript, SocialBrief } from "./types";
@@ -40,11 +48,25 @@ export async function runReelsPipeline(opts: {
   /** آیا منبع را انسان داده؟ پیش‌فرض بله. کمپین false می‌فرستد. */
   sourceIsTrusted?: boolean;
   /**
-   * مسیر برند. اگر داده شود، CTAها قطعاً به همان مسیر محدود می‌شوند.
-   * پایپ‌لاین ریلز استراتژیست ندارد، پس این از ورودی اجرا می‌آید نه از بریف.
+   * مسیر برند — زمینه‌ی محتوایی برای نویسنده. پایپ‌لاین ریلز استراتژیست
+   * ندارد، پس این از ورودی اجرا می‌آید نه از بریف.
    */
   route?: BrandRoute;
+  /**
+   * هدف ویدیو (v3.7 «CTA بر اساس هدف پست»). پیش‌فرض آموزشی — ریلز تابع
+   * اینستاگرام فارسی است و پستی که برای فروش نیست، تابع ردیف آموزشی است.
+   */
+  contentGoal?: ContentGoal;
+  /**
+   * گروه مخاطب و مرحله‌ی سفر — **اجباری** (v3.7: «اگر پاسخ هرکدام همه
+   * بود، محتوا آماده نیست»). ریلز استراتژیست ندارد، پس این دو از ورودی
+   * اجرا می‌آیند: استودیو از اپراتور می‌پرسد، کمپین از روایت مادر.
+   * پیش‌فرض ندارند — نبودشان اجرا را با خطای صریح متوقف می‌کند.
+   */
+  audienceGroup: AudienceGroup;
+  journeyStage: JourneyStage;
 }): Promise<PipelineRun> {
+  const contentGoal: ContentGoal = opts.contentGoal ?? "educational";
   const store = getStore();
   const runId = opts.runId;
   const leadMagnet = opts.leadMagnet?.trim() || null;
@@ -70,6 +92,18 @@ export async function runReelsPipeline(opts: {
   const step = makeStepRunner(run);
 
   try {
+    // ── ۰. هدف‌گیری — نگهبان زمان اجرا ──
+    // تایپ‌اسکریپت فراخواننده‌های داخلی را مجبور می‌کند، ولی ورودیِ
+    // درخواست/دیتابیس از تایپ رد نمی‌شود. مقدارِ نبود یا خارج از فهرست
+    // برند، اجرا را با خطای صریح می‌کشد — نه null، نه حدس.
+    if (!isAudienceGroup(opts.audienceGroup)) {
+      throw new Error(`گروه مخاطب ریلز نامعتبر یا خالی است: ${String(opts.audienceGroup)}`);
+    }
+    if (!isJourneyStage(opts.journeyStage)) {
+      throw new Error(`مرحله‌ی سفر ریلز نامعتبر یا خالی است: ${String(opts.journeyStage)}`);
+    }
+    const { audienceGroup, journeyStage } = opts;
+
     // ── ۱. تهیه‌ی منبع — کد قطعی، بدون LLM ──
     // متن کامل را در متغیر بیرونی نگه می‌داریم و در output فقط پیش‌نمایش
     // می‌گذاریم؛ وگرنه کل مقاله در هر رکورد گام تکرار می‌شد.
@@ -90,8 +124,10 @@ export async function runReelsPipeline(opts: {
       };
     });
 
-    const allowed = allowedCtaIds(opts.route);
-    const direct = directCtaIds(opts.route);
+    // v3.7: CTAی ریلز از «CTA بر اساس هدف پست» اینستاگرام می‌آید، نه از
+    // فهرست دعوت مستقیم/واسط برند. فقط پست فروش CTAی «مستقیم» دارد.
+    const allowed = goalCtaIds(contentGoal);
+    const direct = contentGoal === "sales" ? allowed : [];
 
     /**
      * ویراستار اجتماعی یک `SocialBrief` می‌خواهد تا بداند محتوا قرار بوده
@@ -101,13 +137,16 @@ export async function runReelsPipeline(opts: {
      */
     const brief: SocialBrief = {
       coreMessage: `اسکریپت ریلز بر اساس: ${source.origin}`,
-      audience:
-        "متخصصان و بنیان‌گذاران فارسی‌زبان، ۲۸ تا ۴۸ سال، با پنج سال به بالا سابقه‌ی قابل دفاع — داخل ایران یا مقیم خارج",
+      // از پروفایل گروه در لایه‌ی برند — نه یک توصیف ثابتِ عمومی
+      audience: `${AUDIENCES[audienceGroup].label} — ${AUDIENCES[audienceGroup].who}`,
       keyPoints: [],
       hookAngle: "قلاب باید در سه تا پنج ثانیه‌ی اول مخاطب را متوقف کند",
       proofPoint: source.text.slice(0, 1500),
       cta: `یکی از این‌ها: ${allowed.join("، ")}`,
       language: "fa",
+      contentGoal,
+      audienceGroup,
+      journeyStage,
     };
 
     // ── ۲ و ۳. کپی‌رایتر ریلز ⇄ ویراستار (حلقه‌ی مشترک) ──
@@ -117,9 +156,27 @@ export async function runReelsPipeline(opts: {
       writerAgent: "reels-writer",
       label: "ریلز",
       brief,
-      write: () => runReelsWriter({ source, leadMagnet, route: opts.route }),
+      write: () =>
+        runReelsWriter({
+          source,
+          leadMagnet,
+          route: opts.route,
+          contentGoal,
+          audienceGroup,
+          journeyStage,
+        }),
       revise: (draft, review, failedChecks) =>
-        runReelsRevision({ source, leadMagnet, route: opts.route, draft, review, failedChecks }),
+        runReelsRevision({
+          source,
+          leadMagnet,
+          route: opts.route,
+          contentGoal,
+          audienceGroup,
+          journeyStage,
+          draft,
+          review,
+          failedChecks,
+        }),
       check: (d) =>
         runReelsChecks({
           hook: d.hook,
@@ -190,7 +247,7 @@ export async function runReelsPipeline(opts: {
 
       const words = script.trim().split(/\s+/).length;
       return {
-        output: { reelsId: post.id, words, ctaId: d.ctaId },
+        output: { reelsId: post.id, words, ctaId: d.ctaId, audienceGroup, journeyStage },
         summary:
           reels.review.score >= SOCIAL_APPROVE_THRESHOLD
             ? `اسکریپت ${words} کلمه‌ای ذخیره شد — آماده‌ی ضبط`
@@ -205,7 +262,7 @@ export async function runReelsPipeline(opts: {
     await step<unknown>("critic", "منتقد — استخراج درس", async () => {
       try {
         const out = await runSocialCritic({
-          context: `نوع اجرا: اسکریپت ریلز از ${source.origin}`,
+          context: `نوع اجرا: اسکریپت ریلز از ${source.origin} — مخاطب ${audienceGroup}، مرحله‌ی ${journeyStage}`,
           parts: [{ label: "اسکریپت ریلز", ...reels }],
           revisionRounds: reels.revisionRounds,
         });

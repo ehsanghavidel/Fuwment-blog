@@ -3,7 +3,8 @@ import { runAgentJSON } from "@/lib/ai";
 import { COMPANY_NAME, COMPANY_PROFILE, BRAND_VOICE } from "@/lib/company";
 import { slideText } from "@/lib/slide-spec";
 import { lessonsBlockFor } from "./lessons";
-import { SocialBriefSchema, type SocialBrief } from "./types";
+import { TargetedSocialBriefSchema, type SocialBrief } from "./types";
+import { BRIEF_LANGUAGE_NOTE_FA, audienceChoiceListFa, journeyChoiceListFa } from "@/lib/brand";
 import type { SocialPost } from "@/lib/store";
 
 /**
@@ -51,7 +52,13 @@ ${BRAND_VOICE}
 - keyPoints و proofPoint را به‌صورتِ **یادداشتِ مفهومیِ سطح‌بالا** بنویس — چیزی که نویسنده باید از نو با کلمات و ساختارِ خودش بیان کند، نه جمله‌ای که می‌شود مستقیم در فریم چسباند.
 - لازم نیست ترتیبِ بولت‌های کاروسل را حفظ کنی، مگر ترتیبِ واقعیِ رویدادها/مراحل الزامش کند.
 - فقط عوض‌کردنِ چند کلمه با مترادف کافی نیست — این باز هم همان جمله‌ی کاروسل شمرده می‌شود. ساختار و زاویه‌ی بیان باید واقعاً فرق کند.
-- نامِ رسمیِ مسیرها (مثلاً Global Talent، Innovator Founder)، اصطلاحاتِ فنی/حقوقیِ ضروری، و اعداد/شواهدِ واقعی را دقیقاً همان‌طور نگه دار — این‌ها اصطلاحِ لازم‌اند، نه کپی.${lessons}`;
+- نامِ رسمیِ مسیرها، اصطلاحاتِ فنی/حقوقیِ ضروری، و اعداد/شواهدِ واقعی را دقیقاً نگه دار — این‌ها اصطلاحِ لازم‌اند، نه کپی. (استوریِ فارسی تابع اینستاگرام فارسی است: نام مسیرها با حروف فارسی — «گلوبال تلنت»، «اینوویتور فاندر».)
+- دو فیلد اجباری — گروه مخاطب و مرحله‌ی سفرِ همین استوری:
+  · audienceGroup: ${audienceChoiceListFa()}
+  · journeyStage:
+${journeyChoiceListFa()}
+
+${BRIEF_LANGUAGE_NOTE_FA}${lessons}`;
 
   const carouselBlock = `کاروسلِ مبدأ — «${source.title}»:
 کپشن: ${source.body}
@@ -68,17 +75,21 @@ ${source.slides.map((s, i) => `${i + 1}. ${slideText(s)}`).join("\n")}`;
     system,
     prompt,
     temperature: 0.5,
-    schema: SocialBriefSchema,
+    schema: TargetedSocialBriefSchema,
     shapeHint: `{
   "coreMessage": "همان یک زاویه‌ی برنده از دلِ کاروسل",
   "audience": "مخاطب مشخص این استوری",
   "keyPoints": ["ادعای مستقل اول", "ادعای دوم"],
   "hookAngle": "قلابی که بدونِ دیدنِ کاروسل هم می‌ایستاند",
   "proofPoint": "شاهد/جزئیاتِ ملموس، از دلِ همین کاروسل",
-  "cta": "دعوت به اقدامِ فریمِ آخر"
+  "cta": "قدم بعدیِ فریمِ آخر — آموزشی: ذخیره/ارسال",
+  "audienceGroup": "digital-tech",
+  "journeyStage": "curious"
 }`,
   });
 
   // زبانِ استوری همانِ زبانِ کاروسلِ مبدأ است — تصمیمِ اجراست، نه قضاوتِ مدل.
-  return { ...result, language: source.language };
+  // هدفِ استوریِ مشتق‌شده آموزشی است: هدفِ کاروسلِ مبدأ ذخیره نمی‌شود و
+  // پیش‌فرضِ امن v3.7 «آموزشی» است (هیچ فروشِ ناخواسته‌ای).
+  return { ...result, language: source.language, contentGoal: "educational" as const };
 }

@@ -1,7 +1,13 @@
 import type { Config } from "tailwindcss";
+// ⚠️ مسیر نسبی، نه `@/`: Tailwind این فایل را با jiti بارگذاری می‌کند.
+import { PALETTE } from "./src/lib/brand/visual";
 
 /**
- * توکن‌های دیزاین — پالت رسمی فومنت.
+ * توکن‌های دیزاین — پالت رسمی فومنت (راهنمای برند v3.7).
+ *
+ * ⚠️ hexهای پالت رسمی از `src/lib/brand/visual.ts` می‌آیند — همان منبعی که
+ * رندرکننده‌ی PNG (`slide-spec.ts`) می‌خواند. فقط مقادیرِ غیررسمیِ مخصوص
+ * استودیو (سطح روشن، مقیاس brand، رنگ‌های معنایی) اینجا مانده‌اند.
  *
  * نسبت هدف: ۶۰٪ سرمه‌ای · ۲۵٪ خنثی · ۱۰٪ فیروزه‌ای · ۵٪ نارنجی.
  *
@@ -23,26 +29,26 @@ const config: Config = {
     extend: {
       colors: {
         // ── پالت رسمی فومنت ──
-        navy: { DEFAULT: "#0E394A", deep: "#072A38", card: "#123F52" },
+        navy: { DEFAULT: PALETTE.navy, deep: PALETTE.navyDeep, card: PALETTE.navyCard },
         /**
          * `light` برای متن فیروزه‌ای روی سرمه‌ای است (کنتراست ۴.۹۳).
          * `dark` از پالت رسمی نیست و برای متن فیروزه‌ای روی **سفید** اضافه
          * شده: هم اصلی (۲.۹۹) و هم روشن (۲.۵۰) آنجا از حد AA پایین‌ترند —
          * و روشن‌تر یعنی کنتراست کمتر، نه بیشتر. `dark` نسبت ۴.۸۸ می‌دهد.
          */
-        teal: { DEFAULT: "#1FA795", light: "#23B7A5", dark: "#147F71" },
-        amber: { DEFAULT: "#F5941F", light: "#FFB74D" },
-        mist: "#E6EEF2",
+        teal: { DEFAULT: PALETTE.teal, light: PALETTE.tealLight, dark: "#147F71" },
+        amber: { DEFAULT: PALETTE.orange, light: PALETTE.orangeLight },
+        mist: PALETTE.mist,
         /**
          * `DEFAULT` برای متن فرعی روی سرمه‌ای است (کنتراست ۵.۶۵).
          * روی سفید فقط ۲.۱۸ می‌دهد، پس آنجا از `dark` استفاده کنید.
          */
-        slateblue: { DEFAULT: "#9DB3BD", dark: "#55707E" },
+        slateblue: { DEFAULT: PALETTE.slate, dark: "#55707E" },
 
         // ── نام‌های قدیمی، نگاشت‌شده به پالت فومنت ──
-        pine: { DEFAULT: "#0E394A", dark: "#072A38" },
-        brass: { DEFAULT: "#1FA795", dark: "#178A7C" },
-        bone: "#E6EEF2",
+        pine: { DEFAULT: PALETTE.navy, dark: PALETTE.navyDeep },
+        brass: { DEFAULT: PALETTE.teal, dark: "#178A7C" },
+        bone: PALETTE.mist,
         sand: "#D3E1E8",
 
         /**
@@ -53,7 +59,7 @@ const config: Config = {
          * حتی #6E8794 هم ۳.۷۸ بود. این مقدار ۵.۲۴ می‌دهد و از AA رد می‌شود.
          */
         ink: {
-          DEFAULT: "#0B1F28",
+          DEFAULT: PALETTE.ink,
           soft: "#25454F",
           muted: "#55707E",
         },
@@ -61,7 +67,7 @@ const config: Config = {
         // سطوح: سفید (کارت)، خنثی روشن (پس‌زمینه)، خط
         surface: {
           DEFAULT: "#ffffff",
-          dim: "#E6EEF2",
+          dim: PALETTE.mist,
           line: "#D3E1E8",
         },
 
@@ -73,17 +79,17 @@ const config: Config = {
           300: "#7FA3B4",
           400: "#4A7A90",
           500: "#1D5670",
-          600: "#0E394A",
-          700: "#072A38",
+          600: PALETTE.navy,
+          700: PALETTE.navyDeep,
           800: "#061F29",
           900: "#04161E",
         },
 
         // رنگ‌های معنایی — موفقیت فیروزه‌ای (رنگ «مسیر و موفقیت» برند)
-        success: { DEFAULT: "#1FA795", soft: "#E2F4F1" },
+        success: { DEFAULT: PALETTE.teal, soft: "#E2F4F1" },
         warn: { DEFAULT: "#B26A05", soft: "#FDF0DC" },
         danger: { DEFAULT: "#D9553A", soft: "#FFECE6" },
-        error: "#FF8A6B",
+        error: PALETTE.error,
       },
       fontFamily: {
         // فارسی: وزیرمتن · انگلیسی: Inter (هر دو در layout.tsx بارگذاری می‌شوند)

@@ -12,7 +12,37 @@
  * بی‌دلیل راه می‌اندازد و به مدل می‌گوید چیزی را درست کند که خراب نیست.
  */
 
-import { COMPANY_NAME, COMPANY_NAME_EN } from "@/lib/company";
+import {
+  BLOG_BUREAUCRATIC_FA,
+  BLOG_COLLOQUIAL_FA,
+  EVIDENCE_OVERCLAIM_FA,
+  EVIDENCE_TAG_LEAK,
+  DESCRIPTIVE_FRAME,
+  STAT_TO_RULE,
+  descriptiveFacts,
+  officialFacts,
+  type OverclaimPattern,
+  sourceAuthority,
+  COMPANY_NAME,
+  COMPANY_NAME_EN,
+  COMPETITOR_COMPARISON_EN,
+  FEAR_PATTERNS_EN,
+  FEAR_PATTERNS_FA,
+  FORBIDDEN_CLAIMS_EN,
+  FORBIDDEN_CLAIMS_FA,
+  INTERNAL_TERMS_FA,
+  INTERNAL_TERMS_LATIN,
+  LATIN_ALLOWED_IN_FA_INSTAGRAM,
+  MAIN_TAGLINE_FA,
+  REGULATED_STATUS_EN,
+  SUPERLATIVES_EN,
+  WRONG_TERMS_EN,
+  WRONG_TERMS_FA,
+  stripGuaranteeNegationsEn,
+  stripGuaranteeNegationsFa,
+  type BrandChannel,
+  type EnTerm,
+} from "@/lib/brand";
 
 /**
  * شدت یک چک — تعیین می‌کند شکستش بازنویسی کامل را اجباری می‌کند یا نه.
@@ -104,9 +134,6 @@ function wordWithSuffix(term: string): RegExp {
  * و بعضی‌شان علامت دارند (#1، 100%).
  */
 
-/** `cs: true` یعنی تطبیق حساس به بزرگی و کوچکی حروف — برای املای نام برند */
-type EnTerm = { term: string; why: string; cs?: boolean };
-
 function wholeWordEn(term: string, caseSensitive = false): RegExp {
   const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(
@@ -122,58 +149,39 @@ function findTermsEn(text: string, list: EnTerm[]): EnTerm[] {
 /* ── الف) ادعاهای ممنوع ──────────────────────────────────── */
 
 /**
- * این‌ها ادعای حقوقی‌اند، نه سلیقه‌ی نگارشی. قواعد ادعا در BRAND_VOICE بر
+ * این‌ها ادعای حقوقی‌اند، نه سلیقه‌ی نگارشی. قواعد ادعا در راهنمای برند بر
  * همه‌ی قواعد دیگر اولویت دارند و در تبلیغات بریتانیا قابل شکایت‌اند.
+ *
+ * فهرست‌ها در `@/lib/brand/claims.ts` زندگی می‌کنند — همان‌جا که متن
+ * پرامپت هم از رویشان ساخته می‌شود.
+ *
+ * ⚠️ نفیِ صادقانه («بدون تضمین»، «هیچ نتیجه‌ای را تضمین نمی‌کنیم») پیش
+ * از سنجش از متن کنار گذاشته می‌شود — خودِ v3.7 این جمله‌ها را می‌گوید.
+ * هر «تضمین»ِ دیگری در همان متن همچنان مسدود است.
  */
-const FORBIDDEN_CLAIMS: { term: string; why: string }[] = [
-  { term: "تضمینی", why: "تضمین نتیجه — هیچ نتیجه‌ای در این مسیرها تضمین نمی‌شود" },
-  { term: "تضمین", why: "تضمین نتیجه — هیچ نتیجه‌ای در این مسیرها تضمین نمی‌شود" },
-  { term: "۱۰۰٪", why: "ادعای قطعیت مطلق" },
-  { term: "۱۰۰ درصد", why: "ادعای قطعیت مطلق" },
-  { term: "100٪", why: "ادعای قطعیت مطلق" },
-  { term: "100%", why: "ادعای قطعیت مطلق" },
-  { term: "قطعی", why: "ادعای قطعیت — قوانین این مسیرها تغییر می‌کنند" },
-  { term: "بدون ریسک", why: "ادعای قطعیت مطلق" },
-  { term: "تا دیر نشده", why: "ادبیات ترس — قهرمان ما از موضع جاه‌طلبی می‌آید، نه اضطرار" },
-  { term: "آخرین فرصت", why: "ادبیات ترس" },
-  { term: "نرخ موفقیت بالا", why: "ادعای نرخ موفقیت — حتی بدون عدد هم ادعای عددی است" },
-  { term: "نرخ موفقیت", why: "ادعای نرخ موفقیت — نه عدد، نه معادل کیفی‌اش منتشر نمی‌شود" },
-  { term: "اکثر قریب‌به‌اتفاق", why: "ادعای نرخ موفقیت با بیان جایگزین" },
-  { term: "اکثر قریب به اتفاق", why: "ادعای نرخ موفقیت با بیان جایگزین" },
-];
-
 function checkForbiddenClaims(text: string): BrandCheck {
-  const hits = FORBIDDEN_CLAIMS.filter((c) => wholeWord(c.term).test(text));
+  const scan = stripGuaranteeNegationsFa(text);
+  const hits = FORBIDDEN_CLAIMS_FA.filter((c) => wholeWord(c.term).test(scan)).map(
+    (h) => `«${h.term}» — ${h.why}`
+  );
+  for (const f of FEAR_PATTERNS_FA) {
+    const m = text.match(f.re);
+    if (m) hits.push(`«${m[0].trim()}» — ${f.why}`);
+  }
   return {
     name: "ادعاهای ممنوع",
     severity: "blocking",
     pass: hits.length === 0,
     note:
       hits.length === 0
-        ? "هیچ ادعای تضمینی یا نرخ موفقیت در متن نیست"
-        : hits.map((h) => `«${h.term}» — ${h.why}`).join(" | ") +
-        " | جایگزین مجاز: «کاری می‌کنیم پرونده در بهترین شکل ممکن ارائه شود.»",
+        ? "هیچ ادعای تضمینی، نرخ موفقیت یا ادبیات ترس در متن نیست"
+        : hits.join(" | ") +
+        " | جایگزین مجاز: «کاری می‌کنیم پرونده در بهترین شکل ممکن ارائه شود.» (گفتنِ «هیچ نتیجه‌ای را تضمین نمی‌کنیم» مجاز است)",
   };
 }
 
 /* ── ب) واژگان نادرست ────────────────────────────────────── */
 
-const WRONG_TERMS: { term: string; why: string }[] = [
-  { term: "فیومنت", why: "املای غلط نام برند — درستش «فومنت» است" },
-  { term: "فوومنت", why: "املای غلط نام برند — درستش «فومنت» است" },
-  { term: "ویزای نخبگان", why: "نام غلط مسیر — درستش «ویزای گلوبال تلنت (Global Talent)» است" },
-  { term: "تاییدیه نخبگی", why: "ترجمه‌ی غلط — «اندورسمنت (Endorsement)» ترجمه نمی‌شود" },
-  { term: "تأییدیه نخبگی", why: "ترجمه‌ی غلط — «اندورسمنت (Endorsement)» ترجمه نمی‌شود" },
-  {
-    term: "وکیل",
-    why: "مرز حقوقی — مشاور ثبت‌شده در IAA لزوماً وکیل نیست و این دو نظام صنفی جدا هستند. همه‌جا «مشاور مهاجرتی ثبت‌شده»",
-  },
-  { term: "مشتری", why: "در محتوای عمومی «متقاضی» یا «همراه» درست است" },
-  { term: "مشتریان", why: "در محتوای عمومی «متقاضیان» یا «همراهان» درست است" },
-  { term: "مشاوره رایگان", why: "این خدمت وجود ندارد — نام درستش «ارزیابی اولیه» است" },
-  { term: "مشاوره‌ی رایگان", why: "این خدمت وجود ندارد — نام درستش «ارزیابی اولیه» است" },
-  { term: "مشاورهٔ رایگان", why: "این خدمت وجود ندارد — نام درستش «ارزیابی اولیه» است" },
-];
 
 /**
  * «مشاور» جدا سنجیده می‌شود.
@@ -188,7 +196,7 @@ const ALLOWED_MOSHAVER = /مشاور(ان)?\s+(مهاجرتی|authorised|ثبت�
 const ROLE_MOSHAVER = /(مشاورانِ?|مشاوران|مشاورِ?)\s+(ما|فومنت)|فومنت\s+مشاور/;
 
 function checkWrongTerms(text: string): BrandCheck {
-  const hits = WRONG_TERMS.filter((t) => wholeWord(t.term).test(text)).map(
+  const hits = WRONG_TERMS_FA.filter((t) => wholeWord(t.term).test(text)).map(
     (h) => `«${h.term}» — ${h.why}`
   );
 
@@ -458,7 +466,7 @@ function checkBrandAsSubject(md: string): BrandCheck {
     note:
       hits.length === 0
         ? "هیچ پاراگرافی با «ما» یا نام برند شروع نمی‌شود"
-        : `${hits.map((h) => `«${h.slice(0, 45)}…»`).join("، ")} — پاراگراف با «ما» یا نام برند شروع شده. فاعل باید «شما» باشد: به‌جای «ما بررسی می‌کنیم که…» بنویس «شما باید بدانید که…»`,
+        : `${hits.map((h) => `«${h.slice(0, 45)}…»`).join("، ")} — پاراگراف با «ما» یا نام برند شروع شده. فاعل باید خودِ مخاطب باشد (در بلاگ «شما»، در اینستاگرام «تو»): به‌جای «ما بررسی می‌کنیم که…» از کار و موقعیت مخاطب شروع کن`,
   };
 }
 
@@ -702,88 +710,13 @@ export function runBriefChecks(input: {
  * ۲. فهرست جایگاه نظارتی (REGULATED_STATUS_EN) معادل فارسی ندارد.
  *    سطح مجوز فومنت «Level 1 — Advice and Assistance» است؛ ادعای
  *    نمایندگی فراتر از آن، فراتر از اختیار است.
- * ۳. مخاطب انگلیسی نهاد و شریک بریتانیایی است، نه متقاضی. ریسک بیشتر
- *    است، نه کمتر.
+ * ۳. از v3.7 مخاطب انگلیسی هم یکی از پنج گروه است (تصمیم مالک) — همان
+ *    متخصص و بنیان‌گذار، به زبان مرجع برند. قواعد ادعا همان‌قدر سخت‌اند.
  *
- * چهار چک نگارشی فارسی (ارقام، گیومه، نیم‌فاصله، اصلاح خودکار) اینجا
+ * سه چک نگارشی فارسی (ارقام، گیومه، نیم‌فاصله) و اصلاح خودکار اینجا
  * اجرا نمی‌شوند. اگر می‌شدند، هر عدد و هر گیومه‌ی انگلیسی رد می‌شد و
  * هیچ پست انگلیسی هرگز «تمیز» نمی‌ماند.
  */
-
-const FORBIDDEN_CLAIMS_EN: EnTerm[] = [
-  { term: "guarantee", why: "outcome guarantee — no outcome is guaranteed on these routes" },
-  { term: "guaranteed", why: "outcome guarantee" },
-  { term: "100%", why: "absolute certainty claim" },
-  { term: "100 percent", why: "absolute certainty claim" },
-  { term: "risk-free", why: "absolute certainty claim" },
-  { term: "no risk", why: "absolute certainty claim" },
-  { term: "success rate", why: "success-rate claim — not published, in figures or in words" },
-  { term: "approval rate", why: "success-rate claim in different wording" },
-  { term: "acceptance rate", why: "success-rate claim in different wording" },
-  { term: "proven results", why: "proven-outcome claim without published data" },
-  { term: "proven track record", why: "proven-outcome claim without published data" },
-  { term: "will be approved", why: "certainty claim — the rules on these routes change" },
-  { term: "last chance", why: "fear framing — the hero comes from ambition, not urgency" },
-  { term: "final opportunity", why: "fear framing" },
-  { term: "before it's too late", why: "fear framing" },
-  { term: "don't miss out", why: "fear framing" },
-  { term: "hassle-free", why: "understates the real difficulty of the route" },
-  { term: "effortless", why: "understates the real difficulty of the route" },
-  { term: "fast-track", why: "implies preferential processing that does not exist" },
-];
-
-/**
- * ادعاهای جایگاه نظارتی.
- *
- * «immigration advice» و «immigration adviser» عمداً اینجا نیستند —
- * فومنت واقعاً تحت نظارت IAA ثبت شده (F202639410) و حق دارد این را
- * بگوید. چیزی که ممنوع است «legal» است.
- */
-const REGULATED_STATUS_EN: EnTerm[] = [
-  { term: "lawyer", why: "protected title — an IAA-registered adviser is not a lawyer" },
-  { term: "lawyers", why: "protected title" },
-  { term: "solicitor", why: "protected title under UK legal services law" },
-  { term: "solicitors", why: "protected title" },
-  { term: "barrister", why: "protected title" },
-  { term: "attorney", why: "protected title (and a non-UK term)" },
-  { term: "law firm", why: "Fuwment is not a law firm" },
-  { term: "legal advice", why: "outside the licence — use «immigration advice»" },
-  { term: "legal representation", why: "outside the licence" },
-  { term: "represent you at appeal", why: "IAA Level 1 is Advice and Assistance only" },
-  { term: "Home Office approved", why: "false authority — IAA regulates, it does not approve services" },
-  { term: "government approved", why: "false authority claim" },
-  { term: "official partner", why: "false authority claim" },
-  { term: "OISC", why: "former regulator name — the correct name is IAA" },
-];
-
-const WRONG_TERMS_EN: EnTerm[] = [
-  { term: "Fuwement", why: "brand-name misspelling — it is «Fuwment»" },
-  { term: "Fuwmnet", why: "brand-name misspelling — it is «Fuwment»" },
-  { term: "Fuvment", why: "brand-name misspelling — it is «Fuwment»" },
-  { term: "FUWMENT", why: "all-caps is for the logo only — «Fuwment»", cs: true },
-  { term: "FuWment", why: "capitalisation — «Fuwment»", cs: true },
-  { term: "Elite visa", why: "wrong route name — «Global Talent visa»" },
-  { term: "Genius visa", why: "wrong route name — «Global Talent visa»" },
-  { term: "Exceptional Talent visa", why: "former route name — «Global Talent visa»" },
-  { term: "client", why: "«applicant» or «candidate» in public content" },
-  { term: "clients", why: "«applicants» or «candidates» in public content" },
-  { term: "free consultation", why: "this service does not exist — it is «initial assessment»" },
-  { term: "permanent residency", why: "non-UK concept — «Indefinite Leave to Remain (ILR)»" },
-  { term: "green card", why: "non-UK concept" },
-  { term: "sponsorship", why: "Global Talent needs no sponsor — check this is not a Skilled Worker mix-up" },
-  { term: "expert", why: "expertise claim without a verifiable title — prefer «mentor»" },
-];
-
-const SUPERLATIVES_EN = [
-  "best", "#1", "number one", "leading", "top-rated", "unrivalled", "unrivaled",
-  "unmatched", "unparalleled", "world-class", "premier", "most trusted",
-  "most experienced", "industry-leading", "gold standard",
-];
-
-const COMPETITOR_COMPARISON_EN = [
-  "unlike other agencies", "unlike other consultants", "better than",
-  "cheaper than", "most agencies fail", "typical consultants",
-];
 
 const FORBIDDEN_NARRATIVE_EN: RegExp[] = [
   /\b(hidden|invisible|secret)\s+criteria\b/i,
@@ -831,14 +764,25 @@ function runBrandChecksEn(text: string): BrandCheck[] {
   const translationHit = text.match(TRANSLATION_FRAMING_EN)?.[0]?.trim();
   const translationBad = Boolean(translationHit) && !DOCUMENT_WORDS_EN.test(translationHit!);
 
+  // نفیِ صادقانه («we don't guarantee outcomes») پیش از سنجش کنار می‌رود
+  const claimHits = findTermsEn(stripGuaranteeNegationsEn(text), FORBIDDEN_CLAIMS_EN).map(
+    (h) => `«${h.term}» — ${h.why}`
+  );
+  for (const f of FEAR_PATTERNS_EN) {
+    const m = text.match(f.re);
+    if (m) claimHits.push(`«${m[0].trim()}» — ${f.why}`);
+  }
+
   return [
-    listCheckEn(
-      "ادعاهای ممنوع (انگلیسی)",
-      "blocking",
-      text,
-      FORBIDDEN_CLAIMS_EN,
-      "no guarantee or success-rate claim in the text"
-    ),
+    {
+      name: "ادعاهای ممنوع (انگلیسی)",
+      severity: "blocking",
+      pass: claimHits.length === 0,
+      note:
+        claimHits.length === 0
+          ? "no guarantee, success-rate or fear claim in the text"
+          : claimHits.join(" | "),
+    },
     listCheckEn(
       "جایگاه نظارتی (انگلیسی)",
       "blocking",
@@ -889,19 +833,272 @@ function runBrandChecksEn(text: string): BrandCheck[] {
         : "«translate» در بافت دستاورد استفاده نشده",
     },
     checkBrandInHeading(text),
+    checkInternalJargonEn(text),
   ];
+}
+
+/* ══ v3.7: زبان داخلی ↔ زبان مخاطب ═══════════════════════════ */
+
+/**
+ * واژه‌ی داخلی برند در متن مخاطب — v3.7: «زبان داخلی Brand Guide را
+ * مستقیماً وارد محتوای مخاطب نکنید.»
+ *
+ * فقط عبارت‌های چندواژه‌ایِ بی‌ابهام و اصطلاح‌های لاتینِ بازاریابی سنجیده
+ * می‌شوند (فهرست و دلیلِ نبودِ «قهرمان/راهنما/دشمن» در terminology.ts).
+ * تگ‌لاین رسمی پیش از سنجش کنار می‌رود: «پرونده‌ی قابل دفاع» فقط داخلِ
+ * تگ‌لاین مجاز است.
+ */
+const APPROVED_TAGLINES_FA = [
+  MAIN_TAGLINE_FA,
+  MAIN_TAGLINE_FA.replace(/\.$/, ""),
+  "از ابهام، به یک پرونده‌ی قابل دفاع",
+];
+
+function checkInternalJargon(text: string): BrandCheck {
+  const scan = APPROVED_TAGLINES_FA.reduce((t, tag) => t.split(tag).join(" "), stripNonProse(text));
+  const hits = INTERNAL_TERMS_FA.filter((t) => wholeWord(t.term).test(scan)).map(
+    (t) => `«${t.term}» → ${t.plain}`
+  );
+  hits.push(...findTermsEn(scan, INTERNAL_TERMS_LATIN).map((t) => `«${t.term}» — ${t.why}`));
+
+  return {
+    name: "زبان داخلی برند",
+    severity: "blocking",
+    pass: hits.length === 0,
+    note:
+      hits.length === 0
+        ? "هیچ واژه‌ی داخلی برند در متن مخاطب نیست"
+        : `${hits.join(" | ")} — این‌ها ابزار فکر تیم‌اند، نه متن مخاطب. مفهوم را با زبان خود مخاطب بگو`,
+  };
+}
+
+function checkInternalJargonEn(text: string): BrandCheck {
+  const hits = findTermsEn(stripNonProse(text), INTERNAL_TERMS_LATIN);
+  return {
+    name: "زبان داخلی برند (انگلیسی)",
+    severity: "blocking",
+    pass: hits.length === 0,
+    note:
+      hits.length === 0
+        ? "no internal brand vocabulary in audience copy"
+        : `${hits.map((h) => `«${h.term}» — ${h.why}`).join(" | ")} — internal brand language never goes into audience copy; say it in the reader's words`,
+  };
+}
+
+/* ══ v3.7: قواعد کانالِ فارسی ═════════════════════════════════ */
+
+/**
+ * اینستاگرام فارسی: «حروف لاتین — فقط این دو جا: امضای Fuwment · شماره
+ * ثبت و راستی‌آزمایی IAA». کاروسل، استوری و ریلز (تصمیم مالک).
+ *
+ * مسدودکننده است چون قطعی و بی‌ابهام است و نویسنده دقیقاً می‌داند چه
+ * کند: «Global Talent» → «گلوبال تلنت». خطِ کلیدواژه‌ی دایرکت (استثنای
+ * تأییدشده) بعد از این حلقه اضافه می‌شود و هرگز به این چک نمی‌رسد.
+ */
+function checkNoLatinInPersianInstagram(text: string): BrandCheck {
+  const scan = LATIN_ALLOWED_IN_FA_INSTAGRAM.reduce((t, re) => t.replace(re, " "), text);
+  const words = [...new Set(scan.match(/[A-Za-z][A-Za-z'’.-]*/g) ?? [])];
+  return {
+    name: "بدون حروف لاتین (اینستاگرام فارسی)",
+    severity: "blocking",
+    pass: words.length === 0,
+    note:
+      words.length === 0
+        ? "متن هیچ حرف لاتینی ندارد (جز امضای Fuwment و شماره‌ی IAA)"
+        : `حروف لاتین در متن: ${words.slice(0, 8).map((w) => `«${w}»`).join("، ")} — در اینستاگرام فارسی همه‌چیز با حروف فارسی: «گلوبال تلنت»، «اینوویتور فاندر»، «اندورسمنت». لاتین فقط در امضای Fuwment و شماره‌ی ثبت IAA`,
+  };
+}
+
+/**
+ * ضمیر خطاب — قاعده‌ی کانال، نه قاعده‌ی برند.
+ *
+ * توصیه‌ای است، نه مسدودکننده: «شما» گاهی در نقل‌قول یا جمله‌ای درباره‌ی
+ * دیگران مشروع است و «تو» در فارسی محاوره‌ای حرف اضافه هم هست («تو این
+ * مسیر»). تشخیص قطعیِ خطاب از روی یک واژه ممکن نیست — پس این چک فقط
+ * نشانه را به ویراستار گزارش می‌دهد و جلوی تأیید خودکار را می‌گیرد،
+ * بازنویسی نمی‌سازد (قاعده‌ی ۲ و ۴ پروژه).
+ */
+function checkAddress(text: string, expected: "تو" | "شما"): BrandCheck {
+  const wrong = expected === "تو" ? "شما" : "تو";
+  const found = wordWithSuffix(wrong).test(stripNonProse(text));
+  return {
+    name: `خطاب «${expected}»`,
+    severity: "advisory",
+    pass: !found,
+    note: found
+      ? `«${wrong}» در متن آمده — خطاب این کانال «${expected}» است (${expected === "تو" ? "اینستاگرام فارسی" : "سایت و بلاگ"}). اگر منظور خودِ مخاطب است، با «${expected}» بنویس`
+      : `خطاب با کانال هم‌خوان است («${expected}»)`,
+  };
+}
+
+/* ── چک‌های فقط-بلاگ (v3.7) — فهرست‌ها در `@/lib/brand/blog.ts` ── */
+
+/**
+ * فارسی ساده: عبارت‌های اداری/آکادمیک/مشاوره‌ای که راهنما صریحاً منع کرده.
+ * مسدودکننده، چون فهرست فقط عبارت‌هایی را دارد که در بلاگ **همیشه**
+ * نادرست‌اند؛ اسم‌سازی و زنجیره‌ی اضافه قضاوت می‌خواهند و با ویراستارند.
+ */
+export function checkPlainPersianBlog(text: string): BrandCheck {
+  const scan = stripNonProse(text);
+  const hits = BLOG_BUREAUCRATIC_FA.filter((t) => t.re.test(scan)).map((t) => `«${t.label}» → ${t.plain}`);
+  return {
+    name: "فارسی ساده (نه اداری یا آکادمیک)",
+    severity: "blocking",
+    pass: hits.length === 0,
+    note:
+      hits.length === 0
+        ? "عبارت اداری، آکادمیک یا مشاوره‌ای پیدا نشد"
+        : `${hits.join(" | ")} — بلاگ فارسی نوشتاری ساده است: جمله را با فعل و واژه‌ی روزمره‌ی نوشتاری بازنویسی کن`,
+  };
+}
+
+/** بلاگ نوشتاری است — فارسی شکسته‌ی اینستاگرامی به آن سرایت نکند */
+export function checkWrittenPersianBlog(text: string): BrandCheck {
+  const scan = stripNonProse(text);
+  const hits = BLOG_COLLOQUIAL_FA.filter((t) => t.re.test(scan)).map((t) => `«${t.label}»`);
+  return {
+    name: "فارسی نوشتاری (نه محاوره‌ای)",
+    severity: "blocking",
+    pass: hits.length === 0,
+    note:
+      hits.length === 0
+        ? "صورت محاوره‌ای/شکسته پیدا نشد"
+        : `${hits.join("، ")} — بلاگ محاوره‌ای نیست؛ صورت نوشتاری بنویس («می‌شود»، «می‌توانید»، «آن»)`,
+  };
+}
+
+/** همان بخشی از پژوهش که چک شواهد لازم دارد — فکت‌های برچسب‌دار و منابع نهایی مقاله */
+export type EvidenceBundle = { keyFacts: string[]; sources: { url: string; title?: string }[] };
+
+/**
+ * وضعیت شواهد — دو چک، بر اساس پشتوانه‌ی رسمیِ **سنجیده‌شده با کد**.
+ *
+ * ⚠️ از دومین اجرای زنده: مقاله «طبق راهنمای رسمی…» و «شاخص معتبر برای
+ * Commercial Recognition» نوشت در حالی که تنها منبع چاپ‌شده یک سایت وکالتی
+ * بود. چک قبلی فقط متن را می‌دید و همیشه توصیه‌ای بود — پس ویراستار تأیید
+ * کرد و مقاله رد شد.
+ *
+ * حالا:
+ * - ادعای قطعی/رسمی که هیچ فکت رسمیِ مرتبطی پشتش نیست → **مسدودکننده**
+ *   (بازنویسی به توصیه/تفسیر یا حذف). «فکت رسمی» یعنی برچسب [رسمی Sn] که
+ *   Sn در فهرست منابع نهایی است و هاستش GOV.UK/قواعد مهاجرت.
+ * - ادعایی که فکت رسمیِ مرتبط دارد → توصیه‌ای: کد نمی‌فهمد جمله «دقیقاً»
+ *   همان را می‌گوید (قاعده‌ی ۲)؛ ویراستار و بازبین انسانی می‌سنجند.
+ */
+export function checkEvidenceGroundingBlog(text: string, research: EvidenceBundle): BrandCheck[] {
+  const official = officialFacts(research.keyFacts, research.sources);
+  const descriptive = descriptiveFacts(research.keyFacts, research.sources);
+
+  /**
+   * جمله‌به‌جمله، چون «آیا این توصیف آماری است یا شرط؟» به خودِ جمله
+   * بستگی دارد (v3.7، سومین اجرا): «دارندگان این ویزا … ۱۰ درصد بالای …»
+   * با فکتِ [آمار رسمی] توصیف مجاز است؛ همان عدد کنار «پذیرش» یا «لازم»
+   * شرطِ ساختگی است. آمار رسمی هرگز پشتوانه‌ی «قاعده» نمی‌شود.
+   */
+  const unsupported = new Set<OverclaimPattern>();
+  const supported = new Set<OverclaimPattern>();
+  for (const sentence of stripNonProse(text).split(/[.؟?!؛\n]+/)) {
+    for (const p of EVIDENCE_OVERCLAIM_FA) {
+      if (!p.re.test(sentence)) continue;
+      const describesStatistic =
+        p.descriptiveOk === true &&
+        descriptive.some((f) => /[0-9۰-۹]/.test(f)) &&
+        DESCRIPTIVE_FRAME.test(sentence) &&
+        !STAT_TO_RULE.test(sentence);
+      if (describesStatistic) continue;
+      if (official.some((f) => p.support.test(f))) supported.add(p);
+      else unsupported.add(p);
+    }
+  }
+  for (const p of unsupported) supported.delete(p);
+  const hasOfficialSource = research.sources.some(
+    (s) => sourceAuthority(s.url, s.title) === "official"
+  );
+
+  return [
+    {
+      name: "ادعای رسمی بدون پشتوانه‌ی رسمی",
+      severity: "blocking",
+      pass: unsupported.size === 0,
+      note:
+        unsupported.size === 0
+          ? "هر ادعای رسمی یا قطعی، فکتِ رسمیِ مرتبط در پژوهش دارد"
+          : `${[...unsupported].map((p) => `${p.label} → ${p.safer}`).join(" | ")} — ${
+              hasOfficialSource
+                ? "هیچ فکتِ [رسمی] پژوهش این را نمی‌گوید"
+                : descriptive.length > 0
+                  ? "فهرست منابع فقط آمار/ارزیابیِ رسمی دارد که وضعیت دارندگان ویزا را توصیف می‌کند و قاعده یا آستانه نمی‌سازد؛ هیچ راهنمای رسمیِ جاری در فهرست نیست"
+                  : "فهرست منابع این مقاله هیچ منبع رسمی (GOV.UK / قواعد مهاجرت) ندارد"
+            }؛ به توصیه یا تفسیر بازنویسی کن یا حذف کن. منبع غیررسمی هرگز ادعا را رسمی نمی‌کند`,
+    },
+    {
+      name: "وضعیت شواهد (رسمی / شاهد ممکن / توصیه)",
+      severity: "advisory",
+      pass: supported.size === 0,
+      note:
+        supported.size === 0
+          ? "ادعای رسمیِ پشتیبانی‌شده‌ای نیست که دقتش باید سنجیده شود"
+          : `${[...supported].map((p) => p.label).join(" | ")} — فکت رسمیِ مرتبط هست؛ مطمئن شو جمله دقیقاً همان را می‌گوید، نه بیشتر`,
+    },
+  ];
+}
+
+/**
+ * همه‌ی چک‌های قطعی مقاله‌ی بلاگ: چک‌های برند کانال بلاگ + وضعیت شواهد
+ * (که پژوهش لازم دارد و برای همین در `runBrandChecks` نیست).
+ */
+export function runBlogChecks(input: { text: string; research: EvidenceBundle }): BrandCheck[] {
+  return [
+    ...runBrandChecks({ text: input.text, channel: "blog-fa" }),
+    ...checkEvidenceGroundingBlog(input.text, input.research),
+  ];
+}
+
+/** برچسب‌های داخلی پژوهش ([رسمی]، [تفسیر]، [پیشنهاد عملی]) نباید وارد مقاله شوند */
+export function checkEvidenceTagLeak(text: string): BrandCheck {
+  const m = stripNonProse(text).match(EVIDENCE_TAG_LEAK);
+  return {
+    name: "برچسب داخلی پژوهش در متن",
+    severity: "blocking",
+    pass: !m,
+    note: m ? `«${m[0]}» در متن آمده — برچسب پژوهش داخلی است؛ حذفش کن و جمله را با لحن درست همان وضعیت بنویس` : "برچسب داخلی پژوهش در متن نیست",
+  };
+}
+
+/** چک‌های مخصوص کانال فارسی — هیچ‌کدام به کانال دیگری سرایت نمی‌کند */
+function channelChecksFa(text: string, channel: BrandChannel | undefined): BrandCheck[] {
+  switch (channel) {
+    case "instagram-fa":
+    case "story-fa":
+    case "reels-fa":
+      return [checkNoLatinInPersianInstagram(text), checkAddress(text, "تو")];
+    case "blog-fa":
+      return [
+        checkAddress(text, "شما"),
+        checkPlainPersianBlog(text),
+        checkWrittenPersianBlog(text),
+        checkEvidenceTagLeak(text),
+      ];
+    default:
+      return [];
+  }
 }
 
 /**
  * ورودی `text` می‌تواند مارک‌داون مقاله یا متن پیوسته‌ی محتوای اجتماعی باشد.
  * چکِ ارقام خودش مارک‌داون را تمیز می‌کند؛ بقیه روی متن خام کار می‌کنند.
+ *
+ * `channel` (v3.7) قواعد کانال را روشن می‌کند — لاتین و «تو» برای
+ * اینستاگرام فارسی، «شما» برای بلاگ. نبودش یعنی فقط قواعد مشترک برند
+ * (رفتار قبلی، برای فراخوانی‌هایی که کانال نمی‌دانند).
  */
 export function runBrandChecks(input: {
   text: string;
   /** پیش‌فرض «fa» تا هیچ فراخوانی موجود بلاگ نشکند */
   language?: "fa" | "en";
+  channel?: BrandChannel;
 }): BrandCheck[] {
-  const { text, language = "fa" } = input;
+  const { text, language = "fa", channel } = input;
 
   if (language === "en") return runBrandChecksEn(text);
 
@@ -910,10 +1107,12 @@ export function runBrandChecks(input: {
     checkWrongTerms(text),
     checkForbiddenNarrative(text),
     checkTranslationFraming(text),
+    checkInternalJargon(text),
     checkBrandInHeading(text),
     checkBrandAsSubject(text),
     checkCompetitorComparison(text),
     checkSuperlatives(text),
+    ...channelChecksFa(text, channel),
     checkLatinDigits(text),
     checkLatinQuotes(text),
     checkHalfSpace(text),

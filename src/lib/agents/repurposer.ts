@@ -2,7 +2,8 @@ import "server-only";
 import { runAgentJSON } from "@/lib/ai";
 import { COMPANY_NAME, COMPANY_PROFILE, BRAND_VOICE } from "@/lib/company";
 import { lessonsBlockFor } from "./lessons";
-import { SocialBriefSchema, type SocialBrief } from "./types";
+import { TargetedSocialBriefSchema, type SocialBrief } from "./types";
+import { BRIEF_LANGUAGE_NOTE_FA, audienceChoiceListFa, journeyChoiceListFa } from "@/lib/brand";
 import type { Post } from "@/lib/store";
 
 /**
@@ -31,8 +32,14 @@ ${BRAND_VOICE}
 - مقاله را **خلاصه نکن**. خلاصه‌ی یک مقاله‌ی هزار کلمه‌ای، محتوای کسل‌کننده‌ای برای فید می‌شود. یک ایده انتخاب کن که به‌تنهایی ارزش توقف اسکرول را دارد.
 - keyPoints باید «ادعا» باشند، نه تیتر. هر نکته باید مستقل خوانده و فهمیده شود. «سه اشتباه در جمع‌آوری شواهد» تیتر است؛ «بیشتر متخصص‌ها شواهدشان را دور عنوان شغلی می‌چینند، نه دور تاثیری که ساخته‌اند» ادعاست.
 - proofPoint فقط از دل همین مقاله دربیاید. عدد، آمار یا مثالی که در مقاله نیست، از خودت نساز.
-- hookAngle باید «درد مخاطب» را بگوید، نه موضوع مقاله را. نه «درباره‌ی شواهد»، بلکه «چرا سال‌ها کار جدی، روی کاغذ به پرونده‌ی قابل دفاع تبدیل نمی‌شود».
-- بریف باید پلتفرم‌خنثی بماند: از «سوایپ کن»، «کامنت بگذار» یا هر اصطلاح مخصوص یک شبکه استفاده نکن. لباس را کپی‌رایترها می‌پوشانند.${lessons}`;
+- hookAngle باید «درد مخاطب» را بگوید، نه موضوع مقاله را. نه «درباره‌ی شواهد»، بلکه «چرا سال‌ها کار جدی، روی کاغذ به پرونده‌ای تبدیل نمی‌شود که هر ادعایش مدرک داشته باشد».
+- بریف باید پلتفرم‌خنثی بماند: از «سوایپ کن»، «کامنت بگذار» یا هر اصطلاح مخصوص یک شبکه استفاده نکن. لباس را کپی‌رایترها می‌پوشانند (اینستاگرام فارسی با «تو»، لینکدین انگلیسی).
+- دو فیلد اجباری — همان گروه و مرحله‌ای که مقاله‌ی مبدأ برایش نوشته شده:
+  · audienceGroup: ${audienceChoiceListFa()}
+  · journeyStage:
+${journeyChoiceListFa()}
+
+${BRIEF_LANGUAGE_NOTE_FA}${lessons}`;
 
   const prompt = `مقاله‌ی مبدأ:
 
@@ -49,18 +56,20 @@ ${input.post.contentMd.slice(0, 8000)}
     system,
     prompt,
     temperature: 0.4,
-    schema: SocialBriefSchema,
+    schema: TargetedSocialBriefSchema,
     shapeHint: `{
   "coreMessage": "تنها ایده‌ای که ارزش انتقال به فید را دارد",
   "audience": "مخاطب مشخص این محتوا",
   "keyPoints": ["ادعای مستقل اول", "ادعای دوم", "ادعای سوم"],
   "hookAngle": "دردی که مخاطب را متوقف می‌کند",
   "proofPoint": "مثال یا عددی از دل مقاله",
-  "cta": "دعوت طبیعی به قدم بعدی"
+  "cta": "ذخیره‌اش کن تا …",
+  "audienceGroup": "digital-tech",
+  "journeyStage": "curious"
 }`,
   });
-  // بازآفرینی فعلاً فقط فارسی است — به همان دلیل linkedin-angle-finder:
-  // SocialBrief بعد از parse زبان را الزامی می‌داند، ولی تایپ ورودی
-  // runAgentJSON آن را اختیاری می‌بیند.
-  return { ...result, language: "fa" as const };
+  // بریفِ مشترک فارسی است (کاروسل فارسی). شاخه‌ی لینکدین در ارکستریتور
+  // زبانش را «en» می‌کند — v3.7: لینکدین انگلیسی است. هدف پست آموزشی است:
+  // بازآفرینیِ یک مقاله فروش مستقیم نیست.
+  return { ...result, language: "fa" as const, contentGoal: "educational" as const };
 }

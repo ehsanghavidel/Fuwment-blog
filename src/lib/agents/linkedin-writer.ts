@@ -1,6 +1,7 @@
 import "server-only";
 import { runAgentJSON } from "@/lib/ai";
-import { COMPANY_NAME, COMPANY_PROFILE, BRAND_VOICE } from "@/lib/company";
+import { COMPANY_NAME_EN } from "@/lib/company";
+import { AUDIENCE_BRIEFING_EN, brandContext } from "@/lib/brand";
 import { lessonsBlockFor } from "./lessons";
 import {
   LinkedInPostSchema,
@@ -20,40 +21,47 @@ import type { SocialCheck } from "./social-checks";
  * پلتفرم» است، نه در محتوا. یک پیام، چند لباس.
  */
 
+/**
+ * ⚠️ v3.7 (تصمیم مالک): لینکدین **انگلیسی** است — Plain English، «you»،
+ * تحلیلی، بدون اموجی. پرامپت عمداً کامل انگلیسی است و زمینه‌ی برندش هم
+ * نسخه‌ی انگلیسی (`brandContext("linkedin-en")`): هیچ قاعده‌ی نگارش فارسی
+ * (ارقام فارسی، گیومه، «شما») به این کانال نمی‌رسد. پیش از v3.7 همین
+ * پرامپت فارسی بود و «اعداد داخل متن را فارسی بنویس» داشت.
+ */
 function systemPrompt(lessons: string): string {
-  return `تو «کپی‌رایتر لینکدین» ${COMPANY_NAME} هستی. برای فیدی می‌نویسی که مخاطبش متخصصان و بنیان‌گذارانند و حوصله‌ی تبلیغ ندارند.
+  return `You are ${COMPANY_NAME_EN}'s LinkedIn copywriter. You write for a feed of professionals and founders who have no patience for advertising.
 
-${COMPANY_PROFILE}
+${brandContext("linkedin-en")}
 
-${BRAND_VOICE}
-
-قواعد لینکدین (رعایتشان اجباری است):
-- **سه خط اول** (حدود ۲۱۰ کاراکتر) قبل از «... بیشتر ببینید» دیده می‌شود و تنها شانس توقف اسکرول است. با یک ادعای مشخص یا یک مشاهده‌ی واقعی شروع کن. «در این پست می‌خواهم درباره‌ی...» بدترین شروع ممکن است.
-- **هیچ لینکی در متن پست نگذار.** لینکدین پست‌های دارای لینک بیرونی را کمتر نشان می‌دهد؛ لینک در کامنت اول می‌آید. حتی اگر به‌نظرت کمک‌کننده است، ننویس.
-- هر پاراگراف یک ایده. بین پاراگراف‌ها خط خالی بگذار. حداقل چهار پاراگراف — دیوارِ متن در فید خوانده نمی‌شود.
-- تیتر مارک‌داون (## یا **) استفاده نکن؛ لینکدین هیچ‌کدام را رندر نمی‌کند و کاراکترها خام دیده می‌شوند.
-- طول کل: بین ۹۰۰ تا ۱۸۰۰ کاراکتر. بلندتر از این، مقاله‌ای است که در فید کپی شده.
-- پست باید با یک **پرسشِ دعوت به گفت‌وگو** تمام شود، نه با «برای مشاوره تماس بگیرید». پرسش باید واقعی باشد و تجربه‌ی مخاطب را بخواهد.
-- ۳ تا ۵ هشتگ، در انتها، روی خط خودشان.
-- اعداد داخل متن را فارسی بنویس.${lessons}`;
+LinkedIn rules (mandatory):
+- The first three lines (about 210 characters) are all that shows before "…see more" — they are the only chance to stop the scroll. Open with a specific claim or a real observation. "In this post I want to talk about…" is the worst possible opening.
+- **No links in the post body.** LinkedIn shows posts with external links to fewer people; a link goes in the first comment.
+- One idea per paragraph, a blank line between paragraphs, at least four paragraphs — a wall of text does not get read.
+- No markdown headings or bold (## or **); LinkedIn renders neither and the characters show raw.
+- Total length: 900–1,800 characters.
+- End with a **genuine discussion question** that asks for the reader's own experience — not "contact us for a consultation".
+- 3–5 hashtags, English only, at the end on their own line.
+- The brief may be written in Persian: it is internal notes. Write the post itself in natural English from scratch — never translate the brief's sentences.${lessons}`;
 }
 
 function briefBlock(brief: SocialBrief): string {
-  return `بریف اجتماعی:
-پیام مرکزی: ${brief.coreMessage}
-مخاطب: ${brief.audience}
-زاویه‌ی قلاب: ${brief.hookAngle}
-نکته‌های کلیدی:
+  return `Social brief (internal — may be in Persian):
+Audience group: ${brief.audienceGroup ? AUDIENCE_BRIEFING_EN[brief.audienceGroup] : "(missing)"}
+Journey stage: ${brief.journeyStage ?? "(missing)"}
+Core message: ${brief.coreMessage}
+Audience: ${brief.audience}
+Hook angle: ${brief.hookAngle}
+Key points:
 ${brief.keyPoints.map((p) => `- ${p}`).join("\n")}
-شاهد/مثال: ${brief.proofPoint}
-دعوت به اقدام: ${brief.cta}`;
+Proof / example: ${brief.proofPoint}
+Closing question: ${brief.cta}`;
 }
 
 const SHAPE_HINT = `{
-  "title": "عنوان داخلی برای فهرست استودیو",
-  "body": "متن کامل پست، با خط خالی بین پاراگراف‌ها",
-  "hashtags": ["#گلوبال_تلنت", "#GlobalTalent", "#مسیر_حرفه‌ای"],
-  "cta": "پرسش پایانی دعوت به گفت‌وگو"
+  "title": "short internal title for the studio list",
+  "body": "the full post in English, with a blank line between paragraphs",
+  "hashtags": ["#GlobalTalent", "#UKTalentVisa", "#ResearchCareers"],
+  "cta": "the closing discussion question"
 }`;
 
 export async function runLinkedinWriter(input: {
@@ -66,7 +74,7 @@ export async function runLinkedinWriter(input: {
     system: systemPrompt(lessons),
     prompt: `${briefBlock(input.brief)}
 
-یک پست لینکدین کامل بنویس. هشتگ‌ها را در فیلد hashtags بده، نه داخل body.`,
+Write a complete LinkedIn post in English. Put hashtags in the hashtags field, not inside body.`,
     temperature: 0.7,
     schema: LinkedInPostSchema,
     shapeHint: SHAPE_HINT,
@@ -83,16 +91,16 @@ export async function runLinkedinRevision(input: {
 
   const prompt = `${briefBlock(input.brief)}
 
-— پیش‌نویس فعلی —
+— Current draft —
 ${JSON.stringify(input.draft, null, 2)}
 
-— ایرادهای ویراستار (امتیاز ${input.review.score}/100) —
-${input.review.issues.map((i) => `- ${i}`).join("\n") || "- (بدون ایراد)"}
+— Editor's issues (score ${input.review.score}/100) —
+${input.review.issues.map((i) => `- ${i}`).join("\n") || "- (no issues)"}
 
-— چک‌های قطعیِ ردشده —
-${input.failedChecks.map((c) => `- ${c.name}: ${c.note}`).join("\n") || "- (همه پاس شدند)"}
+— Failed deterministic checks —
+${input.failedChecks.map((c) => `- ${c.name}: ${c.note}`).join("\n") || "- (all passed)"}
 
-پست را اصلاح کن. فقط چیزهایی را عوض کن که ایراد دارند؛ بقیه را دست نزن.`;
+Fix the post. Change only what has an issue; leave everything else as it is. Keep it in English.`;
 
   return runAgentJSON({
     agent: "linkedin-writer",

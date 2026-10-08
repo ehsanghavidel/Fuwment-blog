@@ -2,7 +2,9 @@ import "server-only";
 import { z } from "zod";
 import { runAgentJSON } from "@/lib/ai";
 import { BLOCKED_SOURCE_DOMAINS, COMPANY_NAME, COMPANY_PROFILE } from "@/lib/company";
+import { EVIDENCE_TAGS, normalizeEvidenceTags, sourceAuthority, sourceAuthorityLabelFa, sourceRef } from "@/lib/brand";
 import { lessonsBlockFor } from "./lessons";
+import { OFFICIAL_DISCOVERY_QUERY, irrelevanceReason } from "./source-relevance";
 import { clampText, ResearchSchema, type Brief, type Research, type Source } from "./types";
 
 /**
@@ -145,6 +147,9 @@ function isCentralGovUk(host: string): boolean {
  * چیزی بود که دستور جلسه‌ی شهرداری را به صدر برد.
  */
 const OFFICIAL_BONUS = 0.15;
+
+/** پاداش منبع رسمیِ توصیفی (آمار، ارزیابی) — رسمی، ولی نه راهنمای واجد شرایط بودن */
+const OFFICIAL_RESEARCH_BONUS = 0.05;
 
 /**
  * کف مرتبط‌بودن. نتیجه‌ی زیر این حد اصلاً وارد فهرست نمی‌شود، حتی اگر
@@ -439,7 +444,7 @@ function cleanTitle(raw: string): string {
  * اگر چیزی نماند، آرایه‌ی خالی برمی‌گردد و مقاله اصلاً بخش منابع نمی‌گیرد —
  * فهرست بی‌کیفیت بدتر از نبودِ فهرست است.
  */
-function selectSources(results: SearchResult[]): Source[] {
+function selectSources(results: SearchResult[], route?: string): Source[] {
   const blocked = [...SOCIAL_AND_FORUM_DOMAINS, ...BLOCKED_SOURCE_DOMAINS];
   // کلیدِ راهنما → بهترین نسخه‌ی دیده‌شده از همان راهنما
   const best = new Map<string, { source: Source; rank: number; official: boolean }>();
@@ -447,9 +452,19 @@ function selectSources(results: SearchResult[]): Source[] {
   let printPages = 0;
   let forums = 0;
   let stale = 0;
+  let offTopic = 0;
 
   for (const r of results) {
     if (!r.url || !r.title) continue;
+
+    // v3.7: کشور و مسیر **پیش از** هر رتبه‌بندی — امتیاز Tavily فقط
+    // شباهت متن است و «Global Talent» استرالیا را از بریتانیا تشخیص نمی‌دهد.
+    const offReason = irrelevanceReason(r, route);
+    if (offReason) {
+      offTopic++;
+      console.log(`[researcher] کنار گذاشته شد — ${offReason}: ${r.url.slice(0, 90)}`);
+      continue;
+    }
 
     const host = hostOf(r.url);
     if (!host) continue;
@@ -474,7 +489,14 @@ function selectSources(results: SearchResult[]): Source[] {
     // کهنگی **قبل از** کف اعمال می‌شود، نه بعدش: کل ایده این است که سند
     // قدیمی خودش زیر کف بیفتد و لازم نباشد مکانیزم حذف جداگانه بنویسیم.
     const { penalty, year } = stalenessPenalty(r.url);
-    const rank = score + (official ? OFFICIAL_BONUS : 0) - penalty;
+    // v3.7: گزارش آماری/ارزیابیِ GOV.UK رسمی است ولی **قاعده نیست** —
+    // پاداش کمتری می‌گیرد تا صفحه‌ی جاریِ مسیر و قواعد مهاجرت جلوتر بیایند.
+    const bonus = !official
+      ? 0
+      : sourceAuthority(r.url, r.title) === "official-research"
+        ? OFFICIAL_RESEARCH_BONUS
+        : OFFICIAL_BONUS;
+    const rank = score + bonus - penalty;
 
     if (rank < MIN_RELEVANCE) {
       if (penalty > 0) {
@@ -504,7 +526,7 @@ function selectSources(results: SearchResult[]): Source[] {
   const dropped = results.length - kept.length;
   if (dropped > 0) {
     console.log(
-      `[researcher] ${dropped} نتیجه کنار رفت (${lowRelevance} بی‌ربط، ${stale} کهنه، ${forums} انجمن، ${printPages} نسخه‌ی چاپی، بقیه فیلتر یا هم‌راهنما)`
+      `[researcher] ${dropped} نتیجه کنار رفت (${lowRelevance} بی‌ربط، ${offTopic} کشور/مسیر دیگر، ${stale} کهنه، ${forums} انجمن، ${printPages} نسخه‌ی چاپی، بقیه فیلتر یا هم‌راهنما)`
     );
   }
 
@@ -574,16 +596,40 @@ ${COMPANY_PROFILE}${lessons}`;
       await Promise.all([
         ...queries.map((q) => tavilySearch(q)),
         tavilySearch(queries[0], [OFFICIAL_QUERY_HOST]),
+        // v3.7: کشف صفحه‌ی **جاریِ** مسیر/واجد شرایط بودن و قواعد مهاجرت.
+        // کوئری اول موضوعی است (مثلاً «درآمد») و اغلب به گزارش‌های ارزیابیِ
+        // تاریخی می‌رسد؛ آن‌ها رسمی‌اند ولی جای راهنمای جاری را نمی‌گیرند.
+        ...(OFFICIAL_DISCOVERY_QUERY[brief.route]
+          ? [tavilySearch(OFFICIAL_DISCOVERY_QUERY[brief.route]!, [OFFICIAL_QUERY_HOST])]
+          : []),
       ])
     ).flat();
+    /**
+     * ⚠️ مدل فقط همان منابعی را می‌خواند که پایین مقاله چاپ می‌شوند.
+     *
+     * ریشه‌ی شکست دومین اجرای زنده: پیش از این، **همه‌ی** نتایج خام Tavily
+     * (از جمله نتایج زیر کف مرتبط‌بودن، بیرون از سقف ۶ منبع، انجمن و
+     * دامنه‌ی مسدود) به مدل داده می‌شد، ولی فهرست منابع مقاله فقط خروجی
+     * `selectSources` بود. یعنی مدل می‌توانست از صفحه‌ای فکت «رسمی» بسازد
+     * که هرگز در فهرست منابع نمی‌آمد — و خواننده «طبق راهنمای رسمی» را کنار
+     * فهرستی می‌دید که فقط یک سایت وکالتی داشت.
+     *
+     * حالا ماده‌ی خام = فهرست منابع نهایی، با شماره‌ی S و برچسب اعتبار که
+     * کد می‌گذارد. هر فکت به یک منبع چاپ‌شده قابل ردیابی است.
+     */
     if (allResults.length > 0) {
-      webContext =
-        `\n\nنتایج جستجوی وب (فقط به‌عنوان ماده‌ی خام؛ صحت‌سنجی با توست):\n` +
-        allResults
-          .map((r) => `- ${r.title} (${r.url})\n  ${r.content}`)
-          .join("\n");
-
-      sources = selectSources(allResults);
+      sources = selectSources(allResults, brief.route);
+      const contentOf = new Map(allResults.map((r) => [r.url, r.content]));
+      if (sources.length > 0) {
+        webContext =
+          `\n\nمنابع این مقاله (همین‌ها پایین مقاله چاپ می‌شوند؛ صحت‌سنجی با توست):\n` +
+          sources
+            .map(
+              (s, i) =>
+                `- ${sourceRef(i)} [${sourceAuthorityLabelFa(s.url, s.title)}] ${s.title} (${s.url})\n  ${contentOf.get(s.url) ?? ""}`
+            )
+            .join("\n");
+      }
     }
   }
 
@@ -595,7 +641,13 @@ ${COMPANY_PROFILE}${lessons}`;
 
 بر این اساس، ماده‌ی خام پژوهشی مقاله را آماده کن:
 - keyFacts: نکته‌ها و فکت‌های کلیدی که مقاله باید بگوید (اگر آماری مطمئن نیستی، به‌جای عدد دقیق، روند یا اصل را بگو).
-- examples: مثال‌های ملموس از فضای کسب‌وکار ایران که نویسنده بتواند استفاده کند.
+  هر فکت را **دقیقاً با یکی از این سه برچسب** شروع کن، با شماره‌ی منبع:
+  · «[رسمی S2]» فقط وقتی منبع S2 برچسب «منبع رسمی» دارد و همین را **صریحاً** می‌گوید (الزام، معیار یا قاعده) — فقط به همان اندازه که گفته. کد این را می‌سنجد: [رسمی] روی منبع غیررسمی یا بدون شماره، خودکار پایین می‌آید.
+  · «[آمار رسمی S4]» وقتی منبع S4 برچسب «منبع رسمیِ توصیفی» دارد (گزارش ارزیابی یا آمار وزارت کشور) — این‌ها وضعیت دارندگان ویزا را توصیف می‌کنند، نه شرط پذیرش را؛ فکت را هم توصیفی بنویس («در این گزارش، دارندگان ویزا…»). کد [رسمی] روی چنین منبعی را خودکار [آمار رسمی] می‌کند.
+  · «[تفسیر S3]» وقتی از منبع غیررسمی (سایت وکالتی، مشاوره، وبلاگ مهاجرتی، گزارش حقوق، کارفرما) می‌آید. این‌ها قاعده نمی‌سازند، حتی اگر با اطمینان نوشته شده باشند.
+  · «${EVIDENCE_TAGS.practical}» برای توصیه یا برداشت خودت (بدون شماره).
+  اگر منبع‌ها با هم نمی‌خوانند، حرف منبع رسمی را بیاور و اختلاف را در angleNotes بگو. اگر هیچ منبع رسمی‌ای در فهرست نیست، هیچ فکتی [رسمی] نیست.
+- examples: مثال‌های ملموس از موقعیت واقعی مخاطب این مقاله که نویسنده بتواند استفاده کند (بی‌نام، بدون عدد ساختگی).
 - commonQuestions: سؤال‌هایی که مخاطب واقعاً درباره‌ی این موضوع دارد (برای بخش FAQ).
 - angleNotes: توصیه‌ات به نویسنده برای متمایزکردن مقاله.`;
 
@@ -605,14 +657,23 @@ ${COMPANY_PROFILE}${lessons}`;
     prompt,
     schema: ResearchSchema,
     shapeHint: `{
-  "keyFacts": ["فکت یا نکته کلیدی"],
+  "keyFacts": ["[رسمی S1] فکتی که منبع رسمی S1 صریحاً گفته", "[تفسیر S2] برداشت منبع غیررسمی S2", "${EVIDENCE_TAGS.practical} توصیه‌ی عملی"],
   "examples": ["مثال ملموس"],
   "commonQuestions": ["سؤال رایج مخاطب"],
   "angleNotes": "توصیه‌ها به نویسنده"
 }`,
   });
 
+  // برچسب «رسمی» ادعای مدل است، نه مدرک: کد آن را با فهرست منابع نهایی
+  // می‌سنجد و هر [رسمی] بدون منبع رسمیِ چاپ‌شده را پایین می‌آورد.
+  const { facts: keyFacts, downgraded } = normalizeEvidenceTags(out.keyFacts, sources);
+  if (downgraded.length) {
+    console.log(
+      `[researcher] ${downgraded.length} فکتِ «رسمی» بدون منبع رسمیِ چاپ‌شده پایین آمد: ${downgraded.map((d) => `«${d}»`).join("، ")}`
+    );
+  }
+
   // منابع از کد می‌آیند، نه از مدل — بدون کلید Tavily فهرست خالی می‌ماند
   // و مقاله هم فهرست منابع نمی‌گیرد.
-  return { ...out, sources };
+  return { ...out, keyFacts, sources };
 }

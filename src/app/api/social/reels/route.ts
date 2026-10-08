@@ -4,6 +4,7 @@ import { runReelsPipeline } from "@/lib/agents/reels-orchestrator";
 import { isConfigured } from "@/lib/ai";
 import { isStudioAuthorized, unauthorized } from "@/lib/auth";
 import { BRAND_ROUTES } from "@/lib/agents/types";
+import { AUDIENCE_GROUPS, JOURNEY_STAGES } from "@/lib/brand";
 
 /**
  * POST /api/social/reels — ساخت اسکریپت ریلز از یک لینک یا یک متن.
@@ -23,11 +24,21 @@ const BodySchema = z
     /** منبع رایگان اختیاری — فقط به‌عنوان زمینه به پرامپت می‌رود */
     leadMagnet: z.string().max(200).optional(),
     /**
-     * مسیر برند این محتوا. اگر داده شود، فهرست CTA به همان مسیر فیلتر
-     * می‌شود و چک قطعی هم بر همان مبنا می‌سنجد. اگر نه، همه‌ی CTAها
-     * نشان داده می‌شوند و رعایت محدوده با مدل است.
+     * مسیر برند این محتوا — زمینه‌ی محتوایی نویسنده. (v3.7: CTAی ریلز از
+     * هدف ویدیو می‌آید، نه از مسیر.)
      */
     route: z.enum(BRAND_ROUTES).optional(),
+    /**
+     * گروه مخاطب و مرحله‌ی سفر — اجباری، بدون پیش‌فرض (v3.7: «اگر پاسخ
+     * هرکدام همه بود، محتوا آماده نیست»). ریلز استراتژیست ندارد، پس
+     * اپراتور انتخاب می‌کند. فهرست‌ها از لایه‌ی برند می‌آیند.
+     */
+    audienceGroup: z.enum(AUDIENCE_GROUPS, {
+      errorMap: () => ({ message: "گروه مخاطب ریلز را انتخاب کنید." }),
+    }),
+    journeyStage: z.enum(JOURNEY_STAGES, {
+      errorMap: () => ({ message: "مرحله‌ی سفر مخاطب ریلز را انتخاب کنید." }),
+    }),
   })
   // دقیقاً یکی از دو ورودی. هر دو با هم یعنی کاربر نمی‌داند کدام مبناست.
   .refine((b) => Boolean(b.sourceUrl) !== Boolean(b.sourceText?.trim()), {
@@ -58,6 +69,8 @@ export async function POST(req: NextRequest) {
     sourceText: parsed.data.sourceText ?? null,
     leadMagnet: parsed.data.leadMagnet ?? null,
     route: parsed.data.route,
+    audienceGroup: parsed.data.audienceGroup,
+    journeyStage: parsed.data.journeyStage,
   });
 
   return Response.json({ run });

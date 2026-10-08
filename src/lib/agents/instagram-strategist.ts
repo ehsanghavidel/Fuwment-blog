@@ -2,7 +2,17 @@ import "server-only";
 import { runAgentJSON } from "@/lib/ai";
 import { COMPANY_NAME, COMPANY_PROFILE, BRAND_VOICE } from "@/lib/company";
 import { lessonsBlockFor } from "./lessons";
-import { SocialBriefSchema, type SocialBrief, type SocialIdea } from "./types";
+import { TargetedSocialBriefSchema, type SocialBrief, type SocialIdea } from "./types";
+import {
+  AUDIENCE_BRIEFING,
+  BRIEF_LANGUAGE_NOTE_FA,
+  INSTAGRAM_GOAL_CTAS,
+  audienceChoiceListFa,
+  journeyChoiceListFa,
+  type AudienceGroup,
+  type ContentGoal,
+  type JourneyStage,
+} from "@/lib/brand";
 import { ROUTE_BRIEFING, type BrandRoute } from "./brand-cta";
 
 /**
@@ -32,7 +42,19 @@ export async function runInstagramStrategist(input: {
     * نرم است که استودیو می‌فرستد؛ بازتعریفش یعنی یک اسم با دو معنی.
     */
   assignedTopic?: string;
+  /**
+   * هدف پست (v3.7 «CTA بر اساس هدف پست») — تصمیم اجرا. پیش‌فرض آموزشی:
+   * «پستی که هدفش فروش یا تبدیل نیست، تابع ردیف آموزشی است».
+   */
+  contentGoal?: ContentGoal;
+  /**
+   * گروه مخاطب و مرحله‌ی سفرِ از پیش تعیین‌شده (مسیر هفتگی). وقتی پر
+   * باشند، انتخاب مدل نیستند و قطعی چسبانده می‌شوند.
+   */
+  audienceGroup?: AudienceGroup;
+  journeyStage?: JourneyStage;
 }): Promise<SocialBrief> {
+  const contentGoal = input.contentGoal ?? "educational";
   const lessons = await lessonsBlockFor("instagram-strategist");
 
   const system = `تو «استراتژیست محتوای اینستاگرام» ${COMPANY_NAME} هستی. از میان چند ایده، بهترین را انتخاب می‌کنی و آن را به یک بریف دقیق تبدیل می‌کنی که کپی‌رایتر بتواند مستقیم از رویش بنویسد.
@@ -40,6 +62,8 @@ export async function runInstagramStrategist(input: {
 ${COMPANY_PROFILE}
 
 ${BRAND_VOICE}
+
+${BRIEF_LANGUAGE_NOTE_FA}
 
 قواعد:
 - بهترین ایده را انتخاب کن (لزوماً نه پرامتیازترین، اگر دلیل بهتری داری) و فقط روی همان تمرکز کن. بریف ترکیبی از چند ایده، محتوای بی‌تمرکز می‌سازد.
@@ -52,10 +76,24 @@ ${BRAND_VOICE}
 route = "${input.route}" → ${ROUTE_BRIEFING[input.route]}
 ایده‌ای که به مسیر دیگری تعلق دارد، حتی اگر خوب باشد، اینجا بی‌مصرف است.
 
-دو فیلد را هم باید خودت تعیین کنی:
-- audienceGroup: کدام‌یک از پنج گروه مخاطب؟ (digital-tech، academic-research، arts-culture، engineering-medical، entrepreneurship)
-- journeyStage: کدام مرحله از سفر؟ (unaware، curious، evaluating، decision، in-journey، success، referral)
-اگر برای هرکدام جوابت «همه» بود، یعنی بریف هنوز آماده نیست — یکی را انتخاب کن.
+${
+  input.audienceGroup && input.journeyStage
+    ? `گروه مخاطب و مرحله‌ی سفر از قبل تعیین شده‌اند و انتخاب تو نیستند:
+audienceGroup = "${input.audienceGroup}" → ${AUDIENCE_BRIEFING[input.audienceGroup]}
+journeyStage = "${input.journeyStage}"
+همین دو مقدار را عیناً برگردان و بریف را برای همین مخاطب و همین مرحله بنویس.`
+    : `دو فیلد را هم باید خودت تعیین کنی (هر دو اجباری؛ «همه» جواب مجاز نیست):
+- audienceGroup: کدام‌یک از پنج گروه مخاطب؟ ${audienceChoiceListFa()}
+- journeyStage: کدام مرحله از سفر؟
+${journeyChoiceListFa()}`
+}
+
+هدف این پست: **${contentGoal === "sales" ? "فروش/تبدیل" : "آموزشی"}** — تصمیم اجراست، نه انتخاب تو.
+فیلد cta را مطابق همین هدف بنویس: ${
+  contentGoal === "sales"
+    ? `فقط CTA اصلی — «${INSTAGRAM_GOAL_CTAS.sales[0].fa}»`
+    : `فقط یک قدم نرم — «${INSTAGRAM_GOAL_CTAS.educational[0].fa}» یا «${INSTAGRAM_GOAL_CTAS.educational[1].fa}» (این پست نباید بفروشد؛ ارجاع به بایو، ارزیابی یا رزرو ممنوع)`
+}.
 ${input.assignedTopic ? `
 ⚠️ موضوع این اجرا از قبل تعیین شده و انتخاب تو نیست:
 «${input.assignedTopic}»
@@ -84,20 +122,27 @@ ${input.assignedTopic ? "برای موضوع تعیین‌شده بریف اجت
     system,
     prompt,
     temperature: 0.4,
-    schema: SocialBriefSchema,
+    schema: TargetedSocialBriefSchema,
     shapeHint: `{
   "coreMessage": "تنها ایده‌ای که این محتوا منتقل می‌کند",
   "audience": "مخاطب مشخص این محتوا",
   "keyPoints": ["ادعای مستقل اول", "ادعای دوم", "ادعای سوم"],
   "hookAngle": "دردی که مخاطب را متوقف می‌کند",
   "proofPoint": "مثال یا موقعیت ملموس (نه آمار ساختگی)",
-  "cta": "دعوت طبیعی به قدم بعدی",
-  "audienceGroup": "digital-tech",
-  "journeyStage": "curious"
+  "cta": "${contentGoal === "sales" ? INSTAGRAM_GOAL_CTAS.sales[0].fa : "ذخیره‌اش کن تا …"}",
+  "audienceGroup": "${input.audienceGroup ?? "digital-tech"}",
+  "journeyStage": "${input.journeyStage ?? "curious"}"
 }`,
   });
 
-  // route و language تصمیم اجرا هستند، نه خروجی مدل — قطعی چسبانده می‌شوند.
-  // این‌طور احتمال شکست اسکیما روی این دو فیلد صفر است.
-  return { ...result, route: input.route, language: input.language ?? "fa" };
+  // route، language و هدف پست تصمیم اجرا هستند، نه خروجی مدل — قطعی
+  // چسبانده می‌شوند. گروه و مرحله‌ی از پیش تعیین‌شده (هفتگی) هم همین‌طور.
+  return {
+    ...result,
+    route: input.route,
+    language: input.language ?? "fa",
+    contentGoal,
+    audienceGroup: input.audienceGroup ?? result.audienceGroup,
+    journeyStage: input.journeyStage ?? result.journeyStage,
+  };
 }

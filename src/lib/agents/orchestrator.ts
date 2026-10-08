@@ -10,7 +10,7 @@ import { runEditor, APPROVE_THRESHOLD } from "./editor";
 import {
   applySafeBrandFixes,
   blockingFailures,
-  runBrandChecks,
+  runBlogChecks,
   runBriefChecks,
   type BrandCheck,
 } from "./brand-checks";
@@ -154,10 +154,10 @@ export async function runPipeline(opts: {
     });
 
     // چک‌های قطعی برند روی پیش‌نویس — قبل از ویراستار، چون خروجی‌شان ورودی اوست
-    let brandChecks: BrandCheck[] = runBrandChecks({ text: draft });
+    let brandChecks: BrandCheck[] = runBlogChecks({ text: draft, research });
 
     let review: Review = await step("editor", "ویراستار — بازبینی اول", async () => {
-      const out = await runEditor({ brief, draft, failedBrandChecks: brandChecks });
+      const out = await runEditor({ brief, research, draft, failedBrandChecks: brandChecks });
       const passed = brandChecks.filter((c) => c.pass).length;
       return {
         output: { review: out, brandChecks },
@@ -204,10 +204,10 @@ export async function runPipeline(opts: {
         };
       });
 
-      brandChecks = runBrandChecks({ text: draft });
+      brandChecks = runBlogChecks({ text: draft, research });
 
       review = await step("editor", `ویراستار — بازبینی ${round + 1}`, async () => {
-        const out = await runEditor({ brief, draft, failedBrandChecks: brandChecks });
+        const out = await runEditor({ brief, research, draft, failedBrandChecks: brandChecks });
         const passed = brandChecks.filter((c) => c.pass).length;
         return {
           output: { review: out, brandChecks },

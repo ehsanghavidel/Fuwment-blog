@@ -15,6 +15,7 @@ import { slideText } from "@/lib/slide-spec";
 import { reserveDmKeywordForPost } from "./dm-registry";
 import type { InstagramCarousel, SocialIdea } from "./types";
 import type { BrandRoute } from "./brand-cta";
+import type { AudienceGroup, ContentGoal, JourneyStage } from "@/lib/brand";
 
 /**
  * ارکستریتور اینستاگرام — پایپ‌لاین سوم سیستم.
@@ -89,6 +90,15 @@ export async function runInstagramPipeline(opts: {
    * سطح هفته می‌زند و این گام را خاموش می‌کند.
    */
   collectForCritic?: (part: SocialCriticPart) => void;
+  /**
+   * هدف پست (v3.7 «CTA بر اساس هدف پست»). مسیر هفتگی از نوع محتوای شبکه
+   * می‌دهد؛ اجرای دستی پیش‌فرض «آموزشی» می‌گیرد — پستی که برای فروش
+   * نیست تابع ردیف آموزشی است.
+   */
+  contentGoal?: ContentGoal;
+  /** گروه مخاطب و مرحله‌ی سفرِ از پیش تعیین‌شده (مسیر هفتگی) */
+  audienceGroup?: AudienceGroup;
+  journeyStage?: JourneyStage;
 }): Promise<PipelineRun> {
   const store = getStore();
   const runId = opts.runId;
@@ -180,10 +190,13 @@ export async function runInstagramPipeline(opts: {
         route,
         language,
         assignedTopic: assignedSlot?.topic,
+        contentGoal: opts.contentGoal,
+        audienceGroup: opts.audienceGroup,
+        journeyStage: opts.journeyStage,
       });
       return {
         output: out,
-        summary: `بریف ساخته شد — ${out.keyPoints.length} نکته‌ی کلیدی — ${route} / ${out.audienceGroup ?? "؟"} / ${out.journeyStage ?? "؟"}`,
+        summary: `بریف ساخته شد — ${out.keyPoints.length} نکته‌ی کلیدی — ${route} / ${out.audienceGroup ?? "؟"} / ${out.journeyStage ?? "؟"} / هدف: ${out.contentGoal === "sales" ? "فروش" : "آموزشی"}`,
       };
     });
 
@@ -198,7 +211,12 @@ export async function runInstagramPipeline(opts: {
       revise: (draft, review, failedChecks) =>
         runInstagramRevision({ brief, draft, review, failedChecks, sceneFamily, dmMode }),
       check: (d) =>
-        runInstagramChecks({ caption: d.caption, slides: d.slides, hashtags: d.hashtags }),
+        runInstagramChecks({
+          caption: d.caption,
+          slides: d.slides,
+          hashtags: d.hashtags,
+          language: brief.language,
+        }),
       // کپشن + متن همه‌ی اسلایدها + دعوت به اقدام
       brandText: (d) => [d.caption, ...d.slides.map(slideText), d.cta].join("\n"),
       describe: (d) => `${d.slides.length} اسلاید، ${d.hashtags.length} هشتگ`,

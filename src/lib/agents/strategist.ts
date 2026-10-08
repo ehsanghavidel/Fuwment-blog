@@ -5,6 +5,7 @@ import { lessonsBlockFor } from "./lessons";
 import { BriefSchema, type Brief, type Idea } from "./types";
 import { ctaListBlock, allowedCtaIds, ROUTE_BRIEFING } from "./brand-cta";
 import type { BrandRoute } from "@/lib/company";
+import { audienceChoiceListFa, journeyChoiceListFa, BRIEF_LANGUAGE_NOTE_FA } from "@/lib/brand";
 
 
 /**
@@ -30,7 +31,9 @@ export async function runStrategist(input: {
 
 ${COMPANY_PROFILE}
 
-${BRAND_VOICE}${lessons}`;
+${BRAND_VOICE}
+
+${BRIEF_LANGUAGE_NOTE_FA}${lessons}`;
 
   const ideasText = input.ideas
     .map(
@@ -54,20 +57,9 @@ route = "${input.route}" → ${ROUTE_BRIEFING[input.route]}
 
 — دو تصمیم دیگر (هر دو اجباری، و «همه» جواب مجاز نیست) —
 - audienceGroup: کدام‌یک از پنج گروه؟
-  digital-tech (مهندس نرم‌افزار، دیزاینر محصول، متخصص داده، مدیر محصول) ·
-  academic-research (دکترا، پسادکترا، هیئت علمی) ·
-  arts-culture (فیلم‌ساز، طراح، نویسنده، موسیقی‌دان، کیوریتور) ·
-  engineering-medical (مهندسی، پزشکی و پژوهش بالینی) ·
-  entrepreneurship (بنیان‌گذار استارتاپ یا کسب‌وکار فعال)
+  ${audienceChoiceListFa()}
 - journeyStage: مخاطب این مقاله کجای سفر است؟
-  · unaware — نمی‌داند این مسیرها وجود دارند یا فکر می‌کند برای نوابغ‌اند.
-    محتوای این مرحله نباید بفروشد.
-  · curious — می‌داند مسیر هست و می‌پرسد «من هم می‌توانم؟»
-  · evaluating — دارد می‌سنجد به چه کسی اعتماد کند.
-  · decision — می‌پرسد ارزش هزینه‌اش را دارد یا نه.
-  · in-journey — در مسیر است و می‌خواهد بداند کجای کار است.
-  · success — مسیر را طی کرده؛ محتوای استقرار و روایت تجربه.
-  · referral — راضی است و می‌تواند دیگران را معرفی کند.
+${journeyChoiceListFa()}
   برای مقاله‌ی بلاگ معمولاً یکی از چهار مرحله‌ی اول درست است.
 - فیلد audience را متناسب با همان گروه بنویس، مشخص و ملموس. «همه‌ی متخصصان»
   یا «عموم مخاطبان» رد می‌شود؛ محتوایی که برای همه نوشته شود قلاب ندارد.

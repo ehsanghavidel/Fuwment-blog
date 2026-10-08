@@ -259,7 +259,7 @@ export function CampaignPanel({ onUnauthorized }: { onUnauthorized: () => void }
               </dd>
             </div>
             <div>
-              <dt className="mb-1 text-xs font-bold text-ink-muted">پاسخ آرکان</dt>
+              <dt className="mb-1 text-xs font-bold text-ink-muted">پاسخ فومنت</dt>
               <dd dir="auto" className="text-sm leading-7 text-ink-soft">
                 {n.resolution}
               </dd>

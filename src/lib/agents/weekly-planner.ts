@@ -5,6 +5,7 @@ import { lessonsBlockFor } from "./lessons";
 import { ROUTE_BRIEFING } from "./brand-cta";
 import { CONTENT_TYPE_BRIEFING, WEEKLY_GRID } from "./weekly-grid";
 import { JOURNEY_STAGES, WeeklyPlanSchema, type WeeklyPlan } from "./types";
+import { AUDIENCE_BRIEFING, BRIEF_LANGUAGE_NOTE_FA } from "@/lib/brand";
 
 /**
  * ایجنت ۱ (پایپ‌لاین هفتگی) — برنامه‌ریز هفتگی
@@ -49,20 +50,7 @@ export const RECENT_TITLES_DAYS = 90;
  */
 export const MIN_DISTINCT_JOURNEY_STAGES = 4;
 
-/** توضیح یک‌خطی هر گروه مخاطب، برای اینکه برنامه‌ریز قلاب درست را بردارد */
-const AUDIENCE_BRIEFING: Record<string, string> = {
-  "digital-tech":
-    "دیجیتال تک — تاثیر ساخته ولی فکر می‌کند تاثیر «مدرک» نیست. خودکم‌بینی بیشترین است.",
-  "academic-research":
-    "آکادمیک و پژوهش — مدرک کم ندارد، مسیر را نمی‌بیند. لحن دقیق‌تر و داده‌محورتر.",
-  "arts-culture":
-    "هنر و فرهنگ — دستاوردش پراکنده است و باور دارد این مسیرها برای مهندس و پزشک ساخته شده‌اند.",
-  "engineering-medical":
-    "مهندسی و پزشکی — نگرانی اصلی هزینه‌ی فرصت است. ماهیت پژوهشی فعالیت تعیین‌کننده است، نه عنوان شغلی.",
-  entrepreneurship:
-    "کارآفرینی — بین دو مسیر گیر کرده و می‌ترسد ایده‌اش قضاوت شود.",
-};
-
+// توضیح یک‌خطی هر گروه مخاطب — از v3.7 در `@/lib/brand` (یک منبع)
 /**
  * شبکه، به‌شکل خوانا برای مدل.
  *
@@ -72,9 +60,8 @@ const AUDIENCE_BRIEFING: Record<string, string> = {
  */
 function gridBlock(): string {
   return WEEKLY_GRID.map((slot) => {
-    const audience = slot.audienceGroup
-      ? AUDIENCE_BRIEFING[slot.audienceGroup] ?? slot.audienceGroup
-      : "بدون گروه مخاطب مشخص — مخاطب انگلیسی‌زبان: نهاد، دانشگاه، شریک بین‌المللی";
+    // v3.7: هر اسلات — از جمله انگلیسی — گروه مخاطب دارد.
+    const audience = AUDIENCE_BRIEFING[slot.audienceGroup];
 
     return `day=${slot.day} (${slot.dayLabel})
   زبان: ${slot.language === "fa" ? "فارسی" : "انگلیسی"}
@@ -98,6 +85,8 @@ export async function runWeeklyPlanner(input: {
   const system = `تو «برنامه‌ریز محتوای هفتگی» ${COMPANY_NAME} هستی. یک هفته‌ی کامل محتوای اینستاگرام را طراحی می‌کنی — هفت پست، یکی برای هر روز.
 
 ${COMPANY_PROFILE}
+
+${BRIEF_LANGUAGE_NOTE_FA}
 
 کارِ تو **طراحی در سطح هفته** است، نه نوشتن هفت ایده‌ی مستقل. هفت پستی که هرکدام جداگانه خوب باشند ولی کنار هم تکراری یا بی‌ربط بیایند، هفته‌ی بدی است. چیزی که فقط تو می‌توانی تضمین کنی و هیچ ایجنت پایین‌دستی نمی‌تواند، همین انسجام و تمایز است.
 
