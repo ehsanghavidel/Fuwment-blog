@@ -15,6 +15,7 @@
  * - ctas          CTAهای برند + CTAی اینستاگرام بر اساس هدف پست
  * - channels      قواعد صریح هر کانال و ترکیب‌شان (brandContext)
  * - blog          فقط بلاگ: فارسی ساده، وضعیت شواهد، اعتبار منبع
+ * - instagram     فقط کاروسل فارسی: حکم مطلق درباره‌ی مدرک و ذهن ارزیاب
  * - visual        پالت، گرادیان، فونت، کنتراست
  *
  * `@/lib/company` همچنان صادر می‌کند (COMPANY_PROFILE، BRAND_VOICE،
@@ -30,4 +31,5 @@ export * from "./terminology";
 export * from "./ctas";
 export * from "./channels";
 export * from "./blog";
+export * from "./instagram";
 export * from "./visual";

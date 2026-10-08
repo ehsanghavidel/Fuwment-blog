@@ -94,6 +94,14 @@ const TIMEOUT_MS = 60_000;
  *    - PALETTE: «تناژ سرد با یک نقطه گرم. اشباع متعادل — نه HDR، نه
  *      سیاه‌وسفید». نسخه‌ی قبلی («deep desaturated blue-teal, close to
  *      monochrome») عملاً تک‌رنگ بود و همین را نقض می‌کرد.
+ *    - **اصلاح بعد از یک اجرای زنده (مهر ۱۴۰۵):** کاورِ کاروسل باز هم تقریباً
+ *      تک‌رنگ آبی/فیروزه‌ای درآمد. سه عامل در خودِ پرامپت بود: LIGHT
+ *      «restrained grey-blue tint» می‌خواست (یعنی ته‌رنگ آبی روی کل تصویر)،
+ *      PALETTE «navy and blue-teal tones» را رنگ کل صحنه می‌گفت، و نقطه‌ی
+ *      گرم «one small» بود و گم می‌شد. حالا: تراز سفید خنثی‌-سرد بدون
+ *      ته‌رنگ، رنگ سرد از اشیای خودِ صحنه نه از فیلتر، رنگ طبیعی مواد،
+ *      و یک نقطه‌ی گرمِ **دیدنی ولی محدود** که عکاسی‌شده باشد نه لایه‌ی
+ *      گرافیکی — و صریحاً «شیء نارنجی اضافه نکن». قالب انتزاعی دست‌نخورده.
  *    - کلیشه‌های ممنوعِ تازه: کره‌ی زمین، مهر ویزا، تاور بریج، دست‌دادنِ
  *      استوکیِ دو نفر با کت‌وشلوار، و عکس دفتر/ساختمان/میز خودمان به‌عنوان
  *      تصویر اصلی.
@@ -147,7 +155,7 @@ COMPOSITION
 
 LIGHT
 Soft, directional daylight — bright overcast or gentle indirect daylight,
-cool-neutral with a restrained grey-blue tint. Gentle falloff, low contrast,
+with a cool-neutral white balance and no overall colour cast. Gentle falloff, low contrast,
 no harsh shadows, no flash, no rim lighting, no lens flare. The exposure
 stays bright, clean, and contemporary-editorial — never dim, muddy,
 sepia-toned, or nostalgic.
@@ -177,11 +185,23 @@ stays secondary and never becomes sharp enough to compete with the focal
 subject.
 
 PALETTE
-A cool, balanced palette: navy and blue-teal tones with natural, balanced
-saturation — not near-monochrome, not black-and-white, not HDR, not
-over-saturated. Exactly one small warm point (a warm amber or orange detail
-such as a lamp, a notebook cover or a sleeve) — never more than one, and
-never dominant.
+Overall cool tone with natural, balanced saturation. The cool notes (navy,
+slate, muted blue-teal) come from things actually in the scene — shadows, a
+wall, a window, fabric — not from a filter or grade laid over the whole
+image. Materials keep believable natural colours: wood looks like wood,
+brick like brick, plants stay green, paper stays off-white, any skin tone
+stays natural.
+Where the composition permits, include one visible but restrained warm
+point — warm lamplight, a wooden surface catching light, a book or notebook
+cover, a mug, a sleeve — noticeable at first glance yet never dominant
+(roughly a tenth of the frame or less). It must feel photographed: part of
+the scene's real light and materials, never a graphic overlay, a colour
+splash or a selectively recoloured object. Do not add an orange object just
+to create it; if nothing warm belongs in the scene, let warm light or
+natural wood provide it.
+Not monochrome, not near-monochrome, not a uniform blue or teal wash, not
+duotone, not black-and-white, not teal-and-orange cinematic grading, not
+HDR, not over-saturated.
 
 MOOD
 Composed, credible, unhurried. Editorial photography, not advertising.
@@ -203,7 +223,7 @@ university façade as the hero image, no visibly old or decaying buildings,
 no antique furniture, no dark-wood heritage interiors, no rustic interiors,
 no weathered or crumbling masonry as the dominant element.
 No sepia or nostalgic colour grading, no period-drama atmosphere, no
-historic-postcard aesthetic.
+historic-postcard aesthetic. No blue or teal colour cast over the whole image.
 No collage, split frames, borders, or vignettes.
 No 3D render, no illustration, no digital art — photographic only.
 

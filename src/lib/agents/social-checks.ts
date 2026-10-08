@@ -2,6 +2,11 @@ import type { Slide, StorySticker } from "@/lib/store";
 import { slideText } from "@/lib/slide-spec";
 import { LIMITS_BY_LAYOUT } from "./types";
 import { countDmCtaLine } from "@/lib/dm-keyword";
+import {
+  ABSOLUTE_DISMISSAL_FA,
+  DISMISSAL_NEGATED_FRAME,
+  type DismissalPattern,
+} from "@/lib/brand/instagram";
 
 /**
  * چک‌های قطعی محتوای اجتماعی — بدون LLM.
@@ -249,6 +254,38 @@ export function checkBriefTargeting(brief: {
   };
 }
 
+/**
+ * حکم مطلق درباره‌ی مدرک یا ذهن ارزیاب (کاروسل فارسی، v3.7).
+ *
+ * مسدودکننده، چون الگوها فقط صورت‌هایی را می‌گیرند که «کافی نیست» را به
+ * «بی‌ارزش است» تبدیل می‌کنند؛ «به‌تنهایی … نشان نمی‌دهد» هیچ‌کدام را فعال
+ * نمی‌کند. فهرست در `@/lib/brand/instagram.ts`.
+ */
+export function checkAbsoluteDismissalFa(text: string): SocialCheck {
+  // جمله‌به‌جمله، با دو استثنا که روی متن خودِ راهنمای برند پیدا شدند:
+  // پرسشِ بلاغی برای رد کردن («این یعنی تجربه‌ات بی‌ارزش است؟») و
+  // دستورِ ضدِ رد کردن («هرگز نگو مقاله بی‌ارزش است»). هیچ‌کدام حکم نیست.
+  const hits = new Set<DismissalPattern>();
+  for (const sentence of text.match(/[^.!؟?\n]+[.!؟?]?/g) ?? []) {
+    if (/[؟?]\s*$/.test(sentence)) continue;
+    for (const p of ABSOLUTE_DISMISSAL_FA) {
+      const m = sentence.match(p.re);
+      if (!m) continue;
+      if (DISMISSAL_NEGATED_FRAME.test(sentence.slice(0, m.index))) continue;
+      hits.add(p);
+    }
+  }
+  return {
+    name: "حکم مطلق درباره‌ی مدرک",
+    severity: "blocking",
+    pass: hits.size === 0,
+    note:
+      hits.size === 0
+        ? "هیچ مدرکی مطلق رد نشده و حکمی درباره‌ی ذهن ارزیاب نیامده"
+        : `${[...hits].map((p) => `${p.label} → ${p.safer}`).join(" | ")} — «به‌تنهایی کافی نیست» را به «ارزشی ندارد» تبدیل نکن`,
+  };
+}
+
 export function runInstagramChecks(input: {
   caption: string;
   slides: Slide[];
@@ -346,6 +383,11 @@ export function runInstagramChecks(input: {
   });
 
   checks.push(checkHashtagScript(hashtags, language));
+
+  // v3.7: فقط کاروسل فارسی — استوری/ریلز/لینکدین چک‌های خودشان را دارند
+  if (language === "fa") {
+    checks.push(checkAbsoluteDismissalFa([caption, ...slides.map(slideText)].join("\n")));
+  }
 
   const hasUrl = URL_RE.test(caption);
   checks.push({

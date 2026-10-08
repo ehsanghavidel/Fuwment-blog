@@ -5,6 +5,7 @@ import { COMPANY_NAME } from "@/lib/company";
 import {
   ABSTRACT_BRAND_SUBJECT,
   AUDIENCE_BRIEFING_EN,
+  INSTAGRAM_EVIDENCE_WORDING_FA,
   audienceProfileFa,
   brandChannelFor,
   brandContext,
@@ -116,6 +117,8 @@ import type { SocialCheck } from "./social-checks";
 const FA_BLOCK = `
 زبان خروجی: **فارسی**، با خطاب «تو» (قواعد کامل کانال بالاتر آمده).
 - هشتگ‌ها فقط با حروف فارسی — مثل #گلوبال_تلنت، #مهاجرت_حرفه‌ای. هیچ هشتگ لاتینی.
+
+${INSTAGRAM_EVIDENCE_WORDING_FA}
 
 **ساختار جمله — این بند را جدی بگیر.** متنِ درست ولی بی‌جان بدترین حالت است: هیچ ایرادی ندارد و هیچ‌کس هم نمی‌خواندش. سه مثال زیر خروجی واقعی همین سیستم‌اند.
 
