@@ -1,9 +1,9 @@
 import "server-only";
 import { runAgentJSON } from "@/lib/ai";
 import { COMPANY_NAME } from "@/lib/company";
-import { brandContext } from "@/lib/brand";
+import { EVIDENCE_TAGS, PLAIN_PERSIAN_CALIBRATION_FA, brandContext, sourceAuthorityLabelFa, sourceRef } from "@/lib/brand";
 import { lessonsBlockFor } from "./lessons";
-import { ReviewSchema, type Brief, type Review } from "./types";
+import { ReviewSchema, type Brief, type Research, type Review } from "./types";
 import type { BrandCheck } from "./brand-checks";
 
 /**
@@ -21,9 +21,56 @@ import type { BrandCheck } from "./brand-checks";
 /** حد نصاب پذیرش — زیر این امتیاز، پیش‌نویس به نویسنده برمی‌گردد */
 export const APPROVE_THRESHOLD = 75;
 
+/**
+ * دروازه‌های v3.7 — مستقل از score بازنویسی می‌سازند. یک مقاله‌ی ۸۵ امتیازی
+ * که توصیه‌ی عملی را «قاعده‌ی رسمی» جا زده یا به نثر مشاوره‌ای نوشته شده،
+ * نباید با میانگین‌گرفتن تأیید شود.
+ *
+ * ⚠️ دومین اجرای زنده نشان داد نمره‌ی عددی کالیبره نیست: مقاله‌ای با سیزده
+ * عبارت مشاوره‌ای/آکادمیک تأیید شد. پس دروازه‌ی اصلی **تعداد جمله‌های
+ * نقل‌شده** است (`plainPersianFlags` / `evidenceFlags`) — نقل عین جمله
+ * سخت‌تر از یک عدد خوش‌بینانه دور زده می‌شود — و کف نمره هم بالا رفت.
+ */
+export const EVIDENCE_GATE = 8;
+export const PLAIN_PERSIAN_GATE = 8;
+/** بیش از این تعداد جمله‌ی نقل‌شده‌ی اداری/آکادمیک یعنی بازنویسی */
+export const PLAIN_PERSIAN_MAX_FLAGS = 1;
+
+/**
+ * اعمال دروازه‌ها روی خروجی ویراستار — کد، نه مدل (قاعده‌ی ۱): «اگر نمره‌ی
+ * X زیر Y بود revise بگذار» را مدل گاهی رعایت نمی‌کند.
+ *
+ * جمله‌های نقل‌شده با بازنویسی پیشنهادی‌شان به issues اضافه می‌شوند تا
+ * نویسنده دقیقاً بداند چه چیزی را کجا عوض کند.
+ */
+export function applyEditorGates(review: Review): Review {
+  const reasons: string[] = [];
+  const { evidenceFlags, plainPersianFlags } = review;
+
+  if (review.rubric.evidence < EVIDENCE_GATE || evidenceFlags.length > 0) {
+    reasons.push(
+      `دقت وضعیت شواهد (${review.rubric.evidence}/10، ${evidenceFlags.length} جمله): توصیه یا شاهد ممکن با لحن الزام رسمی آمده — فقط فکتِ [رسمی] پژوهش را الزام یا معیار بگو، بقیه «می‌تواند بخشی از شواهد باشد»`,
+      ...evidenceFlags.map((f) => `شواهد: «${f.quote}» ← ${f.fix}`)
+    );
+  }
+  if (review.rubric.persian < PLAIN_PERSIAN_GATE || plainPersianFlags.length > PLAIN_PERSIAN_MAX_FLAGS) {
+    reasons.push(
+      `فارسی ساده (${review.rubric.persian}/10، ${plainPersianFlags.length} جمله): متن اداری، آکادمیک یا مشاوره‌ای است — حرفه‌ای یعنی روشن، نه رسمی؛ نوشتاری ساده بازنویسی کن`,
+      ...plainPersianFlags.map((f) => `فارسی ساده: «${f.quote}» ← «${f.plain}»`)
+    );
+  }
+  if (reasons.length === 0) return review;
+  return { ...review, verdict: "revise", issues: [...review.issues, ...reasons] };
+}
+
 export async function runEditor(input: {
   brief: Brief;
   draft: string;
+  /**
+   * پژوهش همان مقاله — تا ویراستار ببیند کدام فکت واقعاً [رسمی] است.
+   * بدون آن، «آیا این الزام از منبع رسمی آمده؟» را نمی‌شود قضاوت کرد.
+   */
+  research?: Research;
   /** چک‌های قطعی برند که رد شده‌اند — کد قبلاً سنجیده، ویراستار دوباره قضاوتشان نمی‌کند */
   failedBrandChecks?: BrandCheck[];
 }): Promise<Review> {
@@ -42,12 +89,23 @@ ${failed.map((c) => `- ${c.name}: ${c.note}`).join("\n")}
 این موارد باید عیناً در issues بیایند و امتیاز brandVoice را پایین بیاورند.\n`
     : "";
 
+  const researchBlock = input.research
+    ? `
+— فکت‌های پژوهش (مبنای سنجش وضعیت شواهد؛ فقط ${EVIDENCE_TAGS.official} الزام یا معیار رسمی است) —
+${input.research.keyFacts.map((f) => `- ${f}`).join("\n")}${
+        input.research.sources.length
+          ? `\nمنابع:\n${input.research.sources.map((s, i) => `- ${sourceRef(i)} ${s.title} — ${sourceAuthorityLabelFa(s.url)}`).join("\n")}`
+          : "\n(بدون منبع وب — پس هیچ فکتی رسمی نیست و هیچ جمله‌ای را نمی‌شود الزام یا معیار رسمی دانست)"
+      }
+`
+    : "";
+
   const prompt = `بریف مقاله:
 عنوان: ${input.brief.title}
 مخاطب: ${input.brief.audience}
 کلمه‌ی کلیدی اصلی: ${input.brief.primaryKeyword}
 طول هدف: ${input.brief.targetWordCount} کلمه
-
+${researchBlock}
 — پیش‌نویس —
 ${input.draft}
 ${brandBlock}
@@ -77,15 +135,51 @@ ${brandBlock}
   بالاتر از ۴ بگیرد.
 - usefulness: سودمندی عملی — خواننده بعد از مقاله «قدم بعدی» را می‌داند؟
 - structure: ساختار — تطابق با بریف، تیترهای درست، مقدمه و جمع‌بندی؟
-- persian: فارسی طبیعی — بدون ترجمه‌زدگی و جمله‌های ماشینی؟
+- persian: **فارسی ساده** — حرفه‌ای ≠ رسمی ≠ آکادمیک ≠ زبان مشاوره. معیار:
+  فارسی نوشتاری روشنی که یک متخصص باتجربه (مهندس، پژوهشگر، بنیان‌گذار) بار
+  اول و بدون مکث بفهمد.
+  **روش:** متن را جمله‌به‌جمله با این سؤال بخوان: «یک خواننده‌ی حرفه‌ایِ
+  غیرمتخصص در مهاجرت، باید این را دوباره بخواند؟» و هر جمله‌ای که این‌طور
+  است را در plainPersianFlags بیاور. دنبال این الگوها بگرد — فهرست واژه
+  نیستند، کلاس‌اند؛ روی عبارت تازه هم بگیر:
+  · اسم انتزاعی به‌جای حرف ملموس («به رسمیت شناخته‌شدن تجاری»)
+  · عبارت مشاوره‌ای («نیروی محرکه‌ی کلیدی»، «بسته‌ی استاندارد شواهد»، «بررسی ساختارمند»)
+  · عبارت آکادمیک («چارچوب تحلیلی»، «صدک‌های بالا»، «رقم مجرد»)
+  · اسم‌سازی به‌جای فعل («خنثی کردن اثر تورم»، «ساختاربندی درست»، «انجام بررسی صورت می‌گیرد»)
+  · زنجیره‌ی بلند اسم و اضافه («هدر رفتن ظرفیت مدارک»، «قابلیت دفاع در برابر معیارهای سخت‌گیرانه»)
+  · انگلیسی غیرضروری وقتی معادل فارسی طبیعی هست («انتقال زمینه (Context)»)
+  · قید اداری («در هماهنگی کامل»، «در راستای»، «به منظور»، «ذیل»)
+  · و از آن طرف: محاوره‌ای یا شکسته («می‌شه»، «می‌تونید»، «تو») — بلاگ
+    نوشتاری است، اینستاگرام نیست. «شما» درست است.
+  نمونه‌ی کالیبراسیون از یک مقاله‌ی واقعی که **نباید** تأیید می‌شد:
+${PLAIN_PERSIAN_CALIBRATION_FA.map((c) => `    «${c.bad}» ← «${c.plain}» (${c.why})`).join("\n")}
+  هر مورد را در plainPersianFlags بیاور: quote = عین عبارت از متن، plain =
+  بازنویسی ساده. نمره: بدون مورد ۹–۱۰؛ یک مورد حداکثر ۸؛ دو یا بیشتر
+  حداکثر ۶. (کد می‌شمارد: بیش از ${PLAIN_PERSIAN_MAX_FLAGS} مورد یعنی بازنویسی، مستقل از score.)
   همچنین یک واژه‌ی برند را جدا بسنج: «همراه» در راهنمای برند فقط به معنای
   «متقاضی» است. اگر متن آن را به‌جای «همکار» یا «هم‌تیمی» به‌کار برده،
   در issues بیاور.
+- evidence: **دقت وضعیت شواهد** — هر جمله درباره‌ی مدرک، معیار، ارزیاب یا
+  واجد شرایط بودن را با فکت‌های پژوهش بالا مقایسه کن. کدام است؟
+  · الزام یا معیار رسمی — فقط اگر یک فکتِ «[رسمی Sn]» همین را صریحاً بگوید
+    (کد قبلاً سنجیده که Sn واقعاً GOV.UK یا قواعد مهاجرت است)
+  · شاهد ممکن («می‌تواند بخشی از شواهد باشد»)
+  · توصیه یا برداشت عملی («ممکن است کمک کند»، «یک راه ممکن…»)
+  این‌ها را evidenceFlags کن مگر فکتِ رسمی **دقیقاً** همان را بگوید:
+  «طبق راهنمای رسمی…»، «ارزیاب دقیقاً دنبال … است»، «شاخص/معیار معتبر برای
+  …»، «وزن پررنگ‌تری دارند»، «وزن پرونده را بالا می‌برد»، «جزو ۱۰ درصد بالای
+  بازار»، مقایسه‌ی حقوق با بازار به‌عنوان معیار تأیید، ESOP/صورت‌حساب
+  بانکی/نامه‌ی منابع انسانی به‌عنوان مدرک لازم. منبع غیررسمی (سایت وکالتی،
+  مشاوره، وبلاگ، گزارش حقوق، کارفرما) هرگز ادعا را رسمی نمی‌کند.
+  ⚠️ «یکی از عواملی که ممکن است در ارزیابی کلی دیده شود» با «معیار مستقل»
+  فرق دارد؛ اگر فکت رسمی اولی را گفته، دومی evidenceFlag است.
+  هر مورد: quote = عین جمله، fix = بازنویسی محتاطانه. نمره: بدون مورد ۹–۱۰؛
+  حتی یک مورد حداکثر ۵. (کد می‌شمارد: هر مورد یعنی بازنویسی.)
 
-score = مجموع پنج معیار × ۲ (یعنی ۰ تا ۱۰۰).
-اگر score زیر ${APPROVE_THRESHOLD} بود verdict را "revise" بگذار و در issues دقیق بگو چه چیزهایی باید اصلاح شود؛ وگرنه "approve".`;
+score = مجموع پنج معیار اول (clarity، brandVoice، usefulness، structure، persian) × ۲ (یعنی ۰ تا ۱۰۰). evidence در score جمع نمی‌شود — جداگانه سنجیده می‌شود.
+اگر score زیر ${APPROVE_THRESHOLD} بود، یا evidence زیر ${EVIDENCE_GATE}، یا persian زیر ${PLAIN_PERSIAN_GATE}، یا هر evidenceFlag، یا بیش از ${PLAIN_PERSIAN_MAX_FLAGS} plainPersianFlag، verdict را "revise" بگذار و در issues دقیق بگو چه چیزهایی باید اصلاح شود؛ وگرنه "approve".`;
 
-  return runAgentJSON({
+  const review = await runAgentJSON({
     agent: "editor",
     system,
     prompt,
@@ -93,9 +187,12 @@ score = مجموع پنج معیار × ۲ (یعنی ۰ تا ۱۰۰).
     schema: ReviewSchema,
     shapeHint: `{
   "score": 82,
-  "rubric": { "clarity": 8, "brandVoice": 9, "usefulness": 8, "structure": 8, "persian": 8 },
+  "rubric": { "clarity": 8, "brandVoice": 9, "usefulness": 8, "structure": 8, "persian": 8, "evidence": 9 },
+  "plainPersianFlags": [{ "quote": "عین عبارت سنگین از متن", "plain": "بازنویسی ساده" }],
+  "evidenceFlags": [],
   "issues": ["ایراد مشخص و قابل اجرا"],
   "verdict": "approve"
 }`,
   });
+  return applyEditorGates(review);
 }

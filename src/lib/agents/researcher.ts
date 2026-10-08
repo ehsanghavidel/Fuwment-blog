@@ -2,6 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { runAgentJSON } from "@/lib/ai";
 import { BLOCKED_SOURCE_DOMAINS, COMPANY_NAME, COMPANY_PROFILE } from "@/lib/company";
+import { EVIDENCE_TAGS, normalizeEvidenceTags, sourceAuthorityLabelFa, sourceRef } from "@/lib/brand";
 import { lessonsBlockFor } from "./lessons";
 import { clampText, ResearchSchema, type Brief, type Research, type Source } from "./types";
 
@@ -576,14 +577,32 @@ ${COMPANY_PROFILE}${lessons}`;
         tavilySearch(queries[0], [OFFICIAL_QUERY_HOST]),
       ])
     ).flat();
+    /**
+     * ⚠️ مدل فقط همان منابعی را می‌خواند که پایین مقاله چاپ می‌شوند.
+     *
+     * ریشه‌ی شکست دومین اجرای زنده: پیش از این، **همه‌ی** نتایج خام Tavily
+     * (از جمله نتایج زیر کف مرتبط‌بودن، بیرون از سقف ۶ منبع، انجمن و
+     * دامنه‌ی مسدود) به مدل داده می‌شد، ولی فهرست منابع مقاله فقط خروجی
+     * `selectSources` بود. یعنی مدل می‌توانست از صفحه‌ای فکت «رسمی» بسازد
+     * که هرگز در فهرست منابع نمی‌آمد — و خواننده «طبق راهنمای رسمی» را کنار
+     * فهرستی می‌دید که فقط یک سایت وکالتی داشت.
+     *
+     * حالا ماده‌ی خام = فهرست منابع نهایی، با شماره‌ی S و برچسب اعتبار که
+     * کد می‌گذارد. هر فکت به یک منبع چاپ‌شده قابل ردیابی است.
+     */
     if (allResults.length > 0) {
-      webContext =
-        `\n\nنتایج جستجوی وب (فقط به‌عنوان ماده‌ی خام؛ صحت‌سنجی با توست):\n` +
-        allResults
-          .map((r) => `- ${r.title} (${r.url})\n  ${r.content}`)
-          .join("\n");
-
       sources = selectSources(allResults);
+      const contentOf = new Map(allResults.map((r) => [r.url, r.content]));
+      if (sources.length > 0) {
+        webContext =
+          `\n\nمنابع این مقاله (همین‌ها پایین مقاله چاپ می‌شوند؛ صحت‌سنجی با توست):\n` +
+          sources
+            .map(
+              (s, i) =>
+                `- ${sourceRef(i)} [${sourceAuthorityLabelFa(s.url)}] ${s.title} (${s.url})\n  ${contentOf.get(s.url) ?? ""}`
+            )
+            .join("\n");
+      }
     }
   }
 
@@ -595,7 +614,12 @@ ${COMPANY_PROFILE}${lessons}`;
 
 بر این اساس، ماده‌ی خام پژوهشی مقاله را آماده کن:
 - keyFacts: نکته‌ها و فکت‌های کلیدی که مقاله باید بگوید (اگر آماری مطمئن نیستی، به‌جای عدد دقیق، روند یا اصل را بگو).
-- examples: مثال‌های ملموس از فضای کسب‌وکار ایران که نویسنده بتواند استفاده کند.
+  هر فکت را **دقیقاً با یکی از این سه برچسب** شروع کن، با شماره‌ی منبع:
+  · «[رسمی S2]» فقط وقتی منبع S2 برچسب «منبع رسمی» دارد و همین را **صریحاً** می‌گوید (الزام، معیار یا قاعده) — فقط به همان اندازه که گفته. کد این را می‌سنجد: [رسمی] روی منبع غیررسمی یا بدون شماره، خودکار پایین می‌آید.
+  · «[تفسیر S3]» وقتی از منبع غیررسمی (سایت وکالتی، مشاوره، وبلاگ مهاجرتی، گزارش حقوق، کارفرما) می‌آید. این‌ها قاعده نمی‌سازند، حتی اگر با اطمینان نوشته شده باشند.
+  · «${EVIDENCE_TAGS.practical}» برای توصیه یا برداشت خودت (بدون شماره).
+  اگر منبع‌ها با هم نمی‌خوانند، حرف منبع رسمی را بیاور و اختلاف را در angleNotes بگو. اگر هیچ منبع رسمی‌ای در فهرست نیست، هیچ فکتی [رسمی] نیست.
+- examples: مثال‌های ملموس از موقعیت واقعی مخاطب این مقاله که نویسنده بتواند استفاده کند (بی‌نام، بدون عدد ساختگی).
 - commonQuestions: سؤال‌هایی که مخاطب واقعاً درباره‌ی این موضوع دارد (برای بخش FAQ).
 - angleNotes: توصیه‌ات به نویسنده برای متمایزکردن مقاله.`;
 
@@ -605,14 +629,23 @@ ${COMPANY_PROFILE}${lessons}`;
     prompt,
     schema: ResearchSchema,
     shapeHint: `{
-  "keyFacts": ["فکت یا نکته کلیدی"],
+  "keyFacts": ["[رسمی S1] فکتی که منبع رسمی S1 صریحاً گفته", "[تفسیر S2] برداشت منبع غیررسمی S2", "${EVIDENCE_TAGS.practical} توصیه‌ی عملی"],
   "examples": ["مثال ملموس"],
   "commonQuestions": ["سؤال رایج مخاطب"],
   "angleNotes": "توصیه‌ها به نویسنده"
 }`,
   });
 
+  // برچسب «رسمی» ادعای مدل است، نه مدرک: کد آن را با فهرست منابع نهایی
+  // می‌سنجد و هر [رسمی] بدون منبع رسمیِ چاپ‌شده را پایین می‌آورد.
+  const { facts: keyFacts, downgraded } = normalizeEvidenceTags(out.keyFacts, sources);
+  if (downgraded.length) {
+    console.log(
+      `[researcher] ${downgraded.length} فکتِ «رسمی» بدون منبع رسمیِ چاپ‌شده پایین آمد: ${downgraded.map((d) => `«${d}»`).join("، ")}`
+    );
+  }
+
   // منابع از کد می‌آیند، نه از مدل — بدون کلید Tavily فهرست خالی می‌ماند
   // و مقاله هم فهرست منابع نمی‌گیرد.
-  return { ...out, sources };
+  return { ...out, keyFacts, sources };
 }

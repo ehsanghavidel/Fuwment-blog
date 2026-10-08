@@ -14,6 +14,7 @@
  * - terminology   واژگان، زبان داخلی ↔ زبان مخاطب، لاتین در اینستاگرام
  * - ctas          CTAهای برند + CTAی اینستاگرام بر اساس هدف پست
  * - channels      قواعد صریح هر کانال و ترکیب‌شان (brandContext)
+ * - blog          فقط بلاگ: فارسی ساده، وضعیت شواهد، اعتبار منبع
  * - visual        پالت، گرادیان، فونت، کنتراست
  *
  * `@/lib/company` همچنان صادر می‌کند (COMPANY_PROFILE، BRAND_VOICE،
@@ -28,4 +29,5 @@ export * from "./claims";
 export * from "./terminology";
 export * from "./ctas";
 export * from "./channels";
+export * from "./blog";
 export * from "./visual";

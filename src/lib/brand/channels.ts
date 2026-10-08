@@ -2,6 +2,7 @@ import { COMPANY_NAME, COMPANY_NAME_EN, type ContentLanguage } from "./core";
 import { POSITIONING_FA, POSITIONING_EN } from "./positioning";
 import { VOICE_FA, VOICE_EN } from "./voice";
 import { CLAIMS_FA, CLAIMS_EN } from "./claims";
+import { BLOG_PLAIN_PERSIAN_FA, EVIDENCE_STATUS_RULES_FA } from "./blog";
 import {
   TERMINOLOGY_FA,
   INTERNAL_LANGUAGE_RULE_FA,
@@ -82,6 +83,10 @@ export const BLOG_FA_RULES = `قواعد کانال: سایت و بلاگ فار
   · مراحل کار → «شش قدم روشن، از ارزیابی تا ثبت درخواست.»
   · تعهد صداقت → «اگر مسیر به شما نخورد، همان اول می‌گوییم.»
   · سه معیار کارآفرینی → «ایده‌تان تازه است؟ شدنی است؟ می‌تواند بزرگ شود؟»
+
+${BLOG_PLAIN_PERSIAN_FA}
+
+${EVIDENCE_STATUS_RULES_FA}
 
 ${WRITING_STYLE_FA}`;
 

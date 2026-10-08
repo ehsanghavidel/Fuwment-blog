@@ -13,6 +13,12 @@
  */
 
 import {
+  BLOG_BUREAUCRATIC_FA,
+  BLOG_COLLOQUIAL_FA,
+  EVIDENCE_OVERCLAIM_FA,
+  EVIDENCE_TAG_LEAK,
+  officialFacts,
+  sourceAuthority,
   COMPANY_NAME,
   COMPANY_NAME_EN,
   COMPETITOR_COMPARISON_EN,
@@ -921,6 +927,116 @@ function checkAddress(text: string, expected: "تو" | "شما"): BrandCheck {
   };
 }
 
+/* ── چک‌های فقط-بلاگ (v3.7) — فهرست‌ها در `@/lib/brand/blog.ts` ── */
+
+/**
+ * فارسی ساده: عبارت‌های اداری/آکادمیک/مشاوره‌ای که راهنما صریحاً منع کرده.
+ * مسدودکننده، چون فهرست فقط عبارت‌هایی را دارد که در بلاگ **همیشه**
+ * نادرست‌اند؛ اسم‌سازی و زنجیره‌ی اضافه قضاوت می‌خواهند و با ویراستارند.
+ */
+export function checkPlainPersianBlog(text: string): BrandCheck {
+  const scan = stripNonProse(text);
+  const hits = BLOG_BUREAUCRATIC_FA.filter((t) => t.re.test(scan)).map((t) => `«${t.label}» → ${t.plain}`);
+  return {
+    name: "فارسی ساده (نه اداری یا آکادمیک)",
+    severity: "blocking",
+    pass: hits.length === 0,
+    note:
+      hits.length === 0
+        ? "عبارت اداری، آکادمیک یا مشاوره‌ای پیدا نشد"
+        : `${hits.join(" | ")} — بلاگ فارسی نوشتاری ساده است: جمله را با فعل و واژه‌ی روزمره‌ی نوشتاری بازنویسی کن`,
+  };
+}
+
+/** بلاگ نوشتاری است — فارسی شکسته‌ی اینستاگرامی به آن سرایت نکند */
+export function checkWrittenPersianBlog(text: string): BrandCheck {
+  const scan = stripNonProse(text);
+  const hits = BLOG_COLLOQUIAL_FA.filter((t) => t.re.test(scan)).map((t) => `«${t.label}»`);
+  return {
+    name: "فارسی نوشتاری (نه محاوره‌ای)",
+    severity: "blocking",
+    pass: hits.length === 0,
+    note:
+      hits.length === 0
+        ? "صورت محاوره‌ای/شکسته پیدا نشد"
+        : `${hits.join("، ")} — بلاگ محاوره‌ای نیست؛ صورت نوشتاری بنویس («می‌شود»، «می‌توانید»، «آن»)`,
+  };
+}
+
+/** همان بخشی از پژوهش که چک شواهد لازم دارد — فکت‌های برچسب‌دار و منابع نهایی مقاله */
+export type EvidenceBundle = { keyFacts: string[]; sources: { url: string }[] };
+
+/**
+ * وضعیت شواهد — دو چک، بر اساس پشتوانه‌ی رسمیِ **سنجیده‌شده با کد**.
+ *
+ * ⚠️ از دومین اجرای زنده: مقاله «طبق راهنمای رسمی…» و «شاخص معتبر برای
+ * Commercial Recognition» نوشت در حالی که تنها منبع چاپ‌شده یک سایت وکالتی
+ * بود. چک قبلی فقط متن را می‌دید و همیشه توصیه‌ای بود — پس ویراستار تأیید
+ * کرد و مقاله رد شد.
+ *
+ * حالا:
+ * - ادعای قطعی/رسمی که هیچ فکت رسمیِ مرتبطی پشتش نیست → **مسدودکننده**
+ *   (بازنویسی به توصیه/تفسیر یا حذف). «فکت رسمی» یعنی برچسب [رسمی Sn] که
+ *   Sn در فهرست منابع نهایی است و هاستش GOV.UK/قواعد مهاجرت.
+ * - ادعایی که فکت رسمیِ مرتبط دارد → توصیه‌ای: کد نمی‌فهمد جمله «دقیقاً»
+ *   همان را می‌گوید (قاعده‌ی ۲)؛ ویراستار و بازبین انسانی می‌سنجند.
+ */
+export function checkEvidenceGroundingBlog(text: string, research: EvidenceBundle): BrandCheck[] {
+  const scan = stripNonProse(text);
+  const official = officialFacts(research.keyFacts, research.sources);
+  const hits = EVIDENCE_OVERCLAIM_FA.filter((p) => p.re.test(scan));
+  const unsupported = hits.filter((p) => !official.some((f) => p.support.test(f)));
+  const supported = hits.filter((p) => !unsupported.includes(p));
+  const hasOfficialSource = research.sources.some((s) => sourceAuthority(s.url) === "official");
+
+  return [
+    {
+      name: "ادعای رسمی بدون پشتوانه‌ی رسمی",
+      severity: "blocking",
+      pass: unsupported.length === 0,
+      note:
+        unsupported.length === 0
+          ? "هر ادعای رسمی یا قطعی، فکتِ رسمیِ مرتبط در پژوهش دارد"
+          : `${unsupported.map((p) => `${p.label} → ${p.safer}`).join(" | ")} — ${
+              hasOfficialSource
+                ? "هیچ فکتِ [رسمی] پژوهش این را نمی‌گوید"
+                : "فهرست منابع این مقاله هیچ منبع رسمی (GOV.UK / قواعد مهاجرت) ندارد"
+            }؛ به توصیه یا تفسیر بازنویسی کن یا حذف کن. منبع غیررسمی هرگز ادعا را رسمی نمی‌کند`,
+    },
+    {
+      name: "وضعیت شواهد (رسمی / شاهد ممکن / توصیه)",
+      severity: "advisory",
+      pass: supported.length === 0,
+      note:
+        supported.length === 0
+          ? "ادعای رسمیِ پشتیبانی‌شده‌ای نیست که دقتش باید سنجیده شود"
+          : `${supported.map((p) => p.label).join(" | ")} — فکت رسمیِ مرتبط هست؛ مطمئن شو جمله دقیقاً همان را می‌گوید، نه بیشتر`,
+    },
+  ];
+}
+
+/**
+ * همه‌ی چک‌های قطعی مقاله‌ی بلاگ: چک‌های برند کانال بلاگ + وضعیت شواهد
+ * (که پژوهش لازم دارد و برای همین در `runBrandChecks` نیست).
+ */
+export function runBlogChecks(input: { text: string; research: EvidenceBundle }): BrandCheck[] {
+  return [
+    ...runBrandChecks({ text: input.text, channel: "blog-fa" }),
+    ...checkEvidenceGroundingBlog(input.text, input.research),
+  ];
+}
+
+/** برچسب‌های داخلی پژوهش ([رسمی]، [تفسیر]، [پیشنهاد عملی]) نباید وارد مقاله شوند */
+export function checkEvidenceTagLeak(text: string): BrandCheck {
+  const m = stripNonProse(text).match(EVIDENCE_TAG_LEAK);
+  return {
+    name: "برچسب داخلی پژوهش در متن",
+    severity: "blocking",
+    pass: !m,
+    note: m ? `«${m[0]}» در متن آمده — برچسب پژوهش داخلی است؛ حذفش کن و جمله را با لحن درست همان وضعیت بنویس` : "برچسب داخلی پژوهش در متن نیست",
+  };
+}
+
 /** چک‌های مخصوص کانال فارسی — هیچ‌کدام به کانال دیگری سرایت نمی‌کند */
 function channelChecksFa(text: string, channel: BrandChannel | undefined): BrandCheck[] {
   switch (channel) {
@@ -929,7 +1045,12 @@ function channelChecksFa(text: string, channel: BrandChannel | undefined): Brand
     case "reels-fa":
       return [checkNoLatinInPersianInstagram(text), checkAddress(text, "تو")];
     case "blog-fa":
-      return [checkAddress(text, "شما")];
+      return [
+        checkAddress(text, "شما"),
+        checkPlainPersianBlog(text),
+        checkWrittenPersianBlog(text),
+        checkEvidenceTagLeak(text),
+      ];
     default:
       return [];
   }

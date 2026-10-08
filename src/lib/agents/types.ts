@@ -123,7 +123,22 @@ export const ReviewSchema = z.object({
     usefulness: z.number().min(0).max(10),
     structure: z.number().min(0).max(10),
     persian: z.number().min(0).max(10),
+    /**
+     * v3.7 — دقت وضعیت شواهد (الزام رسمی / شاهد ممکن / توصیه). بیرون از
+     * جمع score است و نقش دروازه دارد: زیر حد، کد verdict را «revise»
+     * می‌کند (`applyEditorGates` در editor.ts).
+     */
+    evidence: z.number().min(0).max(10),
   }),
+  /**
+   * v3.7 — جمله‌هایی که ویراستار به‌عنوان نثر اداری/آکادمیک/مشاوره‌ای نقل
+   * کرده، با بازنویسی ساده. **کد می‌شمارد** و تصمیم می‌گیرد (دومین اجرای
+   * زنده: ویراستار persian را بالا داد با وجود سیزده عبارت مشاوره‌ای —
+   * نمره‌ی عددی کالیبره نبود، نقل‌قول هست).
+   */
+  plainPersianFlags: z.array(z.object({ quote: z.string(), plain: z.string() })),
+  /** جمله‌هایی که توصیه/شاهد ممکن را با لحن الزام رسمی گفته‌اند — هر یک بازنویسی می‌سازد */
+  evidenceFlags: z.array(z.object({ quote: z.string(), fix: z.string() })),
   /** فهرست مشکلات مشخص که نویسنده باید اصلاح کند */
   issues: z.array(z.string()),
   verdict: z.enum(["approve", "revise"]),
