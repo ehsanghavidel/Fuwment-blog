@@ -188,7 +188,8 @@ export async function runStoryPipeline(opts: {
       write: () => runStoryWriter({ brief }),
       revise: (draft, review, failedChecks) =>
         runStoryRevision({ brief, draft, review, failedChecks }),
-      check: (d) => runStoryChecks({ frames: d.frames, stickers: d.stickers ?? [] }),
+      check: (d) =>
+        runStoryChecks({ frames: d.frames, stickers: d.stickers ?? [], cta: d.cta, language: brief.language }),
       // خلاصه‌ی داخلی + متنِ همه‌ی فریم‌ها + دعوت به اقدام
       brandText: (d) => [d.setSummary, ...d.frames.map(slideText), d.cta].join("\n"),
       describe: (d) =>
@@ -231,7 +232,12 @@ export async function runStoryPipeline(opts: {
         failedChecks,
       });
 
-      const recheck = runStoryChecks({ frames: revised.frames, stickers: revised.stickers ?? [] });
+      const recheck = runStoryChecks({
+        frames: revised.frames,
+        stickers: revised.stickers ?? [],
+        cta: revised.cta,
+        language: brief.language,
+      });
       const stillColliding = detectSourceCopyCollisions(revised.frames, source.slides);
 
       if (stillColliding.length > 0) {
