@@ -28,6 +28,8 @@ import {
   COMPETITOR_COMPARISON_EN,
   FEAR_PATTERNS_EN,
   FEAR_PATTERNS_FA,
+  FEAR_PATTERNS_SPOKEN_FA,
+  CERTAINTY_PATTERNS_SPOKEN_FA,
   FORBIDDEN_CLAIMS_EN,
   FORBIDDEN_CLAIMS_FA,
   INTERNAL_TERMS_FA,
@@ -40,6 +42,8 @@ import {
   WRONG_TERMS_FA,
   stripGuaranteeNegationsEn,
   stripGuaranteeNegationsFa,
+  stripGuaranteeNegationsSpokenFa,
+  isSpokenRegisterChannel,
   type BrandChannel,
   type EnTerm,
 } from "@/lib/brand";
@@ -127,6 +131,16 @@ function wordWithSuffix(term: string): RegExp {
   return new RegExp(`(^|${BOUNDARY})${escaped}${PERSIAN_SUFFIX}($|${BOUNDARY})`);
 }
 
+/**
+ * واژه + فعل ربطیِ گفتاری: «تضمینیه»، «قطعیه»، «تضمین‌شده‌ست». تطبیق
+ * کلمه‌کامل این‌ها را نمی‌گرفت — در متن محاوره‌ی نرم (کاروسل و استوری از
+ * ۲۰۲۶-۱۰-۰۹) یعنی ادعای تضمینی که **بی‌صدا** از چک رد می‌شد.
+ */
+function wordWithSpokenCopula(term: string): RegExp {
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|${BOUNDARY})${escaped}\u200C?(?:ه|ست|ئه)($|${BOUNDARY})`);
+}
+
 /* ── کمک‌کننده‌های انگلیسی ────────────────────────────────── */
 
 /**
@@ -159,12 +173,18 @@ function findTermsEn(text: string, list: EnTerm[]): EnTerm[] {
  * از سنجش از متن کنار گذاشته می‌شود — خودِ v3.7 این جمله‌ها را می‌گوید.
  * هر «تضمین»ِ دیگری در همان متن همچنان مسدود است.
  */
-function checkForbiddenClaims(text: string): BrandCheck {
-  const scan = stripGuaranteeNegationsFa(text);
-  const hits = FORBIDDEN_CLAIMS_FA.filter((c) => wholeWord(c.term).test(scan)).map(
+function checkForbiddenClaims(text: string, spoken = false): BrandCheck {
+  // spoken: کاروسل/استوریِ محاوره‌ی نرم — نفی و ترسِ گفتاری هم شناخته می‌شوند
+  const scan = spoken ? stripGuaranteeNegationsSpokenFa(text) : stripGuaranteeNegationsFa(text);
+  const hits = FORBIDDEN_CLAIMS_FA.filter(
+    (c) => wholeWord(c.term).test(scan) || (spoken && wordWithSpokenCopula(c.term).test(scan))
+  ).map(
     (h) => `«${h.term}» — ${h.why}`
   );
-  for (const f of FEAR_PATTERNS_FA) {
+  const patterns = spoken
+    ? [...FEAR_PATTERNS_FA, ...FEAR_PATTERNS_SPOKEN_FA, ...CERTAINTY_PATTERNS_SPOKEN_FA]
+    : FEAR_PATTERNS_FA;
+  for (const f of patterns) {
     const m = text.match(f.re);
     if (m) hits.push(`«${m[0].trim()}» — ${f.why}`);
   }
@@ -241,6 +261,19 @@ const FORBIDDEN_NARRATIVE: RegExp[] = [
 ];
 
 /**
+ * صورت گفتاریِ همان فرمول‌ها — فقط کاروسل و استوریِ محاوره‌ی نرم
+ * (۲۰۲۶-۱۰-۰۹). بدون این، «فقط باید دستاوردت رو ترجمه کنی» و «مسئله
+ * فقط ارائه‌ست» بی‌صدا رد می‌شدند. بلاگ و ریلز همان فهرست بالا را دارند.
+ */
+const FORBIDDEN_NARRATIVE_SPOKEN: RegExp[] = [
+  // ⚠️ نه `دستاوردت?ان?` مثل فهرست نوشتاری — آن فقط «دستاوردتان» را می‌گیرد
+  // و «دستاوردت» را نه (در نوشتاری قاب ترجمه جبرانش می‌کند).
+  /فقط\s*(باید\s*)?دستاورد(?:‌?ها)?(?:ت|تان|ات)?\s*رو\s*ترجمه/,
+  /فقط\s*(یه|یک)?\s*مسئله‌?ی?\s*(ترجمه|ارائه|روایت)‌?(ست|ه)(?![\u0600-\u06FF])/,
+  /مسئله\s*فقط\s*(ترجمه|ارائه|نحوه‌ی ارائه)‌?(ست|ه)(?![\u0600-\u06FF])/,
+];
+
+/**
  * «ترجمه» وقتی موضوعش دستاورد است، نه سند.
  *
  * چرا جدا از FORBIDDEN_NARRATIVE: آن فهرست دنبال جمله‌ی کاملِ «فقط باید
@@ -273,8 +306,19 @@ const TRANSLATION_FRAMING: RegExp[] = [
   new RegExp(`${ACHIEVEMENT_WORDS}[^.!?؟\\n]{0,60}را[^.!?؟\\n]{0,40}ترجمه`),
 ];
 
-function checkTranslationFraming(text: string): BrandCheck {
-  const hits = TRANSLATION_FRAMING.map((re) => text.match(re)?.[0]?.trim())
+/**
+ * صورت گفتاری: «تجربه‌ات رو … ترجمه کن» — فقط کاروسل و استوری. «رو» با
+ * مرز واژه سنجیده می‌شود تا «روی»، «روشن» و «روند» نگیرند.
+ */
+const TRANSLATION_FRAMING_SPOKEN: RegExp[] = [
+  new RegExp(
+    `${ACHIEVEMENT_WORDS}[^.!?؟\\n]{0,60}(?<![\\u0600-\\u06FF\\u200C])رو(?![\\u0600-\\u06FF\\u200C])[^.!?؟\\n]{0,40}ترجمه`
+  ),
+];
+
+function checkTranslationFraming(text: string, spoken = false): BrandCheck {
+  const patterns = spoken ? [...TRANSLATION_FRAMING, ...TRANSLATION_FRAMING_SPOKEN] : TRANSLATION_FRAMING;
+  const hits = patterns.map((re) => text.match(re)?.[0]?.trim())
     .filter((m): m is string => Boolean(m))
     .filter((m) => !DOCUMENT_WORDS.test(m));
 
@@ -289,8 +333,9 @@ function checkTranslationFraming(text: string): BrandCheck {
   };
 }
 
-function checkForbiddenNarrative(text: string): BrandCheck {
-  const hits = FORBIDDEN_NARRATIVE.map((re) => text.match(re)?.[0]?.trim()).filter(
+function checkForbiddenNarrative(text: string, spoken = false): BrandCheck {
+  const patterns = spoken ? [...FORBIDDEN_NARRATIVE, ...FORBIDDEN_NARRATIVE_SPOKEN] : FORBIDDEN_NARRATIVE;
+  const hits = patterns.map((re) => text.match(re)?.[0]?.trim()).filter(
     (m): m is string => Boolean(m)
   );
 
@@ -1102,11 +1147,14 @@ export function runBrandChecks(input: {
 
   if (language === "en") return runBrandChecksEn(text);
 
+  // کاروسل و استوریِ فارسی سرتاسر محاوره‌ی نرم‌اند (۲۰۲۶-۱۰-۰۹)
+  const spoken = isSpokenRegisterChannel(channel);
+
   return [
-    checkForbiddenClaims(text),
+    checkForbiddenClaims(text, spoken),
     checkWrongTerms(text),
-    checkForbiddenNarrative(text),
-    checkTranslationFraming(text),
+    checkForbiddenNarrative(text, spoken),
+    checkTranslationFraming(text, spoken),
     checkInternalJargon(text),
     checkBrandInHeading(text),
     checkBrandAsSubject(text),

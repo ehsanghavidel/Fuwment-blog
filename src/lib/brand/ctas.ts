@@ -107,6 +107,14 @@ export const INSTAGRAM_GOAL_CTAS: Record<ContentGoal, GoalCta[]> = {
   ],
 };
 
+/**
+ * شکل گفتاریِ CTAی فروش — کاروسل و استوری از ۲۰۲۶-۱۰-۰۹ محاوره‌ی نرم‌اند
+ * و «… در بایو است.» ته یک متن گفتاری، همان دوپارگی‌ای است که قاعده‌ی
+ * سطح زبان منع می‌کند. معنا دقیقاً همان CTA اصلی است؛ رشته‌ی مرجع
+ * (`INSTAGRAM_GOAL_CTAS.sales`) دست نخورده.
+ */
+export const INSTAGRAM_SALES_CTA_SPOKEN_FA = "لینک ارزیابی مسیر توی بایوئه.";
+
 export function goalCtaIds(goal: ContentGoal): string[] {
   return INSTAGRAM_GOAL_CTAS[goal].map((c) => c.id);
 }
@@ -115,10 +123,10 @@ export function goalCtaIds(goal: ContentGoal): string[] {
 export function instagramCtaBlockFa(goal: ContentGoal): string {
   if (goal === "sales") {
     return `— قدم بعدی (پست فروش/تبدیل) —
-فقط CTA اصلی، یک بار: «${INSTAGRAM_GOAL_CTAS.sales[0].fa}» — یا همین را با کلماتی خیلی نزدیک و «تو». CTAی دیگری کنارش نگذار.`;
+فقط CTA اصلی، یک بار: «${INSTAGRAM_GOAL_CTAS.sales[0].fa}» — یا همین را با کلماتی خیلی نزدیک و «تو». در متنِ محاوره‌ی نرم (کاروسل و استوری) شکل گفتاری‌اش را بنویس تا متن دوپاره نشود: «${INSTAGRAM_SALES_CTA_SPOKEN_FA}» CTAی دیگری کنارش نگذار.`;
   }
   return `— قدم بعدی (پست آموزشی) —
-این پست نباید بفروشد. CTA فقط یکی از این دو، هماهنگ با همین پست: «${INSTAGRAM_GOAL_CTAS.educational[0].fa}» یا «${INSTAGRAM_GOAL_CTAS.educational[1].fa}» — مثلاً «ذخیره‌اش کن تا قبل از شروع، این سه سؤال را از خودت بپرسی.»
+این پست نباید بفروشد. CTA فقط یکی از این دو، هماهنگ با همین پست: «${INSTAGRAM_GOAL_CTAS.educational[0].fa}» یا «${INSTAGRAM_GOAL_CTAS.educational[1].fa}» — مثلاً «ذخیره‌اش کن که قبل از شروع، این سه تا سؤال رو از خودت بپرسی.»
 ⚠️ «لینک ارزیابی مسیر در بایو است»، «ارزیابی اولیه‌تان را شروع کنید» یا هر دعوت به خرید/رزرو اینجا ممنوع است. هیچ پستی دو CTA ندارد.`;
 }
 

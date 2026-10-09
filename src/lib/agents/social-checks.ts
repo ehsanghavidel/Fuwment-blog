@@ -291,7 +291,7 @@ export function checkAbsoluteDismissalFa(text: string): SocialCheck {
     note:
       hits.length === 0
         ? "هیچ مدرکی مطلق رد نشده و حکمی درباره‌ی ذهن ارزیاب نیامده"
-        : `${hits.map((p) => `${p.label} → ${p.safer}`).join(" | ")} — «به‌تنهایی کافی نیست» را به «ارزشی ندارد» تبدیل نکن`,
+        : `${hits.map((p) => `${p.label} → ${p.safer}`).join(" | ")} — «کافی نیست» را به «ارزشی نداره» تبدیل نکن؛ جایگزین را گفتاری بنویس و «به‌تنهایی» را تکرار نکن`,
   };
 }
 
@@ -411,7 +411,7 @@ export function runInstagramChecks(input: {
 
   checks.push(checkHashtagScript(hashtags, language));
 
-  // v3.7: فقط کاروسل فارسی — استوری/ریلز/لینکدین چک‌های خودشان را دارند
+  // v3.7: کاروسل فارسی (و از ۲۰۲۶-۱۰-۰۹ استوری فارسی، در runStoryChecks) — ریلز/لینکدین چک‌های خودشان را دارند
   if (language === "fa") {
     const copy = [caption, ...slides.map(slideText)].join("\n");
     checks.push(checkAbsoluteDismissalFa(copy));
@@ -708,8 +708,16 @@ export function runLinkedinChecks(input: {
 export function runStoryChecks(input: {
   frames: Slide[];
   stickers: StorySticker[];
+  /** دعوت به اقدامِ فریم آخر — برای چک‌های دقت ادعا */
+  cta?: string;
+  /**
+   * از ۲۰۲۶-۱۰-۰۹ استوریِ فارسی هم چک‌های دقت ادعای کاروسل را می‌گیرد.
+   * نبودش یعنی رفتار قبلی (بدون این دو چک)، تا فراخوانیِ بی‌زبان
+   * فهرست انگلیسی/فارسی را اشتباه روی متن نیندازد.
+   */
+  language?: "fa" | "en";
 }): SocialCheck[] {
-  const { frames, stickers } = input;
+  const { frames, stickers, cta, language } = input;
   const checks: SocialCheck[] = [];
 
   checks.push({
@@ -798,6 +806,18 @@ export function runStoryChecks(input: {
       ? "متنِ یک فریم آدرسِ خام دارد — لینک باید متادیتای استیکرِ link باشد"
       : "متنِ فریم‌ها آدرسِ خام ندارد",
   });
+
+  // همان دو چکِ دقت ادعای کاروسل فارسی، روی هرچه مخاطب می‌بیند: فریم‌ها،
+  // دعوت به اقدام و متن استیکرها. خلاصه‌ی داخلی (setSummary) منتشر
+  // نمی‌شود و عمداً بیرون است.
+  if (language === "fa") {
+    const stickerText = stickers.map((s) =>
+      s.type === "poll" ? [s.question, ...s.options].join("\n") : s.type === "question" ? s.prompt : ""
+    );
+    const copy = [...frames.map(slideText), cta ?? "", ...stickerText].join("\n");
+    checks.push(checkAbsoluteDismissalFa(copy));
+    checks.push(checkBenchmarkRequirementFa(copy));
+  }
 
   return checks;
 }
