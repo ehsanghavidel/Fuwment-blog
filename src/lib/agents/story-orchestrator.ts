@@ -8,7 +8,7 @@ import { SOCIAL_APPROVE_THRESHOLD } from "./social-editor";
 import { runStoryChecks, type SocialCheck } from "./social-checks";
 import { writeAndReview } from "./social-loop";
 import { runSocialCritic } from "./critic";
-import { clampSlides } from "./types";
+import { clampSlides, normalizeVisualFields, resolveVisualFamily } from "./types";
 import { slideText } from "@/lib/slide-spec";
 import type { InstagramStory } from "./types";
 
@@ -270,7 +270,7 @@ export async function runStoryPipeline(opts: {
        * همین‌جا حذفش می‌کنیم — نرمال‌سازیِ بی‌ضرر، نه چکِ مسدودکننده، چون
        * هیچ مصرف‌کننده‌ای امروز از آن فیلد روی فریم‌های بعدی نمی‌خواند.
        */
-      const clamped = clampSlides(finalDraft.frames);
+      const clamped = normalizeVisualFields(clampSlides(finalDraft.frames));
       const cleanFrames = clamped.map((f, i) => {
         if (i > 0 && f.imageSubject) {
           console.log(
@@ -323,6 +323,9 @@ export async function runStoryPipeline(opts: {
         cta: finalDraft.cta,
         checks: finalChecks,
         extras: {
+          // قالب روشن — خانواده‌ی کاروسلِ مبدأ اولویت دارد تا استوری و
+          // کاروسلِ همان روز یک‌شکل باشند؛ مبدأ قدیمی (بی‌خانواده) → انتخاب نویسنده.
+          visualFamily: resolveVisualFamily(source.extras.visualFamily ?? finalDraft.visualFamily),
           sourceSocialPostId: source.id,
           ...(cleanStickers.length > 0 ? { stickers: cleanStickers } : {}),
         },

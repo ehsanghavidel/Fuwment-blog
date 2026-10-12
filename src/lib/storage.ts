@@ -3,7 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 import { getStore } from "@/lib/store";
 import type { SocialPost } from "@/lib/store";
 import { renderCarousel, renderStory } from "@/lib/slide-renderer";
-import { generateCoverImage } from "@/lib/image-gen";
+import { cutoutIllustration, renderLightCarousel, renderLightStory } from "@/lib/slide-light";
+import { generateCoverImage, generateIllustration } from "@/lib/image-gen";
 
 /**
  * تصویرهای اسلاید در Supabase Storage.
@@ -81,6 +82,42 @@ export function coverImagePath(socialPostId: string): string {
 }
 
 /**
+ * مسیر تصویرسازیِ کاورِ قالب روشن — **شفاف‌شده**، نه خامِ مدل.
+ *
+ * ⚠️ نامی جدا از `bg-cover.png` عمداً: پست قدیمی عکسِ تمام‌قاب دارد و اگر
+ * همان مسیر خوانده می‌شد، عکس به‌جای تصویرسازی روی قالب می‌نشست.
+ */
+export function illustrationPath(socialPostId: string): string {
+  return `${socialPostId}/illus-cover.png`;
+}
+
+/**
+ * تصویرسازیِ کاورِ قالب روشن — اول از Storage، بعد از سرویس + شفاف‌سازی.
+ *
+ * همان قاعده‌ی `bg-cover`: رندر دوباره پول نمی‌دهد. شکست هر مرحله کشنده
+ * نیست — `undefined` یعنی کاور با آیکون خودش ساخته می‌شود.
+ */
+async function illustrationFor(socialPostId: string, subject: string | undefined): Promise<Buffer | undefined> {
+  const sb = client();
+  const p = illustrationPath(socialPostId);
+  const cached = await sb.storage.from(BUCKET).download(p);
+  if (cached.data) {
+    console.log(`[storage] تصویرسازی کاور از قبل موجود بود — بدون فراخوانی جدید`);
+    return Buffer.from(await cached.data.arrayBuffer());
+  }
+  const gen = await generateIllustration(subject);
+  if (gen.status !== "generated") return undefined;
+  const cut = await cutoutIllustration(gen.buffer);
+  const up = await sb.storage.from(BUCKET).upload(p, cut, {
+    contentType: "image/png",
+    cacheControl: String(CACHE_SECONDS),
+    upsert: true,
+  });
+  if (up.error) console.error(`[storage] ذخیره‌ی تصویرسازی کاور شکست: ${up.error.message}`);
+  return cut;
+}
+
+/**
  * URL عمومی یک تصویر.
  *
  * bucket عمداً عمومی است (دلیلش در CLAUDE.md بخش امنیت)، پس این فقط
@@ -127,45 +164,53 @@ export async function renderSlidesForPost(socialPostId: string): Promise<RenderR
     if (post.slides.length === 0) return { status: "skipped", reason: "no-slides" };
 
     const t0 = Date.now();
+    const family = post.extras.visualFamily;
+    let buffers: Buffer[];
 
-    /**
-     * تصویر پس‌زمینه‌ی کاور — اول از Storage، بعد از سرویس.
-     *
-     * ⚠️ ترتیب مهم است: اگر تصویر از قبل ساخته شده، رندر دوباره نباید
-     * دوباره پول خرج کند. فقط وقتی تولید می‌شود که واقعاً نباشد.
-     *
-     * شکستِ هر مرحله بی‌ضرر است: کاور همان پس‌زمینه‌ی سرمه‌ای را
-     * می‌گیرد و بقیه‌ی کاروسل دست‌نخورده ساخته می‌شود.
-     */
-    const sbEarly = client();
-    const bgPath = coverImagePath(socialPostId);
-    let backgroundImage: Buffer | undefined;
-
-    const cached = await sbEarly.storage.from(BUCKET).download(bgPath);
-    if (cached.data) {
-      backgroundImage = Buffer.from(await cached.data.arrayBuffer());
-      console.log(`[storage] تصویر کاور از قبل موجود بود — بدون فراخوانی جدید`);
+    if (family) {
+      // قالب روشن (۲۰۲۶-۱۰-۱۲): تصویرسازیِ تک‌شیء + آیکون — نه عکسِ تمام‌قاب
+      const illustration = await illustrationFor(socialPostId, post.slides[0]?.imageSubject);
+      buffers = await renderLightCarousel(post.slides, { family, language: post.language ?? "fa", illustration });
     } else {
-      const gen = await generateCoverImage(post.slides[0]?.imageSubject);
-      if (gen.status === "generated") {
-        backgroundImage = gen.buffer;
-        const up = await sbEarly.storage.from(BUCKET).upload(bgPath, gen.buffer, {
-          contentType: "image/png",
-          cacheControl: String(CACHE_SECONDS),
-          upsert: true,
-        });
-        if (up.error) {
-          // تصویر ساخته شد ولی ذخیره نشد — این بار استفاده می‌شود،
-          // دفعه‌ی بعد دوباره تولید می‌شود. بی‌صدا نگذاریمش.
-          console.error(`[storage] ذخیره‌ی تصویر کاور شکست: ${up.error.message}`);
+      /**
+       * تصویر پس‌زمینه‌ی کاور — اول از Storage، بعد از سرویس.
+       *
+       * ⚠️ ترتیب مهم است: اگر تصویر از قبل ساخته شده، رندر دوباره نباید
+       * دوباره پول خرج کند. فقط وقتی تولید می‌شود که واقعاً نباشد.
+       *
+       * شکستِ هر مرحله بی‌ضرر است: کاور همان پس‌زمینه‌ی سرمه‌ای را
+       * می‌گیرد و بقیه‌ی کاروسل دست‌نخورده ساخته می‌شود.
+       */
+      const sbEarly = client();
+      const bgPath = coverImagePath(socialPostId);
+      let backgroundImage: Buffer | undefined;
+
+      const cached = await sbEarly.storage.from(BUCKET).download(bgPath);
+      if (cached.data) {
+        backgroundImage = Buffer.from(await cached.data.arrayBuffer());
+        console.log(`[storage] تصویر کاور از قبل موجود بود — بدون فراخوانی جدید`);
+      } else {
+        const gen = await generateCoverImage(post.slides[0]?.imageSubject);
+        if (gen.status === "generated") {
+          backgroundImage = gen.buffer;
+          const up = await sbEarly.storage.from(BUCKET).upload(bgPath, gen.buffer, {
+            contentType: "image/png",
+            cacheControl: String(CACHE_SECONDS),
+            upsert: true,
+          });
+          if (up.error) {
+            // تصویر ساخته شد ولی ذخیره نشد — این بار استفاده می‌شود،
+            // دفعه‌ی بعد دوباره تولید می‌شود. بی‌صدا نگذاریمش.
+            console.error(`[storage] ذخیره‌ی تصویر کاور شکست: ${up.error.message}`);
+          }
         }
       }
-    }
 
-    const buffers = await renderCarousel(post.slides, {
-      language: post.language ?? "fa",
-      backgroundImage,
-    });
+      buffers = await renderCarousel(post.slides, {
+        language: post.language ?? "fa",
+        backgroundImage,
+      });
+    }
 
     const sb = client();
     const paths: string[] = [];
@@ -236,45 +281,58 @@ async function renderStoryPost(post: SocialPost): Promise<RenderResult> {
 
   const t0 = Date.now();
   const store = getStore();
-
-  /**
-   * تصویرِ پس‌زمینه‌ی فریمِ اول — همان الگوی کاروسل: اول از Storage،
-   * بعد از سرویس. همان قراردادِ مسیرِ `{postId}/bg-cover.png` — postId
-   * اینجا شناسه‌ی SocialPostِ **استوری** است، پس با کاورِ کاروسلِ مبدأ
-   * (که شناسه‌ی جدایی دارد) هیچ‌وقت تصادف نمی‌کند.
-   */
-  const sbEarly = client();
-  const bgPath = coverImagePath(post.id);
-  let backgroundImage: Buffer | undefined;
-
-  const cached = await sbEarly.storage.from(BUCKET).download(bgPath);
-  if (cached.data) {
-    backgroundImage = Buffer.from(await cached.data.arrayBuffer());
-    console.log(`[storage] تصویرِ استوری از قبل موجود بود — بدون فراخوانی جدید`);
-  } else {
-    const gen = await generateCoverImage(frame0Subject, { frame: "story" });
-    if (gen.status === "generated") {
-      backgroundImage = gen.buffer;
-      const up = await sbEarly.storage.from(BUCKET).upload(bgPath, gen.buffer, {
-        contentType: "image/png",
-        cacheControl: String(CACHE_SECONDS),
-        upsert: true,
-      });
-      if (up.error) {
-        console.error(`[storage] ذخیره‌ی تصویرِ استوری شکست: ${up.error.message}`);
-      }
-    }
-    // شکستِ تولید (failed/skipped) کشنده نیست — همان قاعده‌ی کاروسل: فریمِ
-    // اول بدونِ تصویر هنوز کاملاً قابلِ استفاده است، فقط پس‌زمینه‌ی سرمه‌ای می‌گیرد.
-  }
-
   const stickerFrames = new Set<number>((post.extras.stickers ?? []).map((s) => s.frame));
+  const family = post.extras.visualFamily;
+  let buffers: Buffer[];
 
-  const buffers = await renderStory(post.slides, {
-    language: post.language ?? "fa",
-    backgroundImage,
-    stickerFrames,
-  });
+  if (family) {
+    // قالب روشن — همان قاعده‌ی کاروسل، با نامِ مسیرِ شناسه‌ی خودِ استوری
+    const illustration = await illustrationFor(post.id, frame0Subject);
+    buffers = await renderLightStory(post.slides, {
+      family,
+      language: post.language ?? "fa",
+      illustration,
+      stickerFrames,
+    });
+  } else {
+
+    /**
+     * تصویرِ پس‌زمینه‌ی فریمِ اول — همان الگوی کاروسل: اول از Storage،
+     * بعد از سرویس. همان قراردادِ مسیرِ `{postId}/bg-cover.png` — postId
+     * اینجا شناسه‌ی SocialPostِ **استوری** است، پس با کاورِ کاروسلِ مبدأ
+     * (که شناسه‌ی جدایی دارد) هیچ‌وقت تصادف نمی‌کند.
+     */
+    const sbEarly = client();
+    const bgPath = coverImagePath(post.id);
+    let backgroundImage: Buffer | undefined;
+
+    const cached = await sbEarly.storage.from(BUCKET).download(bgPath);
+    if (cached.data) {
+      backgroundImage = Buffer.from(await cached.data.arrayBuffer());
+      console.log(`[storage] تصویرِ استوری از قبل موجود بود — بدون فراخوانی جدید`);
+    } else {
+      const gen = await generateCoverImage(frame0Subject, { frame: "story" });
+      if (gen.status === "generated") {
+        backgroundImage = gen.buffer;
+        const up = await sbEarly.storage.from(BUCKET).upload(bgPath, gen.buffer, {
+          contentType: "image/png",
+          cacheControl: String(CACHE_SECONDS),
+          upsert: true,
+        });
+        if (up.error) {
+          console.error(`[storage] ذخیره‌ی تصویرِ استوری شکست: ${up.error.message}`);
+        }
+      }
+      // شکستِ تولید (failed/skipped) کشنده نیست — همان قاعده‌ی کاروسل: فریمِ
+      // اول بدونِ تصویر هنوز کاملاً قابلِ استفاده است، فقط پس‌زمینه‌ی سرمه‌ای می‌گیرد.
+    }
+
+    buffers = await renderStory(post.slides, {
+      language: post.language ?? "fa",
+      backgroundImage,
+      stickerFrames,
+    });
+  }
 
   const sb = client();
   const paths: string[] = [];

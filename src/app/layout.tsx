@@ -92,7 +92,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   تنها دکمه‌ی نارنجی هر صفحه باید اقدام اصلی همان صفحه باشد. */}
               <Link
                 href="/studio"
-                className="mr-1 rounded-btn bg-navy-card px-4 py-2 font-medium text-mist transition-colors hover:bg-teal hover:text-ink"
+                className="mr-1 rounded-btn bg-navy-card px-4 py-2 font-medium text-mist transition-colors hover:bg-teal hover:text-mist"
               >
                 استودیو
               </Link>

@@ -10,7 +10,7 @@ import { runInstagramChecks, runLinkedinChecks } from "./social-checks";
 import { writeAndReview } from "./social-loop";
 import { runSocialCritic } from "./critic";
 import { renderSlidesForPost } from "@/lib/storage";
-import { clampSlides, guardPositionLayout } from "./types";
+import { clampSlides, guardPositionLayout, normalizeVisualFields, resolveVisualFamily } from "./types";
 import { slideText } from "@/lib/slide-spec";
 import type { InstagramCarousel, LinkedInPost } from "./types";
 
@@ -133,11 +133,11 @@ export async function runRepurpose(opts: {
         body: ig.draft.caption,
         // همان تور نجات ناشر اینستاگرام — این مسیر هم کاروسل می‌سازد.
         // ترتیب مهم است: guardPositionLayout بعد از clampSlides.
-        slides: guardPositionLayout(clampSlides(ig.draft.slides)),
+        slides: normalizeVisualFields(guardPositionLayout(clampSlides(ig.draft.slides))),
         hashtags: ig.draft.hashtags,
         cta: ig.draft.cta,
         checks: ig.checks,
-        extras: {},
+        extras: { visualFamily: resolveVisualFamily(ig.draft.visualFamily) },
         // کاروسلِ بازآفرینی فارسی است
         language: "fa",
         // این محتوا به هفته‌ی محتوایی تعلق ندارد

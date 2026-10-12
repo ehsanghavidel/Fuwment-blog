@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { BrandRoute } from "@/lib/company";
-import { AUDIENCE_GROUPS, JOURNEY_STAGES } from "@/lib/brand";
+import { AUDIENCE_GROUPS, JOURNEY_STAGES, isIconId, isVisualFamily, type VisualFamily } from "@/lib/brand";
 import { LIMITS_BY_LAYOUT, LIST_JOINER, MAX_LIST_ITEMS } from "@/lib/slide-spec";
 import type { ListSlide, Slide, StandardSlide } from "@/lib/store/types";
 
@@ -368,6 +368,14 @@ const SLIDE_COMMON = {
    * روی بوم نوشته نمی‌شود، پس در `SLIDE_LIMITS` نیست.
    */
   imageSubject: z.string().optional(),
+  /**
+   * قالب روشن (۲۰۲۶-۱۰-۱۲) — همه اختیاری و بازِ string، نه enum: شناسه‌ی
+   * نامعتبر نباید کل اسکیما را رد کند و یک دور مدل بسوزاند (قاعده‌ی ۲).
+   * `normalizeVisualFields` پیش از ذخیره نامعتبرها را با لاگ حذف می‌کند.
+   */
+  icon: z.string().optional(),
+  itemIcons: z.array(z.string()).optional(),
+  highlight: z.string().optional(),
 } as const;
 
 /**
@@ -467,6 +475,57 @@ export function clampSlides(slides: Slide[]): Slide[] {
 }
 
 /**
+ * فیلدهای بصریِ قالب روشن — پاک‌سازیِ قطعی پیش از ذخیره.
+ *
+ * - `icon`/`itemIcons` فقط از `ICONS`؛ شناسه‌ی ناشناخته با لاگ حذف می‌شود
+ *   (رندرکننده برایش فایلی ندارد و بی‌صدا هیچ چیزی نمی‌کشید).
+ * - `itemIcons` فقط روی list و فقط اگر تعدادش با بندها بخواند — آیکونِ
+ *   جابه‌جا روی بندِ اشتباه بدتر از بی‌آیکون است.
+ * - `highlight` فقط اگر **عیناً** در heading باشد؛ وگرنه حذف و رندرکننده
+ *   خط آخر تیتر را می‌گیرد.
+ *
+ * ⚠️ هیچ‌کدام چک مسدودکننده نیست: نبودِ آیکون یا هایلایت ظاهر را کمی ساده
+ * می‌کند، چیزی را خراب نمی‌کند — ارزش یک دور بازنویسی را ندارد (قاعده‌ی ۴).
+ */
+export function normalizeVisualFields(slides: Slide[]): Slide[] {
+  return slides.map((s, i) => {
+    const out: Slide = { ...s };
+    if (out.icon !== undefined && !isIconId(out.icon)) {
+      console.log(`[visual] آیکون ناشناخته روی اسلاید ${i + 1} حذف شد: «${out.icon}»`);
+      delete out.icon;
+    }
+    if (out.itemIcons !== undefined) {
+      const ok =
+        out.layout === "list" &&
+        out.itemIcons.length === out.items.length &&
+        out.itemIcons.every((id) => isIconId(id));
+      if (!ok) {
+        console.log(`[visual] itemIcons اسلاید ${i + 1} حذف شد (ناشناخته یا تعداد نامتناظر با بندها)`);
+        delete out.itemIcons;
+      }
+    }
+    if (out.highlight !== undefined && !(out.highlight.trim() && out.heading.includes(out.highlight.trim()))) {
+      console.log(`[visual] highlight اسلاید ${i + 1} عین heading نبود — حذف شد`);
+      delete out.highlight;
+    }
+    return out;
+  });
+}
+
+/**
+ * خانواده‌ی بصری نهایی — نامعتبر یا جاافتاده → `playful`.
+ *
+ * ⚠️ پیش‌فرض ثابت است، نه حدس از متن: تشخیص «این پست داده‌محور است» از روی
+ * واژه همان تله‌ی قاعده‌ی ۲ است. انتخاب با نویسنده است؛ کد فقط مقدار
+ * ناممکن را به یک مقدار ممکن می‌برد.
+ */
+export function resolveVisualFamily(raw: unknown): VisualFamily {
+  if (isVisualFamily(raw)) return raw;
+  if (raw !== undefined) console.log(`[visual] visualFamily نامعتبر «${String(raw)}» — پیش‌فرض: playful`);
+  return "playful";
+}
+
+/**
  * تبدیلِ فهرست به استاندارد — بدون فراخوانیِ مدل، بدون ازدست‌رفتنِ محتوا.
  *
  * جداکننده‌ی `LIST_JOINER` عمداً خنثای اسکریپت است: بین دو رانِ فارسی
@@ -499,6 +558,8 @@ export function guardPositionLayout(slides: Slide[]): Slide[] {
 
 export const InstagramCarouselSchema = z.object({
   title: z.string().min(4),
+  /** قالب روشن — `resolveVisualFamily` مقدار نامعتبر را با پیش‌فرض جایگزین می‌کند */
+  visualFamily: z.string().optional(),
   /** ۱۲۵ کاراکتر اولش قبل از «... بیشتر» دیده می‌شود */
   caption: z.string().min(80).transform((s) => clampText(s, 2200)),
   // ⚠️ بازه‌ی ۵–۸ در constraint جدول social_posts هم هست (supabase/schema.sql).
@@ -785,6 +846,7 @@ export const InstagramStorySchema = z.preprocess(
   normalizeStoryOutput,
   z.object({
     title: z.string().min(4),
+    visualFamily: z.string().optional(),
     /** خلاصه‌ی داخلیِ ست — کپشن نیست، هرگز paste نمی‌شود */
     setSummary: z.string().min(20),
     // ⚠️ بازه‌ی ۲–۳ زیرمجموعه‌ی بازه‌ی مجازِ دیتابیس (۱–۳) است —

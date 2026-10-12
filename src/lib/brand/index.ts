@@ -17,6 +17,7 @@
  * - blog          فقط بلاگ: فارسی ساده، وضعیت شواهد، اعتبار منبع
  * - instagram     فقط کاروسل و استوری فارسی: سطح زبان (محاوره‌ی نرم) و دقت ادعا درباره‌ی مدرک
  * - visual        پالت، گرادیان، فونت، کنتراست
+ * - graphics      قالب روشن: خانواده‌ی بصری، آیکون‌ها، قاعده‌ی تصویرسازی کاور
  *
  * `@/lib/company` همچنان صادر می‌کند (COMPANY_PROFILE، BRAND_VOICE،
  * BRAND_CTAS، …) ولی حالا فقط از همین لایه بازصادر می‌کند.
@@ -33,3 +34,4 @@ export * from "./channels";
 export * from "./blog";
 export * from "./instagram";
 export * from "./visual";
+export * from "./graphics";

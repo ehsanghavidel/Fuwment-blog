@@ -5,9 +5,11 @@ import { COMPANY_NAME } from "@/lib/company";
 import {
   AUDIENCE_BRIEFING_EN,
   BRIEF_REVOICE_NOTE_FA,
+  ILLUSTRATION_SUBJECT_RULES_FA,
   INSTAGRAM_BENCHMARK_WORDING_FA,
   INSTAGRAM_EVIDENCE_WORDING_FA,
   INSTAGRAM_SENTENCE_STRUCTURE_FA,
+  VISUAL_FIELDS_RULES_FA,
   audienceProfileFa,
   brandChannelFor,
   brandContext,
@@ -81,11 +83,8 @@ ${brandContext(brandChannelFor("story", language))}
 
 قاعده‌ی تصویر (مهم — تصمیمِ محصولیِ قفل‌شده):
 - تصویرِ AI فقط برایِ **فریمِ اول** ساخته می‌شود.
-- **فریمِ اول باید** «imageSubject» داشته باشد: یک رشته‌ی ناتهیِ یک‌جمله‌ای — یک صحنه‌ی فیزیکیِ قابلِ عکاسی که از دلِ همین بریف بیرون می‌آید (نه یک مفهومِ انتزاعی، نه کلیشه‌ی «لپ‌تاپ روی میز»).
-  · موضوع یک شیء، سند، ابزار یا اقدامِ مشخص از همین بریف است — صحنه **خلوت**، با یک عنصر اصلی؛ متن روی همین تصویر می‌نشیند.
-  · هیچ آدمی با چهره‌ی مشخص (دست یا ژست بدون چهره مجاز است)، هیچ پرچم، پاسپورت، چمدان و هواپیما، و هیچ متنی داخل صحنه نباشد.
-  · **هیچ نمایشگر روشنی نباشد** — مانیتور، صفحه‌ی موبایل، نمودار و رابط کاربری. سبک تصویر این‌ها را ممنوع کرده و صحنه‌ای که رویشان بنا شده خالی درمی‌آید.
-  · ❌ «مهندس نرم‌افزار جوان پشت میز در حال بررسی نمودارهای فنی روی مانیتور» — از اولین تست زنده: هم چهره دارد، هم نمایشگر.
+- **فریمِ اول باید** «imageSubject» داشته باشد (رشته‌ی ناتهی).
+${ILLUSTRATION_SUBJECT_RULES_FA}
 - فریم‌های بعدی کلیدِ «imageSubject» را **اصلاً نداشته باشند** — کلید را کامل حذف کن. نه رشته، نه رشته‌ی خالی، و **هرگز مقدارِ null**.
 
 قاعده‌ی استیکرِ تعاملی (اختیاری):
@@ -98,6 +97,8 @@ ${brandContext(brandChannelFor("story", language))}
 - ⚠️ **اگر نمی‌توانی همه‌ی فیلدهای آن نوع را پر کنی، کلِ آن استیکر را ننویس.** استیکرِ ناقص هرگز ننویس، و برای هیچ فیلدِ اجباری‌ای مقدارِ null یا رشته‌ی خالی نگذار. استیکرِ ناقص حذف می‌شود — یعنی هزینه‌اش را داده‌ای و چیزی نگرفته‌ای.
 - ⚠️ **استیکرِ نوعِ link ننویس.** استیکرِ لینک فقط وقتی ساخته می‌شود که خودِ اپلیکیشن یک مقصدِ تأییدشده بدهد؛ در این مسیر چنین ورودی‌ای وجود ندارد. **هیچ آدرسی (URL) نساز، حدس نزن و از روی موضوع بازسازی نکن** — حتی آدرسی که به‌نظر آدرسِ خودِ فومنت می‌آید. هر استیکرِ link حذف می‌شود.
 - متنِ خودِ فریم هم هرگز نباید آدرسِ خام (URL) داشته باشد.
+
+${VISUAL_FIELDS_RULES_FA}
 ${language === "fa" ? FA_BLOCK : EN_BLOCK}
 
 ${language === "en" ? instagramCtaBlockEn(goal) : instagramCtaBlockFa(goal)}${lessons}`;
@@ -123,10 +124,11 @@ ${brief.keyPoints.map((p) => `- ${p}`).join("\n")}
 
 const SHAPE_HINT = `{
   "title": "عنوان داخلی برای فهرست استودیو",
+  "visualFamily": "editorial یا playful",
   "setSummary": "خلاصه‌ی داخلیِ ست برای اپراتور — کپشن نیست، هرگز جایی paste نمی‌شود",
   "frames": [
-    { "layout": "standard", "kicker": "قلاب", "heading": "تیترِ کوتاهِ فریمِ اول", "text": "یکی دو جمله", "imageSubject": "صحنه‌ی فیزیکی — فقط فریمِ اول" },
-    { "layout": "standard", "kicker": "قدم بعدی", "heading": "تیترِ فریمِ آخر", "text": "یکی دو جمله" }
+    { "layout": "standard", "kicker": "قلاب", "heading": "تیترِ کوتاهِ فریمِ اول", "text": "یکی دو جمله", "imageSubject": "یک شیء برای تصویرسازی — فقط فریمِ اول", "highlight": "تکه‌ای عیناً از تیتر" },
+    { "layout": "standard", "kicker": "قدم بعدی", "heading": "تیترِ فریمِ آخر", "text": "یکی دو جمله", "icon": "bookmark-simple" }
   ],
   "stickers": [
     { "type": "poll", "frame": 0, "question": "متنِ نظرسنجی", "options": ["گزینه‌ی اول", "گزینه‌ی دوم"] }
@@ -145,10 +147,11 @@ list: { "layout": "list", "kicker": "برچسب", "heading": "تیترِ فهر�
 
 const SHAPE_HINT_EN = `{
   "title": "short internal title",
+  "visualFamily": "editorial or playful",
   "setSummary": "internal operator summary — not a caption, never pasted anywhere",
   "frames": [
-    { "layout": "standard", "kicker": "hook", "heading": "short first-frame heading", "text": "one or two short sentences", "imageSubject": "a physical, photographable scene — first frame only" },
-    { "layout": "standard", "kicker": "call to action", "heading": "last-frame heading", "text": "one or two short sentences" }
+    { "layout": "standard", "kicker": "hook", "heading": "short first-frame heading", "text": "one or two short sentences", "imageSubject": "one object for the illustration — first frame only", "highlight": "words copied exactly from the heading" },
+    { "layout": "standard", "kicker": "call to action", "heading": "last-frame heading", "text": "one or two short sentences", "icon": "bookmark-simple" }
   ],
   "stickers": [
     { "type": "poll", "frame": 0, "question": "poll question", "options": ["option one", "option two"] }
