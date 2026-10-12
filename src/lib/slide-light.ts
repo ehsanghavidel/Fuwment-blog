@@ -730,7 +730,10 @@ async function drawEditorial(ctx: SKRSContext2D, slide: Slide, opts: LightRender
   }
   const { kicker, heading, body } = B;
 
-  let y = startY;
+  // اسلایدِ فقط-متن (بی‌تصویر، بی‌فهرست) بالا نمی‌چسبد — نیمه‌ی پایینِ قاب
+  // خالی می‌ماند (Preview ِ ۲۰۲۶-۱۰-۱۲). کمی بالاتر از وسط، وسطِ بصری است.
+  const centerShift = slide.layout !== "list" && !hasSideArt ? Math.max(0, (f.bottom - startY - textHeight(B)) * 0.42) : 0;
+  let y = startY + centerShift;
 
   if (kicker) {
     y = drawBlock(ctx, kicker, { top: y, align: "start", f, language: lang }).bottom + 14;

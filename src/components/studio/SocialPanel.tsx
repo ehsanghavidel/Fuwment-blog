@@ -736,6 +736,7 @@ export function SocialPanel({ onUnauthorized }: { onUnauthorized: () => void }) 
               onSetStatus={setStatus}
               onNotice={setNotice}
               onUnauthorized={onUnauthorized}
+              onRefresh={load}
             />
           ))}
         </section>

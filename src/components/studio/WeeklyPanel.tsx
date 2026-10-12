@@ -338,6 +338,7 @@ export function WeeklyPanel({ onUnauthorized }: { onUnauthorized: () => void }) 
               }}
               onNotice={setNotice}
               onUnauthorized={onUnauthorized}
+              onRefresh={load}
             />
           ))}
         </section>
