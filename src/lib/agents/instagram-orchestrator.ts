@@ -10,7 +10,7 @@ import { runInstagramChecks } from "./social-checks";
 import { writeAndReview } from "./social-loop";
 import { runSocialCritic, type SocialCriticPart } from "./critic";
 import { renderSlidesForPost } from "@/lib/storage";
-import { clampSlides, guardPositionLayout } from "./types";
+import { clampSlides, guardPositionLayout, normalizeVisualFields, resolveVisualFamily } from "./types";
 import { slideText } from "@/lib/slide-spec";
 import { reserveDmKeywordForPost } from "./dm-registry";
 import type { InstagramCarousel, SocialIdea } from "./types";
@@ -245,14 +245,16 @@ export async function runInstagramPipeline(opts: {
         // بیاید، وگرنه بندهای هنوز نبریده‌ی list به هم می‌چسبند و بعد از
         // پیوستن بریده می‌شوند — دقیقاً همان ازدست‌رفتنِ محتوایی که
         // guardPositionLayout برای جلوگیری از آن نوشته شده.
-        slides: guardPositionLayout(clampSlides(ig.draft.slides)),
+        // قالب روشن: normalizeVisualFields بعد از guardPositionLayout، چون
+        // list ِ تبدیل‌شده به standard دیگر itemIcons نمی‌خواهد.
+        slides: normalizeVisualFields(guardPositionLayout(clampSlides(ig.draft.slides))),
         hashtags: ig.draft.hashtags,
         cta: ig.draft.cta,
         checks: ig.checks,
-        // فاز ۵: فقط وقتی اپراتور آفر داده extras چیزی می‌گیرد. کپشنِ اولیه
-        // هنوز خطِ CTAی دایرکت را ندارد — آن را فقط گامِ dm-keyword،
-        // بعد از رزروِ موفق، اضافه می‌کند.
-        extras: dmOffer ? { dmOffer } : {},
+        // فاز ۵: dmOffer فقط وقتی اپراتور آفر داده. کپشنِ اولیه هنوز خطِ
+        // CTAی دایرکت را ندارد — آن را فقط گامِ dm-keyword، بعد از رزروِ
+        // موفق، اضافه می‌کند. visualFamily یعنی «قالب روشن» (storage.ts).
+        extras: { visualFamily: resolveVisualFamily(ig.draft.visualFamily), ...(dmOffer ? { dmOffer } : {}) },
         language,
         weekId,
         imagePaths: [],

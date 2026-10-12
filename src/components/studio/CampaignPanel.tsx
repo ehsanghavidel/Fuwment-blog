@@ -425,6 +425,7 @@ export function CampaignPanel({ onUnauthorized }: { onUnauthorized: () => void }
               onSetStatus={setSocialStatus}
               onNotice={setNotice}
               onUnauthorized={onUnauthorized}
+              onRefresh={() => campaign && openCampaign(campaign.id)}
             />
           ))}
 

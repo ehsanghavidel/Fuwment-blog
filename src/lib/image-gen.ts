@@ -1,5 +1,6 @@
 import "server-only";
 import { ABSTRACT_BRAND_SUBJECT, GRADIENTS, PALETTE } from "@/lib/brand/visual";
+import { LIGHT_BG } from "@/lib/brand/graphics";
 
 /**
  * تولید تصویر پس‌زمینه‌ی کاور — الگوی `wordpress.ts` و `storage.ts`:
@@ -379,6 +380,91 @@ export async function generateCoverImage(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[image-gen] شکست: ${message}`);
+    return { status: "failed", error: message };
+  }
+}
+
+/* ── قالب روشن: تصویرسازی سه‌بعدیِ تک‌شیء (۲۰۲۶-۱۰-۱۲) ─────────── */
+
+/**
+ * سبک تصویرسازیِ کاور در قالب روشن — همان پرامپتی که در آزمایشِ مرحله‌ی ۲
+ * (شش تصویر، ۲۰۲۶-۱۰-۱۲) نزدیک‌ترین نتیجه به نمونه‌های مالک را داد.
+ *
+ * ⚠️ زمینه **عمداً** همان `LIGHT_BG` است، نه شفاف: مدل PNG ِ شفاف نمی‌دهد و
+ * `cutoutIllustration` لبه‌ها را از روی همین رنگ شفاف می‌کند. اگر زمینه را
+ * عوض کردی، آستانه‌ی آن تابع را دوباره با تصویر واقعی بسنج.
+ *
+ * ⚠️ عکاسیِ ادیتوریال (`generateCoverImage`) دست‌نخورده مانده: پست‌های
+ * پیش از قالب روشن هنوز با همان رندر می‌شوند (`storage.ts`).
+ */
+const ILLUSTRATION_TEMPLATE = `A single isolated object illustration: {subject}.
+Style: a clean, friendly 3D product render with soft matte clay-like materials, rounded edges, gentle diffused studio lighting from the upper left, and one soft contact shadow directly beneath the object. Premium, minimal, modern editorial illustration.
+Colour palette strictly limited to: warm orange ${PALETTE.orange}, deep teal-green ${PALETTE.teal}, deep navy ${PALETTE.navy}, light grey ${PALETTE.grey}, and warm off-white. No other hues.
+Plain solid background colour ${LIGHT_BG} filling the entire frame edge to edge — no gradient, no scenery, no floor, no horizon, no vignette. The object is centred, occupies about 65% of the frame, fully visible and not cropped. No text, no letters, no numbers, no logos, no brand marks, no people, no faces, no hands.`;
+
+/** «abstract-brand» در قالب روشن — همان فرم‌های ایزومتریک برند، به سبک همین تصویرسازی */
+const ABSTRACT_ILLUSTRATION_SUBJECT =
+  "an abstract composition of two folded ribbon-like isometric planes at a 30-degree angle, one orange and one teal, flowing upward";
+
+export function illustrationPromptFor(subject: string): string {
+  const clean = subject.trim();
+  return ILLUSTRATION_TEMPLATE.replace(
+    "{subject}",
+    clean === ABSTRACT_BRAND_SUBJECT ? ABSTRACT_ILLUSTRATION_SUBJECT : clean
+  );
+}
+
+/**
+ * ساخت تصویرسازیِ کاورِ قالب روشن — مربعی، روی زمینه‌ی کرم.
+ *
+ * ⚠️ مثل `generateCoverImage` هیچ‌وقت throw نمی‌کند. شکستش کاور را نمی‌کشد:
+ * رندرکننده جایش آیکون همان اسلاید را می‌گذارد.
+ */
+export async function generateIllustration(subject: string | undefined): Promise<ImageGenResult> {
+  if (!isImageGenConfigured()) {
+    console.log("[image-gen] OPENROUTER_API_KEY نیست — تصویرسازی رد شد");
+    return { status: "skipped", reason: "not-configured" };
+  }
+  const clean = subject?.trim();
+  if (!clean) return { status: "skipped", reason: "no-subject" };
+
+  const t0 = Date.now();
+  try {
+    const res = await fetch(ENDPOINT, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://github.com/siavash-smf/fuwment-blog-agents",
+        "X-Title": "Fuwment Blog Agents",
+      },
+      body: JSON.stringify({ model: MODEL, prompt: illustrationPromptFor(clean), aspect_ratio: "1:1", n: 1 }),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      console.error(`[image-gen] تصویرسازی ${res.status} ${res.statusText} — ${detail.slice(0, 300)}`);
+      return { status: "failed", error: `${res.status}: ${detail.slice(0, 200)}` };
+    }
+
+    const json = (await res.json()) as { data?: { b64_json?: string }[]; usage?: { cost?: number } };
+    const b64 = json.data?.[0]?.b64_json;
+    if (!b64) {
+      console.error(`[image-gen] تصویرسازی بدون تصویر: ${JSON.stringify(json).slice(0, 300)}`);
+      return { status: "failed", error: "پاسخ سرویس تصویری نداشت" };
+    }
+
+    const buffer = Buffer.from(b64, "base64");
+    const cost = json.usage?.cost ?? null;
+    console.log(
+      `[image-gen] تصویرسازی ${(buffer.length / 1024).toFixed(0)}KB در ${((Date.now() - t0) / 1000).toFixed(1)}s` +
+        `${cost != null ? ` — $${cost.toFixed(4)}` : ""} — «${clean.slice(0, 50)}»`
+    );
+    return { status: "generated", buffer, costUsd: cost };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[image-gen] تصویرسازی شکست: ${message}`);
     return { status: "failed", error: message };
   }
 }
